@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { exportLocalBackup } from '../../lib/db';
 
 /* ─── Nav items ─── */
 const NAV_ITEMS = [
@@ -36,6 +37,34 @@ export default function AppShell() {
 
   const schoolName = counselor?.school_name || 'Beacon';
 
+  // Backup reminder — show if local mode and no backup in 14+ days
+  const [backupDismissed, setBackupDismissed] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+  const backupAge = useMemo(() => {
+    if (!counselor) return null;
+    const last = localStorage.getItem('beacon_last_backup');
+    if (!last) return 999; // never backed up
+    return Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+  }, [counselor]);
+  const showBackupBanner = backupAge !== null && backupAge >= 14 && !backupDismissed && !showTrialBanner && !isSoftGated;
+
+  async function handleQuickBackup() {
+    setBackingUp(true);
+    try {
+      const data = await exportLocalBackup();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `beacon-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      localStorage.setItem('beacon_last_backup', new Date().toISOString());
+      setBackupDismissed(true);
+    } catch { /* ignore */ }
+    setBackingUp(false);
+  }
+
   return (
     <div className="shell">
       {/* Mobile topbar */}
@@ -61,6 +90,23 @@ export default function AppShell() {
       {isSoftGated && (
         <div className="gate-banner">
           Your trial has expired. Subscribe to restore full access.
+        </div>
+      )}
+      {showBackupBanner && (
+        <div className="backup-banner">
+          <span>
+            {backupAge >= 999
+              ? '🛡️ You\'ve never backed up your data. If your browser cache is cleared, everything is lost.'
+              : `🛡️ Your last backup was ${backupAge} days ago. Back up regularly to protect your work.`}
+          </span>
+          <span style={{ display: 'inline-flex', gap: 8, marginLeft: 12 }}>
+            <button className="backup-banner-btn" onClick={handleQuickBackup} disabled={backingUp}>
+              {backingUp ? 'Saving…' : 'Back Up Now'}
+            </button>
+            <button className="backup-banner-dismiss" onClick={() => setBackupDismissed(true)}>
+              Dismiss
+            </button>
+          </span>
         </div>
       )}
 
@@ -184,6 +230,44 @@ const shellStyles = `
   font-size: 0.8125rem;
   font-weight: 500;
   z-index: 39;
+}
+.backup-banner {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  background: #fef3c7;
+  color: #92400e;
+  text-align: center;
+  padding: 8px 16px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  z-index: 39;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid #fde68a;
+}
+.backup-banner-btn {
+  background: #92400e;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.backup-banner-btn:hover { background: #78350f; }
+.backup-banner-dismiss {
+  background: none;
+  border: none;
+  color: #b45309;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 /* ── Sidebar ── */
