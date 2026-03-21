@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/db';
 import { ASCA_DOMAINS, ROTATION_TYPES } from '../lib/constants';
 
 function NewGroupModal({ open, onClose, counselorId, onCreated }) {
@@ -27,26 +27,22 @@ function NewGroupModal({ open, onClose, counselorId, onCreated }) {
     setSaving(true);
     setError('');
 
-    const { error: gErr } = await supabase
-      .from('groups')
-      .insert({
-        counselor_id: counselorId,
-        name,
-        grade_band: gradeBand,
-        focus_area: focusArea,
-        rotation_type: rotationType,
-        start_date: startDate || null,
-        end_date: endDate || null,
-        status: 'active',
-        obj_1: obj1 || null,
-        obj_2: obj2 || null,
-        obj_3: obj3 || null,
-        asca_1: obj1Domain || null,
-        asca_2: obj2Domain || null,
-        asca_3: obj3Domain || null,
-      })
-      .select()
-      .single();
+    const { error: gErr } = await db.insert('groups', {
+      counselor_id: counselorId,
+      name,
+      grade_band: gradeBand,
+      focus_area: focusArea,
+      rotation_type: rotationType,
+      start_date: startDate || null,
+      end_date: endDate || null,
+      status: 'active',
+      obj_1: obj1 || null,
+      obj_2: obj2 || null,
+      obj_3: obj3 || null,
+      asca_1: obj1Domain || null,
+      asca_2: obj2Domain || null,
+      asca_3: obj3Domain || null,
+    });
 
     if (gErr) {
       setError(gErr.message);
@@ -134,21 +130,17 @@ export default function GroupsPage() {
   const loadGroups = useCallback(async () => {
     if (!counselor?.id) return;
     setLoading(true);
-    const { data: groupRows } = await supabase
-      .from('groups')
-      .select('*')
-      .eq('counselor_id', counselor.id)
-      .order('created_at', { ascending: false });
+    const { data: groupRows } = await db.select('groups', {
+      eq: { counselor_id: counselor.id },
+      order: { column: 'created_at', ascending: false },
+    });
 
-    // Fetch member counts separately (more reliable than embedded join through RLS)
-    const gIds = (groupRows || []).map((g) => g.id);
+    // Fetch member counts separately
+    const gIds = new Set((groupRows || []).map((g) => g.id));
     let memberCounts = {};
-    if (gIds.length) {
-      const { data: members } = await supabase
-        .from('group_members')
-        .select('group_id')
-        .in('group_id', gIds);
-      (members || []).forEach((m) => {
+    if (gIds.size) {
+      const { data: members } = await db.select('group_members');
+      (members || []).filter((m) => gIds.has(m.group_id)).forEach((m) => {
         memberCounts[m.group_id] = (memberCounts[m.group_id] || 0) + 1;
       });
     }

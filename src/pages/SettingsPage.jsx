@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { exportLocalBackup, importLocalBackup } from '../lib/db';
+import { db, exportLocalBackup, importLocalBackup } from '../lib/db';
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
@@ -53,13 +53,16 @@ export default function SettingsPage() {
 
   const loadBlocks = useCallback(async () => {
     if (!counselor?.id) return;
-    const { data } = await supabase
-      .from('schedule_blocks')
-      .select('*')
-      .eq('counselor_id', counselor.id)
-      .order('day_of_week')
-      .order('start_time');
-    setBlocks(data || []);
+    const { data } = await db.select('schedule_blocks', {
+      eq: { counselor_id: counselor.id },
+      order: { column: 'day_of_week', ascending: true },
+    });
+    // Secondary sort by start_time (db.select only supports one order)
+    const sorted = (data || []).sort((a, b) => {
+      if (a.day_of_week !== b.day_of_week) return a.day_of_week < b.day_of_week ? -1 : 1;
+      return (a.start_time || '').localeCompare(b.start_time || '');
+    });
+    setBlocks(sorted);
   }, [counselor]);
 
   useEffect(() => { loadBlocks(); }, [loadBlocks]);
@@ -67,7 +70,7 @@ export default function SettingsPage() {
   const handleSaveProfile = async () => {
     setSaving(true);
     setSaveMsg('');
-    const { error } = await supabase.from('counselors').update({
+    const { error } = await db.update('counselors', counselor.id, {
       name,
       campus,
       district,
@@ -76,7 +79,7 @@ export default function SettingsPage() {
       alert_threshold: alertThreshold,
       notify_email: notifyEmail,
       notify_referral: notifyReferral,
-    }).eq('id', counselor.id);
+    });
 
     if (error) {
       setSaveMsg('Error: ' + error.message);
@@ -98,9 +101,9 @@ export default function SettingsPage() {
       end_time: blockEnd,
     };
     if (editBlock) {
-      await supabase.from('schedule_blocks').update(row).eq('id', editBlock.id);
+      await db.update('schedule_blocks', editBlock.id, row);
     } else {
-      await supabase.from('schedule_blocks').insert(row);
+      await db.insert('schedule_blocks', row);
     }
     setShowBlockForm(false);
     setEditBlock(null);
@@ -121,7 +124,7 @@ export default function SettingsPage() {
 
   const handleDeleteBlock = async (id) => {
     if (!confirm('Delete this schedule block?')) return;
-    await supabase.from('schedule_blocks').delete().eq('id', id);
+    await db.del('schedule_blocks', id);
     loadBlocks();
   };
 

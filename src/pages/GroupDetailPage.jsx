@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { db } from '../lib/db';
 import { supabase } from '../lib/supabase';
 import { SESSION_STATUSES, ASCA_DOMAINS, PROGRESS_LEVELS, PROGRESS_COLORS } from '../lib/constants';
 import { autoLogTime } from '../lib/autoLogTime';
@@ -94,7 +95,7 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
         student_id,
         status: attStatus,
       }));
-      if (attRows.length) await supabase.from('attendance').insert(attRows);
+      if (attRows.length) await db.insertMany('attendance', attRows);
 
       // Feature #1: Auto-log time when session is completed
       if (status === 'Completed' && counselorId) {
@@ -216,7 +217,7 @@ function AddMemberModal({ open, onClose, groupId, existingIds }) {
 
   const handleAdd = async (studentId) => {
     setAdding(studentId);
-    await supabase.from('group_members').insert({ group_id: groupId, student_id: studentId });
+    await db.insert('group_members', { group_id: groupId, student_id: studentId });
     setAdding(null);
     onClose(true);
   };
@@ -276,7 +277,7 @@ function RateProgressModal({ open, onClose, sessionId, members, objectives }) {
       });
     }
     if (rows.length) {
-      await supabase.from('progress_ratings').insert(rows);
+      await db.insertMany('progress_ratings', rows);
     }
     setSaving(false);
     onClose(true);
@@ -537,7 +538,7 @@ export default function GroupDetailPage() {
 
   const removeMember = async (memberId) => {
     if (!confirm('Remove this student from the group?')) return;
-    await supabase.from('group_members').delete().eq('id', memberId);
+    await db.del('group_members', memberId);
     loadAll();
   };
 

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
-import { db, isLocalMode } from '../lib/db';
+import { db } from '../lib/db';
 import { URGENCY_LEVELS, CONCERN_TYPES } from '../lib/constants';
 
 const urgencyColor = { Urgent: '#ef4444', Soon: '#f59e0b', Routine: '#6b7280' };
@@ -14,7 +13,7 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
 
   useEffect(() => {
     if (open) {
-      supabase.from('groups').select('id, name').eq('counselor_id', counselorId).eq('status', 'active').then(({ data }) => setGroups(data || []));
+      db.select('groups', { eq: { counselor_id: counselorId, status: 'active' } }).then(({ data }) => setGroups(data || []));
     }
   }, [open, counselorId]);
 
@@ -25,7 +24,7 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
 
     // Create student record
     const nameParts = (referral.student_name || '').split(' ');
-    const { data: student } = await supabase.from('students').insert({
+    const { data: student } = await db.insert('students', {
       counselor_id: counselorId,
       name: referral.student_name,
       first_name: nameParts[0] || referral.student_name,
@@ -35,25 +34,25 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
       referral_source: referral.concern_type,
       tier: referral.urgency === 'Urgent' ? 3 : referral.urgency === 'Soon' ? 2 : 1,
       status: 'active',
-    }).select().single();
+    });
 
     // Link to group if selected
     if (mode === 'group' && selectedGroup && student) {
-      await supabase.from('group_members').insert({ group_id: selectedGroup, student_id: student.id });
+      await db.insert('group_members', { group_id: selectedGroup, student_id: student.id });
     }
 
     // Update referral status
-    await supabase.from('referrals').update({
+    await db.update('referrals', referral.id, {
       status: 'closed',
       resolution: mode === 'group' ? `Added to group` : 'Individual services',
       response_date: new Date().toISOString().slice(0, 10),
-    }).eq('id', referral.id);
+    });
 
     // Log teacher notification as a communication record
     const teacherName = referral.teacher_name || referral.submitted_by || 'Unknown';
     const assignmentType = mode === 'group' ? 'group counseling' : 'individual services';
     if (student) {
-      await supabase.from('communications').insert({
+      await db.insert('communications', {
         counselor_id: counselorId,
         student_id: student.id,
         contact_type: 'Written notice',
@@ -184,13 +183,9 @@ function ImportModal({ open, onClose, counselorId, onImported }) {
       status: 'open',
     }));
 
-    if (isLocalMode()) {
-      for (const rec of records) {
-        await db.insert('referrals', rec);
-      }
-    } else {
-      const { error: err } = await supabase.from('referrals').insert(records);
-      if (err) { setError(err.message); setImporting(false); return; }
+    for (const rec of records) {
+      const { error: err } = await db.insert('referrals', rec);
+      if (err) { setError(err.message || String(err)); setImporting(false); return; }
     }
 
     setImporting(false);
@@ -287,11 +282,7 @@ function AddReferralModal({ open, onClose, counselorId }) {
       submitted_by: teacherName,
       status: 'open',
     };
-    if (isLocalMode()) {
-      await db.insert('referrals', record);
-    } else {
-      await supabase.from('referrals').insert(record);
-    }
+    await db.insert('referrals', record);
     setSaving(false);
     onClose(true);
   };
@@ -359,20 +350,11 @@ export default function ReferralsPage() {
   const loadReferrals = useCallback(async () => {
     if (!counselor?.id) return;
     setLoading(true);
-    if (isLocalMode()) {
-      const { data } = await db.select('referrals', {
-        eq: { counselor_id: counselor.id },
-        order: { column: 'created_at', ascending: false },
-      });
-      setReferrals(data || []);
-    } else {
-      const { data } = await supabase
-        .from('referrals')
-        .select('*')
-        .eq('counselor_id', counselor.id)
-        .order('created_at', { ascending: false });
-      setReferrals(data || []);
-    }
+    const { data } = await db.select('referrals', {
+      eq: { counselor_id: counselor.id },
+      order: { column: 'created_at', ascending: false },
+    });
+    setReferrals(data || []);
     setLoading(false);
   }, [counselor]);
 
@@ -393,21 +375,13 @@ export default function ReferralsPage() {
 
   const handleDefer = async (ref) => {
     const changes = { status: 'deferred', response_date: new Date().toISOString().slice(0, 10) };
-    if (isLocalMode()) {
-      await db.update('referrals', ref.id, changes);
-    } else {
-      await supabase.from('referrals').update(changes).eq('id', ref.id);
-    }
+    await db.update('referrals', ref.id, changes);
     loadReferrals();
   };
 
   const handleClose = async (ref) => {
     const changes = { status: 'closed', resolution: 'Closed without action', response_date: new Date().toISOString().slice(0, 10) };
-    if (isLocalMode()) {
-      await db.update('referrals', ref.id, changes);
-    } else {
-      await supabase.from('referrals').update(changes).eq('id', ref.id);
-    }
+    await db.update('referrals', ref.id, changes);
     loadReferrals();
   };
 

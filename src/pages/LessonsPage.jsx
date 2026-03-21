@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/db';
 import { ASCA_DOMAINS } from '../lib/constants';
 
 const GRADES = ['K', '1', '2', '3', '4', '5'];
@@ -59,10 +59,10 @@ function LessonModal({ open, onClose, counselorId, editLesson }) {
     };
     let err;
     if (isEdit) {
-      ({ error: err } = await supabase.from('lesson_library').update(payload).eq('id', editLesson.id));
+      ({ error: err } = await db.update('lesson_library', editLesson.id, payload));
     } else {
       payload.counselor_id = counselorId;
-      ({ error: err } = await supabase.from('lesson_library').insert(payload));
+      ({ error: err } = await db.insert('lesson_library', payload));
     }
     if (err) { setError(err.message); setSaving(false); return; }
     setSaving(false);
@@ -169,11 +169,10 @@ export default function LessonsPage() {
   const loadLessons = useCallback(async () => {
     if (!counselor?.id) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('lesson_library')
-      .select('*')
-      .eq('counselor_id', counselor.id)
-      .order('created_at', { ascending: false });
+    const { data } = await db.select('lesson_library', {
+      eq: { counselor_id: counselor.id },
+      order: { column: 'created_at', ascending: false },
+    });
     setLessons(data || []);
     setLoading(false);
   }, [counselor]);
@@ -181,13 +180,13 @@ export default function LessonsPage() {
   useEffect(() => { loadLessons(); }, [loadLessons]);
 
   const toggleFavorite = async (lesson) => {
-    await supabase.from('lesson_library').update({ is_favorite: !lesson.is_favorite }).eq('id', lesson.id);
+    await db.update('lesson_library', lesson.id, { is_favorite: !lesson.is_favorite });
     loadLessons();
   };
 
   const handleDelete = async (lesson) => {
     if (!confirm(`Delete "${lesson.title}"? This cannot be undone.`)) return;
-    await supabase.from('lesson_library').delete().eq('id', lesson.id);
+    await db.del('lesson_library', lesson.id);
     loadLessons();
   };
 

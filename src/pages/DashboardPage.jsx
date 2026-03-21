@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/db';
 import { TIME_DOMAINS } from '../lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { startOfWeek, subWeeks, format } from 'date-fns';
@@ -100,7 +100,7 @@ function QuickLogModal({ open, onClose, counselorId }) {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
-    await supabase.from('time_entries').insert({
+    await db.insert('time_entries', {
       counselor_id: counselorId,
       entry_date: new Date().toISOString().slice(0, 10),
       domain,
@@ -162,12 +162,12 @@ export default function DashboardPage() {
     const yearStart = `${new Date().getFullYear()}-01-01`;
 
     const [sessionsRes, referralsRes, studentsRes, groupsRes, timeRes, missedRes] = await Promise.all([
-      supabase.from('sessions').select('id', { count: 'exact', head: true }).eq('counselor_id', counselor.id).eq('session_date', today),
-      supabase.from('referrals').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-      supabase.from('students').select('id, tier').eq('counselor_id', counselor.id).eq('status', 'active'),
-      supabase.from('groups').select('id', { count: 'exact', head: true }).eq('counselor_id', counselor.id).eq('status', 'active'),
-      supabase.from('time_entries').select('domain, duration_minutes').eq('counselor_id', counselor.id).gte('entry_date', yearStart),
-      supabase.from('sessions').select('id', { count: 'exact', head: true }).eq('counselor_id', counselor.id).eq('session_date', today).eq('status', 'Cancelled'),
+      db.count('sessions', { counselor_id: counselor.id, session_date: today }),
+      db.count('referrals', { status: 'open' }),
+      db.select('students', { eq: { counselor_id: counselor.id, status: 'active' }, select: 'id, tier' }),
+      db.count('groups', { counselor_id: counselor.id, status: 'active' }),
+      db.select('time_entries', { eq: { counselor_id: counselor.id }, gte: { entry_date: yearStart }, select: 'domain, duration_minutes' }),
+      db.count('sessions', { counselor_id: counselor.id, session_date: today, status: 'Cancelled' }),
     ]);
 
     const students = studentsRes.data || [];
@@ -191,14 +191,14 @@ export default function DashboardPage() {
     }));
 
     setStats({
-      sessionsToday: sessionsRes.count || 0,
-      pendingReferrals: referralsRes.count || 0,
-      missedAlerts: missedRes.count || 0,
+      sessionsToday: sessionsRes.count ?? 0,
+      pendingReferrals: referralsRes.count ?? 0,
+      missedAlerts: missedRes.count ?? 0,
       totalStudents: students.length,
       tier1,
       tier2,
       tier3,
-      activeGroups: groupsRes.count || 0,
+      activeGroups: groupsRes.count ?? 0,
       compliancePct,
       domainHours,
     });
@@ -208,34 +208,43 @@ export default function DashboardPage() {
   const loadMakeupQueue = useCallback(async () => {
     if (!counselor?.id) return;
 
-    const { data } = await supabase
-      .from('attendance')
-      .select(`
-        id,
-        status,
-        student_id,
-        session_id,
-        students ( id, name, first_name, last_name ),
-        sessions ( id, session_date, group_id, groups ( id, name ) )
-      `)
-      .in('status', ['absent', 'makeup_needed'])
-      .is('makeup_session_id', null);
+    // Fetch attendance rows, then manually join students/sessions/groups
+    const { data: allAttendance } = await db.select('attendance');
+    const attendanceRows = (allAttendance || []).filter(
+      (a) => ['absent', 'makeup_needed'].includes(a.status) && !a.makeup_session_id
+    );
 
-    if (!data) {
+    if (!attendanceRows.length) {
       setMakeupQueue([]);
       return;
     }
 
-    // Filter to only this counselor's students/sessions and build display list
-    const queue = data
-      .filter((row) => row.students && row.sessions)
-      .map((row) => ({
-        id: row.id,
-        studentName: sName(row.students),
-        sessionDate: row.sessions.session_date,
-        groupName: row.sessions.groups?.name || 'Individual',
-        groupId: row.sessions.group_id,
-      }))
+    // Fetch related students, sessions, and groups for manual join
+    const [{ data: allStudents }, { data: allSessions }, { data: allGroups }] = await Promise.all([
+      db.select('students'),
+      db.select('sessions'),
+      db.select('groups'),
+    ]);
+
+    const studentMap = Object.fromEntries((allStudents || []).map((s) => [s.id, s]));
+    const sessionMap = Object.fromEntries((allSessions || []).map((s) => [s.id, s]));
+    const groupMap = Object.fromEntries((allGroups || []).map((g) => [g.id, g]));
+
+    const queue = attendanceRows
+      .map((row) => {
+        const student = studentMap[row.student_id];
+        const session = sessionMap[row.session_id];
+        if (!student || !session) return null;
+        const group = session.group_id ? groupMap[session.group_id] : null;
+        return {
+          id: row.id,
+          studentName: sName(student),
+          sessionDate: session.session_date,
+          groupName: group?.name || 'Individual',
+          groupId: session.group_id,
+        };
+      })
+      .filter(Boolean)
       .sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
 
     setMakeupQueue(queue);
@@ -249,11 +258,11 @@ export default function DashboardPage() {
     const weekStart = startOfWeek(now, { weekStartsOn: 1 }); // Monday
     const eightWeeksAgo = subWeeks(weekStart, 7); // 8 weeks total including current
 
-    const { data } = await supabase
-      .from('time_entries')
-      .select('entry_date, domain, duration_minutes')
-      .eq('counselor_id', counselor.id)
-      .gte('entry_date', format(eightWeeksAgo, 'yyyy-MM-dd'));
+    const { data } = await db.select('time_entries', {
+      eq: { counselor_id: counselor.id },
+      gte: { entry_date: format(eightWeeksAgo, 'yyyy-MM-dd') },
+      select: 'entry_date, domain, duration_minutes',
+    });
 
     if (!data || data.length === 0) {
       setTrendData([]);

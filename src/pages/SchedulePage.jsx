@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/db';
 import { SESSION_STATUSES } from '../lib/constants';
 import { startOfWeek, endOfWeek, addWeeks, format, parseISO, isToday } from 'date-fns';
 import { startOfMonth, endOfMonth, addMonths, getDay, getDaysInMonth } from 'date-fns';
@@ -46,7 +46,7 @@ function SessionDetailModal({ session, groups, onClose, onSave }) {
 
   const handleSave = async () => {
     setSaving(true);
-    await supabase.from('sessions').update({ status, notes }).eq('id', session.id);
+    await db.update('sessions', session.id, { status, notes });
 
     // Feature #1 — Auto-log time on session complete
     if (status === 'Completed') {
@@ -240,15 +240,14 @@ export default function SchedulePage() {
     const from = format(weekStart, 'yyyy-MM-dd');
     const to = format(weekEnd, 'yyyy-MM-dd');
     const [sessRes, grpRes, blocksRes] = await Promise.all([
-      supabase
-        .from('sessions')
-        .select('*')
-        .eq('counselor_id', counselor.id)
-        .gte('session_date', from)
-        .lte('session_date', to)
-        .order('start_time'),
-      supabase.from('groups').select('id, name').eq('counselor_id', counselor.id),
-      supabase.from('campus_schedule_blocks').select('*').eq('counselor_id', counselor.id),
+      db.select('sessions', {
+        eq: { counselor_id: counselor.id },
+        gte: { session_date: from },
+        lte: { session_date: to },
+        order: { column: 'start_time', ascending: true },
+      }),
+      db.select('groups', { eq: { counselor_id: counselor.id } }),
+      db.select('campus_schedule_blocks', { eq: { counselor_id: counselor.id } }),
     ]);
     setSessions(sessRes.data || []);
     setGroups(grpRes.data || []);
@@ -261,14 +260,13 @@ export default function SchedulePage() {
     const from = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
     const to = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
     const [sessRes, grpRes] = await Promise.all([
-      supabase
-        .from('sessions')
-        .select('*')
-        .eq('counselor_id', counselor.id)
-        .gte('session_date', from)
-        .lte('session_date', to)
-        .order('start_time'),
-      supabase.from('groups').select('id, name').eq('counselor_id', counselor.id),
+      db.select('sessions', {
+        eq: { counselor_id: counselor.id },
+        gte: { session_date: from },
+        lte: { session_date: to },
+        order: { column: 'start_time', ascending: true },
+      }),
+      db.select('groups', { eq: { counselor_id: counselor.id } }),
     ]);
     setMonthlySessions(sessRes.data || []);
     setGroups(grpRes.data || []);

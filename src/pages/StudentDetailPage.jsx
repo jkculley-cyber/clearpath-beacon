@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/db';
 import { CONTACT_TYPES, PROGRESS_COLORS, PROGRESS_LEVELS, MTSS_TIERS, STUDENT_STATUSES } from '../lib/constants';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { autoLogTime } from '../lib/autoLogTime';
@@ -59,7 +59,7 @@ function LogSessionModal({ open, onClose, student, counselorId }) {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
-    const { data: sess } = await supabase.from('sessions').insert({
+    const { data: sess } = await db.insert('sessions', {
       counselor_id: counselorId,
       student_id: student.id,
       session_date: date,
@@ -67,7 +67,7 @@ function LogSessionModal({ open, onClose, student, counselorId }) {
       notes,
       session_type: 'individual',
       status: 'Completed',
-    }).select().single();
+    });
 
     if (sess) {
       await autoLogTime({
@@ -154,7 +154,7 @@ function LogContactModal({ open, onClose, student, counselorId }) {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
-    await supabase.from('communications').insert({
+    await db.insert('communications', {
       counselor_id: counselorId,
       student_id: student.id,
       contact_type: contactType,
@@ -237,12 +237,9 @@ function NoteModal({ open, onClose, student, counselorId, editNote }) {
     e.preventDefault();
     setSaving(true);
     if (editNote) {
-      await supabase
-        .from('counselor_notes')
-        .update({ note_text: text })
-        .eq('id', editNote.id);
+      await db.update('counselor_notes', editNote.id, { note_text: text });
     } else {
-      await supabase.from('counselor_notes').insert({
+      await db.insert('counselor_notes', {
         counselor_id: counselorId,
         student_id: student.id,
         note_text: text,
@@ -320,7 +317,7 @@ function EditStudentModal({ open, onClose, student }) {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
-    await supabase.from('students').update({
+    await db.update('students', student.id, {
       name: (firstName + ' ' + lastName).trim(),
       first_name: firstName,
       last_name: lastName,
@@ -329,7 +326,7 @@ function EditStudentModal({ open, onClose, student }) {
       tier: parseInt(tier, 10),
       status,
       referral_source: referralSource,
-    }).eq('id', student.id);
+    });
     setSaving(false);
     onClose(true);
   };
@@ -401,12 +398,11 @@ function RateProgressModal({ open, onClose, student, counselorId, groups }) {
 
   useEffect(() => {
     if (open && student?.id) {
-      supabase.from('sessions').select('id, session_date, session_type, group_id')
-        .or(`student_id.eq.${student.id}`)
-        .eq('status', 'Completed')
-        .order('session_date', { ascending: false })
-        .limit(10)
-        .then(({ data }) => {
+      db.select('sessions', {
+        eq: { student_id: student.id, status: 'Completed' },
+        order: { column: 'session_date', ascending: false },
+        limit: 10,
+      }).then(({ data }) => {
           setRecentSessions(data || []);
           if (data?.length) setSessionId(data[0].id);
         });
@@ -431,7 +427,7 @@ function RateProgressModal({ open, onClose, student, counselorId, groups }) {
     e.preventDefault();
     if (!sessionId) return;
     setSaving(true);
-    await supabase.from('progress_ratings').insert({
+    await db.insert('progress_ratings', {
       session_id: sessionId,
       student_id: student.id,
       objective_index: parseInt(objectiveIndex, 10),
@@ -526,34 +522,42 @@ export default function StudentDetailPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     const [stuRes, grpRes, sessRes, commRes, noteRes, progRes] = await Promise.all([
-      supabase.from('students').select('*').eq('id', id).single(),
-      supabase
-        .from('group_members')
-        .select('*, groups(id, name, focus_area, status)')
-        .eq('student_id', id),
-      supabase
-        .from('sessions')
-        .select('*')
-        .eq('student_id', id)
-        .order('session_date', { ascending: false }),
-      supabase
-        .from('communications')
-        .select('*')
-        .eq('student_id', id)
-        .order('contact_date', { ascending: false }),
-      supabase
-        .from('counselor_notes')
-        .select('*')
-        .eq('student_id', id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('progress_ratings')
-        .select('*')
-        .eq('student_id', id)
-        .order('created_at'),
+      db.selectById('students', id),
+      db.select('group_members', { eq: { student_id: id } }),
+      db.select('sessions', {
+        eq: { student_id: id },
+        order: { column: 'session_date', ascending: false },
+      }),
+      db.select('communications', {
+        eq: { student_id: id },
+        order: { column: 'contact_date', ascending: false },
+      }),
+      db.select('counselor_notes', {
+        eq: { student_id: id },
+        order: { column: 'created_at', ascending: false },
+      }),
+      db.select('progress_ratings', {
+        eq: { student_id: id },
+        order: { column: 'created_at', ascending: true },
+      }),
     ]);
     setStudent(stuRes.data);
-    setGroups(grpRes.data || []);
+
+    // Manually join groups onto group_members (replaces nested select)
+    const members = grpRes.data || [];
+    if (members.length > 0) {
+      const groupIds = [...new Set(members.map((m) => m.group_id).filter(Boolean))];
+      const groupMap = {};
+      for (const gid of groupIds) {
+        const { data: g } = await db.selectById('groups', gid);
+        if (g) groupMap[gid] = g;
+      }
+      for (const m of members) {
+        m.groups = groupMap[m.group_id] || null;
+      }
+    }
+    setGroups(members);
+
     setSessions(sessRes.data || []);
     setComms(commRes.data || []);
     setNotes(noteRes.data || []);
@@ -567,7 +571,7 @@ export default function StudentDetailPage() {
 
   const deleteNote = async (noteId) => {
     if (!confirm('Delete this note?')) return;
-    await supabase.from('counselor_notes').delete().eq('id', noteId);
+    await db.del('counselor_notes', noteId);
     loadAll();
   };
 

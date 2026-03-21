@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/db';
 import { TIME_DOMAINS } from '../lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
@@ -31,13 +31,12 @@ function pdfFooter(doc) {
 }
 
 async function fetchEntriesRange(counselorId, from, to) {
-  const { data } = await supabase
-    .from('time_entries')
-    .select('*')
-    .eq('counselor_id', counselorId)
-    .gte('entry_date', from)
-    .lte('entry_date', to)
-    .order('entry_date');
+  const { data } = await db.select('time_entries', {
+    eq: { counselor_id: counselorId },
+    gte: { entry_date: from },
+    lte: { entry_date: to },
+    order: { column: 'entry_date', ascending: true },
+  });
   return data || [];
 }
 
@@ -263,9 +262,9 @@ function EntryModal({ open, onClose, counselorId, editEntry }) {
       notes: notes || null,
     };
     if (editEntry) {
-      await supabase.from('time_entries').update(row).eq('id', editEntry.id);
+      await db.update('time_entries', editEntry.id, row);
     } else {
-      await supabase.from('time_entries').insert(row);
+      await db.insert('time_entries', row);
     }
     setSaving(false);
     onClose(true);
@@ -327,10 +326,24 @@ export default function TimeTrackerPage() {
     const me = format(endOfMonth(new Date(selectedDate)), 'yyyy-MM-dd');
 
     const [dayRes, weekRes, monthRes, ytdRes] = await Promise.all([
-      supabase.from('time_entries').select('*').eq('counselor_id', counselor.id).eq('entry_date', selectedDate).order('created_at'),
-      supabase.from('time_entries').select('domain, duration_minutes').eq('counselor_id', counselor.id).gte('entry_date', ws).lte('entry_date', we),
-      supabase.from('time_entries').select('domain, duration_minutes').eq('counselor_id', counselor.id).gte('entry_date', ms).lte('entry_date', me),
-      supabase.from('time_entries').select('domain, duration_minutes').eq('counselor_id', counselor.id).gte('entry_date', yearStart),
+      db.select('time_entries', {
+        eq: { counselor_id: counselor.id, entry_date: selectedDate },
+        order: { column: 'created_at', ascending: true },
+      }),
+      db.select('time_entries', {
+        eq: { counselor_id: counselor.id },
+        gte: { entry_date: ws },
+        lte: { entry_date: we },
+      }),
+      db.select('time_entries', {
+        eq: { counselor_id: counselor.id },
+        gte: { entry_date: ms },
+        lte: { entry_date: me },
+      }),
+      db.select('time_entries', {
+        eq: { counselor_id: counselor.id },
+        gte: { entry_date: yearStart },
+      }),
     ]);
 
     setDayEntries(dayRes.data || []);
@@ -365,7 +378,7 @@ export default function TimeTrackerPage() {
 
   const deleteEntry = async (entryId) => {
     if (!confirm('Delete this time entry?')) return;
-    await supabase.from('time_entries').delete().eq('id', entryId);
+    await db.del('time_entries', entryId);
     loadAll();
   };
 

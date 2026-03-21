@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { db } from '../lib/db';
 import { supabase } from '../lib/supabase';
 import { CONTACT_TYPES } from '../lib/constants';
 
@@ -38,12 +39,33 @@ export default function CommunicationsPage() {
     if (!counselor?.id) return;
     setLoading(true);
     const [commsRes, studRes, templRes] = await Promise.all([
-      supabase.from('communications').select('*, students(name, first_name, last_name, grade)').eq('counselor_id', counselor.id).order('contact_date', { ascending: false }).order('created_at', { ascending: false }).limit(100),
-      supabase.from('students').select('id, name, first_name, last_name, grade').eq('counselor_id', counselor.id).eq('status', 'active').order('name'),
-      supabase.from('communication_templates').select('*').eq('counselor_id', counselor.id).order('name').then(r => r).catch(() => ({ data: [] })),
+      db.select('communications', {
+        eq: { counselor_id: counselor.id },
+        order: { column: 'contact_date', ascending: false },
+        limit: 100,
+      }),
+      db.select('students', {
+        eq: { counselor_id: counselor.id, status: 'active' },
+        order: { column: 'name', ascending: true },
+      }),
+      db.select('communication_templates', {
+        eq: { counselor_id: counselor.id },
+        order: { column: 'name', ascending: true },
+      }).catch(() => ({ data: [] })),
     ]);
-    setComms(commsRes.data || []);
-    setStudents(studRes.data || []);
+
+    // Manually join student data onto communications
+    const allStudents = studRes.data || [];
+    const studentMap = {};
+    allStudents.forEach((s) => { studentMap[s.id] = s; });
+
+    const commsWithStudents = (commsRes.data || []).map((c) => ({
+      ...c,
+      students: studentMap[c.student_id] || null,
+    }));
+
+    setComms(commsWithStudents);
+    setStudents(allStudents);
     setTemplates(templRes.data || []);
     setLoading(false);
   }, [counselor]);
@@ -54,7 +76,7 @@ export default function CommunicationsPage() {
     e.preventDefault();
     if (!studentId) return;
     setSaving(true);
-    await supabase.from('communications').insert({
+    await db.insert('communications', {
       counselor_id: counselor.id,
       student_id: studentId,
       contact_type: contactType,
@@ -93,7 +115,7 @@ export default function CommunicationsPage() {
 
   const handleSaveTemplate = async () => {
     if (!templateName.trim() || !notes.trim()) return;
-    await supabase.from('communication_templates').insert({
+    await db.insert('communication_templates', {
       counselor_id: counselor.id,
       name: templateName,
       body: notes,
@@ -121,7 +143,7 @@ export default function CommunicationsPage() {
 
   const deleteTemplate = async (id) => {
     if (!confirm('Delete this template?')) return;
-    await supabase.from('communication_templates').delete().eq('id', id);
+    await db.del('communication_templates', id);
     loadData();
   };
 

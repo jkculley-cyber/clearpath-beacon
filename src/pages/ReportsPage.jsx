@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/db';
 import { TIME_DOMAINS } from '../lib/constants';
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
@@ -108,71 +108,66 @@ export default function ReportsPage() {
         sessionsTrendRes,
         referralTypesRes,
         groupsRes,
+        groupMembersRes,
+        groupSessionsRes,
       ] = await Promise.all([
         // Active caseload (not date-filtered)
-        supabase
-          .from('students')
-          .select('id, tier')
-          .eq('counselor_id', counselor.id)
-          .eq('status', 'active'),
+        db.select('students', {
+          eq: { counselor_id: counselor.id, status: 'active' },
+        }),
 
         // Sessions in period
-        supabase
-          .from('sessions')
-          .select('id', { count: 'exact', head: true })
-          .eq('counselor_id', counselor.id)
-          .gte('session_date', from)
-          .lte('session_date', to),
+        db.select('sessions', {
+          eq: { counselor_id: counselor.id },
+          gte: { session_date: from },
+          lte: { session_date: to },
+        }),
 
-        // Pending referrals (not date-filtered)
-        supabase
-          .from('referrals')
-          .select('id', { count: 'exact', head: true })
-          .eq('counselor_id', counselor.id)
-          .in('status', ['open', 'in_progress']),
+        // Pending referrals (not date-filtered) — fetch all for this counselor, filter client-side
+        db.select('referrals', {
+          eq: { counselor_id: counselor.id },
+        }),
 
         // YTD time entries for compliance %
-        supabase
-          .from('time_entries')
-          .select('domain, duration_minutes')
-          .eq('counselor_id', counselor.id)
-          .gte('entry_date', yearStart)
-          .lte('entry_date', yearEnd),
+        db.select('time_entries', {
+          eq: { counselor_id: counselor.id },
+          gte: { entry_date: yearStart },
+          lte: { entry_date: yearEnd },
+        }),
 
         // Period time entries for domain breakdown
-        supabase
-          .from('time_entries')
-          .select('domain, duration_minutes')
-          .eq('counselor_id', counselor.id)
-          .gte('entry_date', from)
-          .lte('entry_date', to),
+        db.select('time_entries', {
+          eq: { counselor_id: counselor.id },
+          gte: { entry_date: from },
+          lte: { entry_date: to },
+        }),
 
         // Sessions last 6 months for trend
-        supabase
-          .from('sessions')
-          .select('id, session_date')
-          .eq('counselor_id', counselor.id)
-          .gte('session_date', format(subMonths(new Date(), 5), 'yyyy-MM-01'))
-          .lte('session_date', format(endOfMonth(new Date()), 'yyyy-MM-dd')),
+        db.select('sessions', {
+          eq: { counselor_id: counselor.id },
+          gte: { session_date: format(subMonths(new Date(), 5), 'yyyy-MM-01') },
+          lte: { session_date: format(endOfMonth(new Date()), 'yyyy-MM-dd') },
+        }),
 
         // Referral concern types for pipeline
-        supabase
-          .from('referrals')
-          .select('concern_type')
-          .eq('counselor_id', counselor.id)
-          .gte('created_at', from)
-          .lte('created_at', to + 'T23:59:59'),
+        db.select('referrals', {
+          eq: { counselor_id: counselor.id },
+          gte: { created_at: from },
+          lte: { created_at: to + 'T23:59:59' },
+        }),
 
-        // Groups + members + sessions + attendance for utilization
-        supabase
-          .from('groups')
-          .select(`
-            id, name,
-            group_members ( id, student_id ),
-            sessions ( id, session_date, attendance ( id, status ) )
-          `)
-          .eq('counselor_id', counselor.id)
-          .eq('status', 'active'),
+        // Groups for utilization
+        db.select('groups', {
+          eq: { counselor_id: counselor.id, status: 'active' },
+        }),
+
+        // All group_members (we'll filter by group ids client-side)
+        db.select('group_members', {}),
+
+        // All sessions for groups (we'll filter client-side)
+        db.select('sessions', {
+          eq: { counselor_id: counselor.id },
+        }),
       ]);
 
       /* 1. Active caseload */
@@ -188,10 +183,12 @@ export default function ReportsPage() {
       setTierData(tiers);
 
       /* 2. Sessions this period */
-      setSessionCount(sessionsRes.count || 0);
+      setSessionCount((sessionsRes.data || []).length);
 
       /* 3. Pending referrals */
-      setPendingReferrals(referralsRes.count || 0);
+      const allReferrals = referralsRes.data || [];
+      const pending = allReferrals.filter((r) => r.status === 'open' || r.status === 'in_progress');
+      setPendingReferrals(pending.length);
 
       /* 4. YTD counseling % */
       const ytdEntries = timeYtdRes.data || [];
@@ -241,11 +238,19 @@ export default function ReportsPage() {
         .sort((a, b) => b.count - a.count);
       setReferralPipeline(refArr);
 
-      /* 8. Group utilization */
+      /* 8. Group utilization — manually join groups, members, sessions, attendance */
       const groups = groupsRes.data || [];
+      const allGroupMembers = groupMembersRes.data || [];
+      const allSessions = groupSessionsRes.data || [];
+
+      // Fetch attendance for all sessions
+      const { data: allAttendance } = await db.select('attendance', {});
+
       const groupRows = groups.map((g) => {
-        const memberCount = (g.group_members || []).length;
-        const periodSessions = (g.sessions || []).filter(
+        const members = allGroupMembers.filter((m) => m.group_id === g.id);
+        const memberCount = members.length;
+        const gSessions = allSessions.filter((s) => s.group_id === g.id);
+        const periodSessions = gSessions.filter(
           (s) => s.session_date >= from && s.session_date <= to
         );
         const sessionCnt = periodSessions.length;
@@ -253,7 +258,7 @@ export default function ReportsPage() {
         let totalExpected = 0;
         let totalPresent = 0;
         periodSessions.forEach((s) => {
-          const att = s.attendance || [];
+          const att = (allAttendance || []).filter((a) => a.session_id === s.id);
           totalExpected += memberCount;
           totalPresent += att.filter((a) => a.status === 'present').length;
         });

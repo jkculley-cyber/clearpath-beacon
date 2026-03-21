@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/db';
 import { MTSS_TIERS, STUDENT_STATUSES, CONCERN_TYPES } from '../lib/constants';
 
 const GRADES = ['K', '1', '2', '3', '4', '5'];
@@ -105,7 +105,7 @@ function ImportModal({ open, onClose, counselorId, csvFile }) {
     let errors = [];
     for (let i = 0; i < records.length; i += 50) {
       const chunk = records.slice(i, i + 50);
-      const { error: err, data } = await supabase.from('students').insert(chunk).select('id');
+      const { error: err, data } = await db.insertMany('students', chunk);
       if (err) errors.push(`Rows ${i + 1}-${i + chunk.length}: ${err.message}`);
       else success += (data?.length || chunk.length);
     }
@@ -194,7 +194,7 @@ function AddStudentModal({ open, onClose, counselorId }) {
     e.preventDefault();
     setSaving(true);
     setError('');
-    const { error: err } = await supabase.from('students').insert({
+    const { error: err } = await db.insert('students', {
       counselor_id: counselorId,
       name: (firstName + ' ' + lastName).trim(),
       first_name: firstName,
@@ -283,17 +283,16 @@ export default function StudentsPage() {
   const loadStudents = useCallback(async () => {
     if (!counselor?.id) return;
     setLoading(true);
-    let q = supabase
-      .from('students')
-      .select('*, sessions:sessions(id)')
-      .eq('counselor_id', counselor.id)
-      .order('name');
+    const filters = { counselor_id: counselor.id };
+    if (filterStatus) filters.status = filterStatus;
+    if (filterGrade) filters.grade = filterGrade;
+    if (filterTier) filters.tier = parseInt(filterTier, 10);
 
-    if (filterStatus) q = q.eq('status', filterStatus);
-    if (filterGrade) q = q.eq('grade', filterGrade);
-    if (filterTier) q = q.eq('tier', parseInt(filterTier, 10));
-
-    const { data } = await q;
+    const { data } = await db.select('students', {
+      eq: filters,
+      order: { column: 'name', ascending: true },
+      joins: [{ table: 'sessions', fk: 'student_id', as: 'sessions' }],
+    });
     setStudents(data || []);
     setLoading(false);
   }, [counselor, filterStatus, filterGrade, filterTier]);

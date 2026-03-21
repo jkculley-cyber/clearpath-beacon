@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { db } from './db';
 
 /**
  * Auto-log a time entry when a session is marked Completed.
@@ -6,16 +6,14 @@ import { supabase } from './supabase';
  */
 export async function autoLogTime({ counselorId, sessionId, date, durationMinutes, description }) {
   // Check if auto-entry already exists for this session
-  const { data: existing } = await supabase
-    .from('time_entries')
-    .select('id')
-    .eq('source', 'auto_session')
-    .eq('source_id', sessionId)
-    .limit(1);
+  const { data: existing } = await db.select('time_entries', {
+    eq: { source: 'auto_session', source_id: sessionId },
+    limit: 1,
+  });
 
   if (existing?.length) return; // Already logged
 
-  return supabase.from('time_entries').insert({
+  return db.insert('time_entries', {
     counselor_id: counselorId,
     entry_date: date,
     domain: 'responsive',
