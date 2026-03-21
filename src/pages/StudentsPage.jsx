@@ -24,6 +24,7 @@ function AddStudentModal({ open, onClose, counselorId }) {
     setError('');
     const { error: err } = await supabase.from('students').insert({
       counselor_id: counselorId,
+      name: (firstName + ' ' + lastName).trim(),
       first_name: firstName,
       last_name: lastName,
       grade: grade || null,
@@ -105,7 +106,7 @@ export default function StudentsPage() {
       .from('students')
       .select('*, sessions:sessions(id)')
       .eq('counselor_id', counselor.id)
-      .order('last_name');
+      .order('name');
 
     if (filterStatus) q = q.eq('status', filterStatus);
     if (filterGrade) q = q.eq('grade', filterGrade);
@@ -118,10 +119,12 @@ export default function StudentsPage() {
 
   useEffect(() => { loadStudents(); }, [loadStudents]);
 
+  const studentName = (s) => s.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s.name || '');
+
   const filtered = students.filter((s) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return (s.first_name + ' ' + s.last_name).toLowerCase().includes(q) || (s.teacher || '').toLowerCase().includes(q);
+    return studentName(s).toLowerCase().includes(q) || (s.teacher || '').toLowerCase().includes(q);
   });
 
   const tierBadge = (t) => {
@@ -183,7 +186,7 @@ export default function StudentsPage() {
               {filtered.map((s) => (
                 <tr key={s.id} onClick={() => navigate(`/students/${s.id}`)} style={{ borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }}>
                   <td style={tdStyle}>
-                    <span style={{ fontWeight: 600, color: '#1a2332' }}>{s.first_name} {s.last_name}</span>
+                    <span style={{ fontWeight: 600, color: '#1a2332' }}>{studentName(s)}</span>
                   </td>
                   <td style={tdStyle}>{s.grade || '--'}</td>
                   <td style={tdStyle}>{s.teacher || '--'}</td>

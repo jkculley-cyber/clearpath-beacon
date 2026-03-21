@@ -31,13 +31,16 @@ export default function CommunicationsPage() {
   const [filterType, setFilterType] = useState('');
   const [sortField, setSortField] = useState('contact_date');
 
+  // Student name helper — prefer first_name/last_name, fall back to name
+  const sName = (s) => s.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s.name || '');
+
   const loadData = useCallback(async () => {
     if (!counselor?.id) return;
     setLoading(true);
     const [commsRes, studRes, templRes] = await Promise.all([
-      supabase.from('communications').select('*, students(first_name, last_name)').eq('counselor_id', counselor.id).order('contact_date', { ascending: false }).limit(100),
-      supabase.from('students').select('id, first_name, last_name, grade').eq('counselor_id', counselor.id).eq('status', 'active').order('last_name'),
-      supabase.from('communication_templates').select('*').eq('counselor_id', counselor.id).order('name'),
+      supabase.from('communications').select('*, students(name, first_name, last_name, grade)').eq('counselor_id', counselor.id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('students').select('id, name, first_name, last_name, grade').eq('counselor_id', counselor.id).eq('status', 'active').order('name'),
+      supabase.from('communication_templates').select('*').eq('counselor_id', counselor.id).order('name').then(r => r).catch(() => ({ data: [] })),
     ]);
     setComms(commsRes.data || []);
     setStudents(studRes.data || []);
@@ -76,7 +79,7 @@ export default function CommunicationsPage() {
       const { data } = await supabase.functions.invoke('generate-parent-update', {
         body: {
           student_id: studentId,
-          student_name: `${student?.first_name} ${student?.last_name}`,
+          student_name: student ? sName(student) : '',
           language,
           counselor_id: counselor.id,
         },
@@ -112,7 +115,7 @@ export default function CommunicationsPage() {
 
   // Student search dropdown
   const filteredStudents = studentSearch
-    ? students.filter((s) => `${s.first_name} ${s.last_name}`.toLowerCase().includes(studentSearch.toLowerCase()))
+    ? students.filter((s) => sName(s).toLowerCase().includes(studentSearch.toLowerCase()))
     : students;
 
   const filteredComms = comms.filter((c) => {
@@ -141,9 +144,9 @@ export default function CommunicationsPage() {
                 {studentSearch && !studentId && (
                   <div style={dropdown}>
                     {filteredStudents.slice(0, 8).map((s) => (
-                      <div key={s.id} onClick={() => { setStudentId(s.id); setStudentSearch(`${s.first_name} ${s.last_name}`); }}
+                      <div key={s.id} onClick={() => { setStudentId(s.id); setStudentSearch(sName(s)); }}
                         style={dropdownItem}>
-                        {s.first_name} {s.last_name} <span style={{ color: '#9ca3af', fontSize: 12 }}>Grade {s.grade}</span>
+                        {sName(s)} <span style={{ color: '#9ca3af', fontSize: 12 }}>Grade {s.grade}</span>
                       </div>
                     ))}
                   </div>
@@ -245,9 +248,9 @@ export default function CommunicationsPage() {
                   <div key={c.id} style={{ padding: '10px 0', borderBottom: '1px solid #f3f4f6' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                       <span style={{ fontWeight: 600, color: '#1a2332', fontSize: 14 }}>
-                        {c.students?.first_name} {c.students?.last_name}
+                        {c.students ? sName(c.students) : 'Unknown'}
                       </span>
-                      <span style={{ fontSize: 12, color: '#9ca3af' }}>{c.contact_date}</span>
+                      <span style={{ fontSize: 12, color: '#9ca3af' }}>{c.contact_date || c.created_at?.slice(0, 10)}</span>
                     </div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>
                       {c.contact_type} &middot; {c.duration_minutes} min

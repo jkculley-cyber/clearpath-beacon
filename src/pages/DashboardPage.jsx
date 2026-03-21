@@ -4,6 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { TIME_DOMAINS } from '../lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { startOfWeek, subWeeks, format } from 'date-fns';
+
+/* ─── Helper: student display name ─── */
+const sName = (s) => s?.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s?.name || 'Unknown');
 
 /* ─── 80/20 Ring ─── */
 function ComplianceRing({ percentage, size = 160, strokeWidth = 14 }) {
@@ -22,6 +26,65 @@ function ComplianceRing({ percentage, size = 160, strokeWidth = 14 }) {
         strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }}
       />
     </svg>
+  );
+}
+
+/* ─── Trend Sparkline (SVG polyline, 8 weeks) ─── */
+function TrendSparkline({ data }) {
+  // data = [{ label: 'MM/DD', pct: 0-100 }, ...]
+  if (!data || data.length < 2) return null;
+
+  const width = 260;
+  const height = 48;
+  const padX = 4;
+  const padY = 6;
+  const plotW = width - padX * 2;
+  const plotH = height - padY * 2;
+
+  const maxPct = 100;
+  const points = data.map((d, i) => {
+    const x = padX + (i / (data.length - 1)) * plotW;
+    const y = padY + plotH - (d.pct / maxPct) * plotH;
+    return `${x},${y}`;
+  }).join(' ');
+
+  // 80% threshold line
+  const thresholdY = padY + plotH - (80 / maxPct) * plotH;
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>8-Week Trend</div>
+      <svg width={width} height={height} style={{ display: 'block', margin: '0 auto' }}>
+        {/* 80% threshold dashed line */}
+        <line
+          x1={padX} y1={thresholdY} x2={width - padX} y2={thresholdY}
+          stroke="#f59e0b" strokeWidth="1" strokeDasharray="4,3" opacity="0.6"
+        />
+        {/* Trend polyline */}
+        <polyline
+          points={points}
+          fill="none"
+          stroke="#2A9D8F"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        {/* Data points */}
+        {data.map((d, i) => {
+          const x = padX + (i / (data.length - 1)) * plotW;
+          const y = padY + plotH - (d.pct / maxPct) * plotH;
+          return <circle key={i} cx={x} cy={y} r="3" fill={d.pct >= 80 ? '#22c55e' : '#ef4444'} />;
+        })}
+      </svg>
+      {/* Week labels */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', padding: `0 ${padX}px`, marginTop: 2 }}>
+        {data.map((d, i) => (
+          <span key={i} style={{ fontSize: 9, color: '#9ca3af', width: 0, textAlign: 'center', overflow: 'visible', whiteSpace: 'nowrap' }}>
+            {d.label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -90,6 +153,8 @@ export default function DashboardPage() {
     domainHours: [],
   });
   const [showQuickLog, setShowQuickLog] = useState(false);
+  const [makeupQueue, setMakeupQueue] = useState([]);
+  const [trendData, setTrendData] = useState([]);
 
   const loadData = useCallback(async () => {
     if (!counselor?.id) return;
@@ -139,7 +204,106 @@ export default function DashboardPage() {
     });
   }, [counselor]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  /* ─── Feature #6: Make-up Session Tracker ─── */
+  const loadMakeupQueue = useCallback(async () => {
+    if (!counselor?.id) return;
+
+    const { data } = await supabase
+      .from('attendance')
+      .select(`
+        id,
+        status,
+        student_id,
+        session_id,
+        students ( id, name, first_name, last_name ),
+        sessions ( id, session_date, group_id, groups ( id, name ) )
+      `)
+      .in('status', ['absent', 'makeup_needed'])
+      .is('makeup_session_id', null);
+
+    if (!data) {
+      setMakeupQueue([]);
+      return;
+    }
+
+    // Filter to only this counselor's students/sessions and build display list
+    const queue = data
+      .filter((row) => row.students && row.sessions)
+      .map((row) => ({
+        id: row.id,
+        studentName: sName(row.students),
+        sessionDate: row.sessions.session_date,
+        groupName: row.sessions.groups?.name || 'Individual',
+        groupId: row.sessions.group_id,
+      }))
+      .sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
+
+    setMakeupQueue(queue);
+  }, [counselor]);
+
+  /* ─── Feature #8: 8-Week Trend ─── */
+  const loadTrend = useCallback(async () => {
+    if (!counselor?.id) return;
+
+    const now = new Date();
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 }); // Monday
+    const eightWeeksAgo = subWeeks(weekStart, 7); // 8 weeks total including current
+
+    const { data } = await supabase
+      .from('time_entries')
+      .select('entry_date, domain, duration_minutes')
+      .eq('counselor_id', counselor.id)
+      .gte('entry_date', format(eightWeeksAgo, 'yyyy-MM-dd'));
+
+    if (!data || data.length === 0) {
+      setTrendData([]);
+      return;
+    }
+
+    // Build 8 week buckets
+    const weeks = [];
+    for (let i = 7; i >= 0; i--) {
+      const ws = subWeeks(weekStart, i);
+      weeks.push({
+        start: ws,
+        label: format(ws, 'M/d'),
+        counseling: 0,
+        total: 0,
+      });
+    }
+
+    const counselingDomains = new Set(['guidance', 'planning', 'responsive']);
+
+    data.forEach((entry) => {
+      const entryDate = new Date(entry.entry_date + 'T00:00:00');
+      // Find which week bucket this belongs to
+      for (let i = weeks.length - 1; i >= 0; i--) {
+        if (entryDate >= weeks[i].start) {
+          weeks[i].total += entry.duration_minutes;
+          if (counselingDomains.has(entry.domain)) {
+            weeks[i].counseling += entry.duration_minutes;
+          }
+          break;
+        }
+      }
+    });
+
+    // Only include weeks that have data
+    const trend = weeks
+      .map((w) => ({
+        label: w.label,
+        pct: w.total > 0 ? Math.round((w.counseling / w.total) * 100) : 0,
+        hasData: w.total > 0,
+      }));
+
+    setTrendData(trend);
+  }, [counselor]);
+
+  useEffect(() => {
+    loadData();
+    loadMakeupQueue();
+    loadTrend();
+  }, [loadData, loadMakeupQueue, loadTrend]);
 
   return (
     <div style={styles.page}>
@@ -178,6 +342,8 @@ export default function DashboardPage() {
           <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>
             {stats.compliancePct >= 82 ? 'On track' : stats.compliancePct >= 78 ? 'Getting close to threshold' : 'Below compliance threshold'}
           </p>
+          {/* Feature #8: 8-Week Trend Sparkline */}
+          <TrendSparkline data={trendData} />
         </div>
 
         {/* ─── Bottom Left: Caseload Snapshot ─── */}
@@ -227,6 +393,42 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── Feature #6: Make-up Session Tracker ─── */}
+      {makeupQueue.length > 0 && (
+        <div style={{ ...styles.card, marginTop: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <h2 style={{ ...styles.cardTitle, margin: 0 }}>Make-up Sessions Needed</h2>
+            <span style={styles.badge}>{makeupQueue.length}</span>
+          </div>
+          <div style={styles.makeupList}>
+            {makeupQueue.map((item) => (
+              <div
+                key={item.id}
+                style={styles.makeupRow}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (item.groupId) navigate(`/groups/${item.groupId}`);
+                }}
+              >
+                <div style={styles.makeupStudent}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <span style={{ fontWeight: 600, color: '#1a2332' }}>{item.studentName}</span>
+                </div>
+                <span style={{ fontSize: 13, color: '#6b7280' }}>{item.sessionDate}</span>
+                <span style={styles.makeupGroup}>{item.groupName}</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Quick Log FAB */}
       <button style={styles.fab} onClick={() => setShowQuickLog(true)} title="Quick time log">
@@ -283,6 +485,51 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     transition: 'transform 0.15s',
+  },
+  badge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    background: '#f59e0b',
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 700,
+    padding: '0 6px',
+  },
+  makeupList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+  },
+  makeupRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 16,
+    padding: '10px 12px',
+    borderRadius: 8,
+    cursor: 'pointer',
+    transition: 'background 0.15s',
+    background: '#fffbeb',
+    border: '1px solid #fef3c7',
+  },
+  makeupStudent: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  makeupGroup: {
+    fontSize: 13,
+    color: '#92400e',
+    background: '#fef3c7',
+    padding: '2px 8px',
+    borderRadius: 4,
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
   },
 };
 

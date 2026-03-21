@@ -23,12 +23,14 @@ function AcceptModal({ open, onClose, referral, counselorId }) {
     setSaving(true);
 
     // Create student record
+    const nameParts = (referral.student_name || '').split(' ');
     const { data: student } = await supabase.from('students').insert({
       counselor_id: counselorId,
-      first_name: referral.student_name?.split(' ')[0] || referral.student_name,
-      last_name: referral.student_name?.split(' ').slice(1).join(' ') || '',
+      name: referral.student_name,
+      first_name: nameParts[0] || referral.student_name,
+      last_name: nameParts.slice(1).join(' ') || '',
       grade: referral.grade,
-      teacher: referral.teacher_name,
+      teacher: referral.teacher_name || referral.submitted_by,
       referral_source: referral.concern_type,
       tier: referral.urgency === 'Urgent' ? 3 : referral.urgency === 'Soon' ? 2 : 1,
       status: 'active',
@@ -43,7 +45,7 @@ function AcceptModal({ open, onClose, referral, counselorId }) {
     await supabase.from('referrals').update({
       status: 'closed',
       resolution: mode === 'group' ? `Added to group` : 'Individual services',
-      resolved_at: new Date().toISOString(),
+      response_date: new Date().toISOString().slice(0, 10),
     }).eq('id', referral.id);
 
     setSaving(false);
@@ -127,12 +129,12 @@ export default function ReferralsPage() {
   };
 
   const handleDefer = async (ref) => {
-    await supabase.from('referrals').update({ status: 'deferred', resolved_at: new Date().toISOString() }).eq('id', ref.id);
+    await supabase.from('referrals').update({ status: 'deferred', response_date: new Date().toISOString().slice(0, 10) }).eq('id', ref.id);
     loadReferrals();
   };
 
   const handleClose = async (ref) => {
-    await supabase.from('referrals').update({ status: 'closed', resolution: 'Closed without action', resolved_at: new Date().toISOString() }).eq('id', ref.id);
+    await supabase.from('referrals').update({ status: 'closed', resolution: 'Closed without action', response_date: new Date().toISOString().slice(0, 10) }).eq('id', ref.id);
     loadReferrals();
   };
 
@@ -167,7 +169,7 @@ export default function ReferralsPage() {
                   </div>
                   <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 6 }}>
                     <span>{r.concern_type}</span>
-                    {r.teacher_name && <span> &middot; From: {r.teacher_name}</span>}
+                    {(r.teacher_name || r.submitted_by) && <span> &middot; From: {r.teacher_name || r.submitted_by}</span>}
                     {r.created_at && <span> &middot; {r.created_at.slice(0, 10)}</span>}
                   </div>
                   {r.notes && <p style={{ fontSize: 13, color: '#4b5563', margin: '0 0 10px' }}>{r.notes}</p>}
@@ -204,7 +206,7 @@ export default function ReferralsPage() {
                       <td style={tdStyle}>{r.concern_type}</td>
                       <td style={tdStyle}><span style={{ textTransform: 'capitalize' }}>{r.status}</span></td>
                       <td style={tdStyle}>{r.resolution || '--'}</td>
-                      <td style={tdStyle}>{r.resolved_at?.slice(0, 10) || '--'}</td>
+                      <td style={tdStyle}>{r.response_date?.slice(0, 10) || '--'}</td>
                     </tr>
                   ))}
                 </tbody>

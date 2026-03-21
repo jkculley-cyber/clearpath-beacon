@@ -3,14 +3,46 @@ import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { SESSION_STATUSES, ASCA_DOMAINS, PROGRESS_LEVELS, PROGRESS_COLORS } from '../lib/constants';
+import { autoLogTime } from '../lib/autoLogTime';
+import { generateGroupProgressPDF } from '../lib/pdfExports';
 
 const TABS = ['Members', 'Sessions', 'Objectives', 'Lesson Plan'];
 
-/* ---- Log Session Modal ---- */
+/** Student display name — prefer first_name/last_name, fall back to name */
+const sName = (s) => s?.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s?.name || 'Unknown');
+
+/** Derive objectives array from group obj_1/obj_2/obj_3 + asca_1/asca_2/asca_3 */
+function deriveObjectives(group) {
+  if (!group) return [];
+  const objs = [];
+  for (let i = 1; i <= 3; i++) {
+    const desc = group[`obj_${i}`];
+    if (desc) {
+      objs.push({
+        index: i,
+        description: desc,
+        asca_domain: group[`asca_${i}`] || '',
+      });
+    }
+  }
+  return objs;
+}
+
+/* ---- Shared styles ---- */
+const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
+const modal = { background: '#fff', borderRadius: 12, padding: 28, width: 440, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' };
+const modalTitle = { fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' };
+const th = { padding: '10px 12px', textAlign: 'left', fontSize: 13, fontWeight: 600, color: '#374151' };
+const td = { padding: '10px 12px' };
+
+/* ====================================================================
+   Log Session Modal
+   ==================================================================== */
 function LogSessionModal({ open, onClose, group, members, objectives, counselorId }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [duration, setDuration] = useState('30');
   const [notes, setNotes] = useState('');
+  const [status, setStatus] = useState('Completed');
   const [attendance, setAttendance] = useState({});
   const [coveredObjs, setCoveredObjs] = useState({});
   const [saving, setSaving] = useState(false);
@@ -29,41 +61,59 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
     setAttendance((prev) => ({ ...prev, [sid]: prev[sid] === 'present' ? 'absent' : 'present' }));
   };
 
-  const toggleObj = (oid) => {
-    setCoveredObjs((prev) => ({ ...prev, [oid]: !prev[oid] }));
+  const toggleObj = (idx) => {
+    setCoveredObjs((prev) => ({ ...prev, [idx]: !prev[idx] }));
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
 
-    const { data: sess } = await supabase
+    const coveredArr = Object.entries(coveredObjs)
+      .filter(([, v]) => v)
+      .map(([idx]) => parseInt(idx, 10));
+
+    const { data: sess, error: sessErr } = await supabase
       .from('sessions')
       .insert({
         counselor_id: counselorId,
         group_id: group.id,
         session_date: date,
         duration_minutes: parseInt(duration, 10),
+        objectives_covered: coveredArr.length ? coveredArr : null,
         notes,
-        status: 'Completed',
+        status,
       })
       .select()
       .single();
 
     if (sess) {
-      // Save attendance
-      const attRows = Object.entries(attendance).map(([student_id, status]) => ({
+      // Save attendance to `attendance` table
+      const attRows = Object.entries(attendance).map(([student_id, attStatus]) => ({
         session_id: sess.id,
         student_id,
-        status,
+        status: attStatus,
       }));
-      if (attRows.length) await supabase.from('session_attendance').insert(attRows);
+      if (attRows.length) await supabase.from('attendance').insert(attRows);
 
-      // Save objectives covered
-      const objRows = Object.entries(coveredObjs)
-        .filter(([, v]) => v)
-        .map(([objective_id]) => ({ session_id: sess.id, objective_id }));
-      if (objRows.length) await supabase.from('session_objectives').insert(objRows);
+      // Feature #1: Auto-log time when session is completed
+      if (status === 'Completed' && counselorId) {
+        try {
+          await autoLogTime({
+            counselorId,
+            sessionId: sess.id,
+            date,
+            durationMinutes: parseInt(duration, 10),
+            description: 'Group counseling: ' + group.name,
+          });
+        } catch (err) {
+          console.error('Auto-log time failed:', err);
+        }
+      }
+    }
+
+    if (sessErr) {
+      console.error('Session save error:', sessErr);
     }
 
     setSaving(false);
@@ -86,11 +136,20 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
             </div>
           </div>
 
+          <div style={{ marginBottom: 12 }}>
+            <label className="form-label">Status</label>
+            <select className="form-input" value={status} onChange={(e) => setStatus(e.target.value)}>
+              {SESSION_STATUSES.map((st) => (
+                <option key={st} value={st}>{st}</option>
+              ))}
+            </select>
+          </div>
+
           <label className="form-label">Attendance</label>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 12, maxHeight: 160, overflowY: 'auto' }}>
             {members.map((m) => (
               <div key={m.student_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid #f3f4f6' }}>
-                <span style={{ fontSize: 14 }}>{m.students?.first_name} {m.students?.last_name}</span>
+                <span style={{ fontSize: 14 }}>{sName(m.students)}</span>
                 <button type="button" onClick={() => toggleAttendance(m.student_id)} style={{
                   padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
                   background: attendance[m.student_id] === 'present' ? '#dcfce7' : '#fee2e2',
@@ -107,9 +166,10 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
               <label className="form-label">Objectives Covered</label>
               <div style={{ marginBottom: 12 }}>
                 {objectives.map((o) => (
-                  <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 14, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={!!coveredObjs[o.id]} onChange={() => toggleObj(o.id)} />
+                  <label key={o.index} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 14, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!coveredObjs[o.index]} onChange={() => toggleObj(o.index)} />
                     {o.description}
+                    {o.asca_domain && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({o.asca_domain})</span>}
                   </label>
                 ))}
               </div>
@@ -131,7 +191,9 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
   );
 }
 
-/* ---- Add Member Modal ---- */
+/* ====================================================================
+   Add Member Modal
+   ==================================================================== */
 function AddMemberModal({ open, onClose, groupId, existingIds }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -142,7 +204,7 @@ function AddMemberModal({ open, onClose, groupId, existingIds }) {
     const t = setTimeout(async () => {
       const { data } = await supabase
         .from('students')
-        .select('id, first_name, last_name, grade')
+        .select('id, first_name, last_name, name, grade')
         .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
         .limit(10);
       setResults((data || []).filter((s) => !existingIds.includes(s.id)));
@@ -170,7 +232,9 @@ function AddMemberModal({ open, onClose, groupId, existingIds }) {
           )}
           {results.map((s) => (
             <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid #f3f4f6' }}>
-              <span style={{ fontSize: 14 }}>{s.first_name} {s.last_name} <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Grade {s.grade}</span></span>
+              <span style={{ fontSize: 14 }}>
+                {sName(s)} <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Grade {s.grade}</span>
+              </span>
               <button className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => handleAdd(s.id)} disabled={adding === s.id}>
                 {adding === s.id ? '...' : 'Add'}
               </button>
@@ -183,7 +247,227 @@ function AddMemberModal({ open, onClose, groupId, existingIds }) {
   );
 }
 
-/* ---- Main Page ---- */
+/* ====================================================================
+   Rate Progress Modal
+   ==================================================================== */
+function RateProgressModal({ open, onClose, sessionId, members, objectives }) {
+  const [ratings, setRatings] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  if (!open) return null;
+
+  const key = (studentId, objIndex) => `${studentId}_${objIndex}`;
+
+  const setRating = (studentId, objIndex, rating) => {
+    setRatings((prev) => ({ ...prev, [key(studentId, objIndex)]: rating }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const rows = [];
+    for (const [k, rating] of Object.entries(ratings)) {
+      if (!rating) continue;
+      const [student_id, objective_index] = k.split('_');
+      rows.push({
+        session_id: sessionId,
+        student_id,
+        objective_index: parseInt(objective_index, 10),
+        rating: parseInt(rating, 10),
+      });
+    }
+    if (rows.length) {
+      await supabase.from('progress_ratings').insert(rows);
+    }
+    setSaving(false);
+    onClose(true);
+  };
+
+  return (
+    <div style={overlay} onClick={() => onClose(false)}>
+      <div style={{ ...modal, width: 520 }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={modalTitle}>Rate Progress</h3>
+        <div style={{ maxHeight: 400, overflowY: 'auto', marginBottom: 16 }}>
+          {members.map((m) => (
+            <div key={m.student_id} style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6, color: '#1a2332' }}>
+                {sName(m.students)}
+              </div>
+              {objectives.map((o) => (
+                <div key={o.index} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, paddingLeft: 8 }}>
+                  <span style={{ fontSize: 13, flex: 1, color: '#374151' }}>{o.description}</span>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[1, 2, 3].map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setRating(m.student_id, o.index, r)}
+                        style={{
+                          width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                          fontWeight: 700, fontSize: 13, color: '#fff',
+                          background: ratings[key(m.student_id, o.index)] === r ? PROGRESS_COLORS[r] : '#e5e7eb',
+                        }}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button type="button" className="btn btn-outline" onClick={() => onClose(false)} style={{ flex: 1 }}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ flex: 1 }}>
+            {saving ? 'Saving...' : 'Save Ratings'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ====================================================================
+   AI Next Session Plan Modal (Feature #9)
+   ==================================================================== */
+function AIPlanModal({ open, onClose, group, members, sessions, objectives }) {
+  const [plan, setPlan] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!open) {
+      setPlan('');
+      setError(null);
+      return;
+    }
+    generatePlan();
+  }, [open]);
+
+  const generatePlan = async () => {
+    setLoading(true);
+    setError(null);
+    setPlan('');
+
+    const recentSessions = (sessions || []).slice(0, 5);
+    const memberNames = (members || []).map((m) => sName(m.students));
+    const objList = objectives.map((o) => o.description).filter(Boolean);
+
+    try {
+      const { data, error: fnErr } = await supabase.functions.invoke('generate-session-plan', {
+        body: {
+          groupName: group.name,
+          focusArea: group.focus_area || '',
+          gradeBand: group.grade_band || '',
+          objectives: objList,
+          recentSessions: recentSessions.map((s) => ({
+            date: s.session_date,
+            notes: s.notes || '',
+            status: s.status,
+          })),
+          members: memberNames,
+        },
+      });
+
+      if (fnErr) throw fnErr;
+      setPlan(data?.plan || data?.text || (typeof data === 'string' ? data : ''));
+      if (!plan && data) {
+        // Handle case where data might be structured differently
+        setPlan(JSON.stringify(data, null, 2));
+      }
+    } catch (err) {
+      console.error('AI plan generation failed:', err);
+      setError(true);
+      // Build a fallback plan based on objectives
+      const fallbackLines = [
+        `Next Session Plan for ${group.name}`,
+        `Grade Band: ${group.grade_band || 'N/A'}`,
+        `Focus Area: ${group.focus_area || 'N/A'}`,
+        '',
+        'Suggested Activities:',
+      ];
+      objectives.forEach((o, i) => {
+        fallbackLines.push(`${i + 1}. Objective: ${o.description}`);
+        if (o.asca_domain) fallbackLines.push(`   ASCA Domain: ${o.asca_domain}`);
+        fallbackLines.push(`   Activity: Facilitate a group discussion or skill-building exercise related to "${o.description}".`);
+        fallbackLines.push('');
+      });
+      if (objectives.length === 0) {
+        fallbackLines.push('- Review group goals and set individual targets');
+        fallbackLines.push('- Conduct a check-in round with all members');
+        fallbackLines.push('- Introduce a new skill-building activity aligned with the focus area');
+      }
+      fallbackLines.push('');
+      fallbackLines.push(`Members (${memberNames.length}): ${memberNames.join(', ')}`);
+      setPlan(fallbackLines.join('\n'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!open) return null;
+
+  const handleSaveAsNotes = () => {
+    // Copy plan text to clipboard and inform user
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(plan).then(() => {
+        alert('Plan copied to clipboard. Paste it into session notes when logging your next session.');
+      });
+    } else {
+      // Fallback: select and copy
+      const ta = document.createElement('textarea');
+      ta.value = plan;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      alert('Plan copied to clipboard. Paste it into session notes when logging your next session.');
+    }
+    onClose();
+  };
+
+  return (
+    <div style={overlay} onClick={() => onClose()}>
+      <div style={{ ...modal, width: 520 }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={modalTitle}>
+          AI Next Session Plan
+          {error && <span style={{ fontSize: 12, fontWeight: 400, color: '#d97706', marginLeft: 8 }}>(fallback suggestion)</span>}
+        </h3>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <div style={{
+              width: 36, height: 36, border: '3px solid #e5e7eb', borderTopColor: 'var(--teal)',
+              borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
+            }} />
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Generating session plan...</p>
+          </div>
+        ) : (
+          <>
+            <textarea
+              className="form-input"
+              rows={14}
+              value={plan}
+              onChange={(e) => setPlan(e.target.value)}
+              style={{ marginBottom: 16, fontFamily: 'inherit', fontSize: 13, lineHeight: 1.5 }}
+            />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="button" className="btn btn-outline" onClick={() => onClose()} style={{ flex: 1 }}>Close</button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveAsNotes} style={{ flex: 1 }}>
+                Save as Session Notes
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ====================================================================
+   Main Page
+   ==================================================================== */
 export default function GroupDetailPage() {
   const { id } = useParams();
   const { counselor } = useAuth();
@@ -191,26 +475,61 @@ export default function GroupDetailPage() {
   const [group, setGroup] = useState(null);
   const [members, setMembers] = useState([]);
   const [sessions, setSessions] = useState([]);
-  const [objectives, setObjectives] = useState([]);
   const [progressData, setProgressData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showLogSession, setShowLogSession] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [showRateProgress, setShowRateProgress] = useState(null); // session id or null
+  const [showAIPlan, setShowAIPlan] = useState(false);
+
+  const objectives = deriveObjectives(group);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    const [grpRes, memRes, sessRes, objRes, progRes] = await Promise.all([
-      supabase.from('groups').select('*').eq('id', id).single(),
-      supabase.from('group_members').select('*, students(id, first_name, last_name, grade)').eq('group_id', id),
-      supabase.from('sessions').select('*, session_attendance(student_id, status)').eq('group_id', id).order('session_date', { ascending: false }),
-      supabase.from('group_objectives').select('*').eq('group_id', id).order('sort_order'),
-      supabase.from('progress_ratings').select('*').eq('group_id', id),
+
+    // 1. Load group
+    const { data: grpData } = await supabase
+      .from('groups')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    setGroup(grpData);
+
+    if (!grpData) {
+      setLoading(false);
+      return;
+    }
+
+    // 2. Load members, sessions in parallel
+    const [memRes, sessRes] = await Promise.all([
+      supabase
+        .from('group_members')
+        .select('*, students(id, first_name, last_name, name, grade)')
+        .eq('group_id', id),
+      supabase
+        .from('sessions')
+        .select('*, attendance(student_id, status)')
+        .eq('group_id', id)
+        .order('session_date', { ascending: false }),
     ]);
-    setGroup(grpRes.data);
+
+    const sessData = sessRes.data || [];
     setMembers(memRes.data || []);
-    setSessions(sessRes.data || []);
-    setObjectives(objRes.data || []);
-    setProgressData(progRes.data || []);
+    setSessions(sessData);
+
+    // 3. Load progress_ratings for all sessions in this group
+    if (sessData.length > 0) {
+      const sessionIds = sessData.map((s) => s.id);
+      const { data: progData } = await supabase
+        .from('progress_ratings')
+        .select('*')
+        .in('session_id', sessionIds);
+      setProgressData(progData || []);
+    } else {
+      setProgressData([]);
+    }
+
     setLoading(false);
   }, [id]);
 
@@ -222,9 +541,23 @@ export default function GroupDetailPage() {
     loadAll();
   };
 
-  const getRating = (studentId, objectiveId) => {
-    const r = progressData.find((p) => p.student_id === studentId && p.objective_id === objectiveId);
-    return r?.rating || 0;
+  /**
+   * Get latest rating for a student + objective_index across all sessions.
+   * progress_ratings has: session_id, student_id, objective_index, rating, notes, created_at
+   */
+  const getLatestRating = (studentId, objectiveIndex) => {
+    const matches = progressData.filter(
+      (p) => p.student_id === studentId && p.objective_index === objectiveIndex
+    );
+    if (matches.length === 0) return 0;
+    // Sort by created_at descending and take latest
+    matches.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    return matches[0].rating || 0;
+  };
+
+  const handleExportPDF = () => {
+    if (!group) return;
+    generateGroupProgressPDF(group, members, sessions);
   };
 
   if (loading) return <div className="page"><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div>;
@@ -232,16 +565,24 @@ export default function GroupDetailPage() {
 
   return (
     <div className="page">
-      <div style={{ marginBottom: 20 }}>
-        <h1 className="page-title" style={{ margin: '0 0 4px' }}>{group.name}</h1>
-        <div style={{ display: 'flex', gap: 16, fontSize: 13, color: 'var(--text-muted)' }}>
-          {group.grade_band && <span>Grades: {group.grade_band}</span>}
-          {group.focus_area && <span>Focus: {group.focus_area}</span>}
-          <span>{members.length} members</span>
+      {/* ---- Header ---- */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <h1 className="page-title" style={{ margin: '0 0 4px' }}>{group.name}</h1>
+          <div style={{ display: 'flex', gap: 16, fontSize: 13, color: 'var(--text-muted)' }}>
+            {group.grade_band && <span>Grades: {group.grade_band}</span>}
+            {group.focus_area && <span>Focus: {group.focus_area}</span>}
+            <span>{members.length} members</span>
+            {group.status && <span>Status: {group.status}</span>}
+          </div>
         </div>
+        {/* Feature #4: PDF Export */}
+        <button className="btn btn-outline" onClick={handleExportPDF} style={{ whiteSpace: 'nowrap' }}>
+          Export PDF
+        </button>
       </div>
 
-      {/* Tab bar */}
+      {/* ---- Tab bar ---- */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border)', marginBottom: 20 }}>
         {TABS.map((t) => (
           <button key={t} onClick={() => setTab(t)} style={{
@@ -254,7 +595,7 @@ export default function GroupDetailPage() {
         ))}
       </div>
 
-      {/* ---- Members Tab ---- */}
+      {/* ==== Members Tab ==== */}
       {tab === 'Members' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -269,8 +610,9 @@ export default function GroupDetailPage() {
                 padding: '12px 16px', borderBottom: i < members.length - 1 ? '1px solid var(--border)' : 'none',
               }}>
                 <div>
-                  <span style={{ fontWeight: 600, color: '#1a2332' }}>{m.students?.first_name} {m.students?.last_name}</span>
+                  <span style={{ fontWeight: 600, color: '#1a2332' }}>{sName(m.students)}</span>
                   <span style={{ marginLeft: 12, fontSize: 12, color: 'var(--text-muted)' }}>Grade {m.students?.grade}</span>
+                  {m.joined_date && <span style={{ marginLeft: 12, fontSize: 11, color: 'var(--text-muted)' }}>Joined {m.joined_date}</span>}
                 </div>
                 <button onClick={() => removeMember(m.id)} style={{
                   background: 'none', border: 'none', color: '#ef4444', fontSize: 13, cursor: 'pointer', fontWeight: 600,
@@ -287,10 +629,14 @@ export default function GroupDetailPage() {
         </div>
       )}
 
-      {/* ---- Sessions Tab ---- */}
+      {/* ==== Sessions Tab ==== */}
       {tab === 'Sessions' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 12 }}>
+            {/* Feature #9: Generate Next Session */}
+            <button className="btn btn-outline" onClick={() => setShowAIPlan(true)}>
+              Generate Next Session
+            </button>
             <button className="btn btn-primary" onClick={() => setShowLogSession(true)}>Log Session</button>
           </div>
           {sessions.length === 0 ? (
@@ -300,22 +646,36 @@ export default function GroupDetailPage() {
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {sessions.map((s) => {
-                const att = s.session_attendance || [];
+                const att = s.attendance || [];
                 const present = att.filter((a) => a.status === 'present').length;
                 return (
                   <div key={s.id} className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, color: '#1a2332', marginBottom: 2 }}>{s.session_date}</div>
                       <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                         {s.duration_minutes} min &middot; {present}/{att.length} present
+                        {s.objectives_covered && s.objectives_covered.length > 0 && (
+                          <span> &middot; Obj: {s.objectives_covered.join(', ')}</span>
+                        )}
                       </div>
                       {s.notes && <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{s.notes}</div>}
                     </div>
-                    <span style={{
-                      padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600,
-                      background: s.status === 'Completed' ? '#dcfce7' : '#fef3c7',
-                      color: s.status === 'Completed' ? '#16a34a' : '#d97706',
-                    }}>{s.status}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {s.status === 'Completed' && objectives.length > 0 && (
+                        <button
+                          className="btn btn-outline"
+                          style={{ padding: '4px 10px', fontSize: 12 }}
+                          onClick={() => setShowRateProgress(s.id)}
+                        >
+                          Rate
+                        </button>
+                      )}
+                      <span style={{
+                        padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600,
+                        background: s.status === 'Completed' ? '#dcfce7' : s.status === 'Cancelled' ? '#fee2e2' : '#fef3c7',
+                        color: s.status === 'Completed' ? '#16a34a' : s.status === 'Cancelled' ? '#dc2626' : '#d97706',
+                      }}>{s.status}</span>
+                    </div>
                   </div>
                 );
               })}
@@ -329,10 +689,25 @@ export default function GroupDetailPage() {
             objectives={objectives}
             counselorId={counselor?.id}
           />
+          <RateProgressModal
+            open={!!showRateProgress}
+            onClose={(saved) => { setShowRateProgress(null); if (saved) loadAll(); }}
+            sessionId={showRateProgress}
+            members={members}
+            objectives={objectives}
+          />
+          <AIPlanModal
+            open={showAIPlan}
+            onClose={() => setShowAIPlan(false)}
+            group={group}
+            members={members}
+            sessions={sessions}
+            objectives={objectives}
+          />
         </div>
       )}
 
-      {/* ---- Objectives Tab ---- */}
+      {/* ==== Objectives Tab ==== */}
       {tab === 'Objectives' && (
         <div>
           {objectives.length === 0 ? (
@@ -346,9 +721,11 @@ export default function GroupDetailPage() {
                   <tr style={{ borderBottom: '2px solid var(--border)' }}>
                     <th style={th}>Student</th>
                     {objectives.map((o) => (
-                      <th key={o.id} style={th}>
+                      <th key={o.index} style={th}>
                         <div>{o.description}</div>
-                        <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>{o.asca_domain}</div>
+                        {o.asca_domain && (
+                          <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>{o.asca_domain}</div>
+                        )}
                       </th>
                     ))}
                   </tr>
@@ -356,11 +733,11 @@ export default function GroupDetailPage() {
                 <tbody>
                   {members.map((m) => (
                     <tr key={m.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={td}>{m.students?.first_name} {m.students?.last_name}</td>
+                      <td style={td}>{sName(m.students)}</td>
                       {objectives.map((o) => {
-                        const r = getRating(m.student_id, o.id);
+                        const r = getLatestRating(m.student_id, o.index);
                         return (
-                          <td key={o.id} style={{ ...td, textAlign: 'center' }}>
+                          <td key={o.index} style={{ ...td, textAlign: 'center' }}>
                             {r > 0 ? (
                               <span style={{
                                 display: 'inline-block', width: 28, height: 28, borderRadius: '50%',
@@ -390,7 +767,7 @@ export default function GroupDetailPage() {
         </div>
       )}
 
-      {/* ---- Lesson Plan Tab ---- */}
+      {/* ==== Lesson Plan Tab ==== */}
       {tab === 'Lesson Plan' && (
         <div>
           {sessions.length === 0 ? (
@@ -410,13 +787,22 @@ export default function GroupDetailPage() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, color: '#1a2332' }}>{s.session_date}</div>
                     <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                      {s.lesson_title || 'No lesson attached'}{s.notes ? ` - ${s.notes}` : ''}
+                      {s.duration_minutes} min
+                      {s.objectives_covered && s.objectives_covered.length > 0 && (
+                        <span>
+                          {' '}&middot; Objectives: {s.objectives_covered.map((idx) => {
+                            const obj = objectives.find((o) => o.index === idx);
+                            return obj ? obj.description : `#${idx}`;
+                          }).join(', ')}
+                        </span>
+                      )}
                     </div>
+                    {s.notes && <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{s.notes}</div>}
                   </div>
                   <span style={{
                     padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600,
-                    background: s.status === 'Completed' ? '#dcfce7' : '#fef3c7',
-                    color: s.status === 'Completed' ? '#16a34a' : '#d97706',
+                    background: s.status === 'Completed' ? '#dcfce7' : s.status === 'Cancelled' ? '#fee2e2' : '#fef3c7',
+                    color: s.status === 'Completed' ? '#16a34a' : s.status === 'Cancelled' ? '#dc2626' : '#d97706',
                   }}>{s.status}</span>
                 </div>
               ))}
@@ -427,9 +813,3 @@ export default function GroupDetailPage() {
     </div>
   );
 }
-
-const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
-const modal = { background: '#fff', borderRadius: 12, padding: 28, width: 440, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' };
-const modalTitle = { fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' };
-const th = { padding: '10px 12px', textAlign: 'left', fontSize: 13, fontWeight: 600, color: '#374151' };
-const td = { padding: '10px 12px' };
