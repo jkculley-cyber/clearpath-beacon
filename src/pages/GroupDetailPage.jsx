@@ -8,8 +8,8 @@ import { generateGroupProgressPDF } from '../lib/pdfExports';
 
 const TABS = ['Members', 'Sessions', 'Objectives', 'Lesson Plan'];
 
-/** Student display name — prefer first_name/last_name, fall back to name */
-const sName = (s) => s?.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s?.name || 'Unknown');
+/** Student display name — use name column (always exists), fall back to first_name/last_name if available */
+const sName = (s) => s?.name || (s?.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : 'Unknown');
 
 /** Derive objectives array from group obj_1/obj_2/obj_3 + asca_1/asca_2/asca_3 */
 function deriveObjectives(group) {
@@ -204,8 +204,8 @@ function AddMemberModal({ open, onClose, groupId, existingIds }) {
     const t = setTimeout(async () => {
       const { data } = await supabase
         .from('students')
-        .select('id, first_name, last_name, name, grade')
-        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
+        .select('id, name, grade')
+        .ilike('name', `%${query}%`)
         .limit(10);
       setResults((data || []).filter((s) => !existingIds.includes(s.id)));
     }, 300);
@@ -505,7 +505,7 @@ export default function GroupDetailPage() {
     const [memRes, sessRes] = await Promise.all([
       supabase
         .from('group_members')
-        .select('*, students(id, first_name, last_name, name, grade)')
+        .select('*, students(id, name, grade)')
         .eq('group_id', id),
       supabase
         .from('sessions')

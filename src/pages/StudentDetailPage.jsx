@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { CONTACT_TYPES, PROGRESS_COLORS, PROGRESS_LEVELS } from '../lib/constants';
+import { CONTACT_TYPES, PROGRESS_COLORS, PROGRESS_LEVELS, MTSS_TIERS, STUDENT_STATUSES } from '../lib/constants';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { autoLogTime } from '../lib/autoLogTime';
 import { generateProgressPDF, generateMTSSReport } from '../lib/pdfExports';
@@ -290,6 +290,220 @@ function NoteModal({ open, onClose, student, counselorId, editNote }) {
   );
 }
 
+const GRADES = ['K', '1', '2', '3', '4', '5'];
+
+/* ---- Edit Student Modal ---- */
+function EditStudentModal({ open, onClose, student }) {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [grade, setGrade] = useState('');
+  const [teacher, setTeacher] = useState('');
+  const [tier, setTier] = useState(1);
+  const [status, setStatus] = useState('active');
+  const [referralSource, setReferralSource] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (student) {
+      setFirstName(student.first_name || student.name?.split(' ')[0] || '');
+      setLastName(student.last_name || student.name?.split(' ').slice(1).join(' ') || '');
+      setGrade(student.grade || '');
+      setTeacher(student.teacher || '');
+      setTier(student.tier || 1);
+      setStatus(student.status || 'active');
+      setReferralSource(student.referral_source || '');
+    }
+  }, [student]);
+
+  if (!open) return null;
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    await supabase.from('students').update({
+      name: (firstName + ' ' + lastName).trim(),
+      first_name: firstName,
+      last_name: lastName,
+      grade: grade || null,
+      teacher,
+      tier: parseInt(tier, 10),
+      status,
+      referral_source: referralSource,
+    }).eq('id', student.id);
+    setSaving(false);
+    onClose(true);
+  };
+
+  return (
+    <div style={overlay} onClick={() => onClose(false)}>
+      <div style={{ ...modal, width: 480 }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={modalTitle}>Edit Student</h3>
+        <form onSubmit={handleSave}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div>
+              <label className="form-label">First Name *</label>
+              <input className="form-input" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            </div>
+            <div>
+              <label className="form-label">Last Name</label>
+              <input className="form-input" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div>
+              <label className="form-label">Grade</label>
+              <select className="form-input" value={grade} onChange={(e) => setGrade(e.target.value)}>
+                <option value="">Select...</option>
+                {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="form-label">MTSS Tier</label>
+              <select className="form-input" value={tier} onChange={(e) => setTier(e.target.value)}>
+                {MTSS_TIERS.map((t) => <option key={t} value={t}>Tier {t}</option>)}
+              </select>
+            </div>
+          </div>
+          <label className="form-label">Teacher</label>
+          <input className="form-input" value={teacher} onChange={(e) => setTeacher(e.target.value)} style={{ marginBottom: 10 }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div>
+              <label className="form-label">Status</label>
+              <select className="form-input" value={status} onChange={(e) => setStatus(e.target.value)}>
+                {STUDENT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Referral Source</label>
+              <input className="form-input" value={referralSource} onChange={(e) => setReferralSource(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <button type="button" className="btn btn-outline" onClick={() => onClose(false)} style={{ flex: 1 }}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving} style={{ flex: 1 }}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Rate Progress Modal ---- */
+function RateProgressModal({ open, onClose, student, counselorId, groups }) {
+  const [objectiveIndex, setObjectiveIndex] = useState(1);
+  const [rating, setRating] = useState(2);
+  const [ratingNotes, setRatingNotes] = useState('');
+  const [sessionId, setSessionId] = useState('');
+  const [recentSessions, setRecentSessions] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && student?.id) {
+      supabase.from('sessions').select('id, session_date, session_type, group_id')
+        .or(`student_id.eq.${student.id}`)
+        .eq('status', 'Completed')
+        .order('session_date', { ascending: false })
+        .limit(10)
+        .then(({ data }) => {
+          setRecentSessions(data || []);
+          if (data?.length) setSessionId(data[0].id);
+        });
+    }
+  }, [open, student]);
+
+  if (!open) return null;
+
+  // Build objective labels from group memberships
+  const objLabels = {};
+  (groups || []).forEach((gm) => {
+    const g = gm.groups;
+    if (g) {
+      if (g.obj_1) objLabels[`${g.name} - Obj 1`] = { groupName: g.name, idx: 1, desc: g.obj_1 };
+      if (g.obj_2) objLabels[`${g.name} - Obj 2`] = { groupName: g.name, idx: 2, desc: g.obj_2 };
+      if (g.obj_3) objLabels[`${g.name} - Obj 3`] = { groupName: g.name, idx: 3, desc: g.obj_3 };
+    }
+  });
+  const objOptions = Object.entries(objLabels);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!sessionId) return;
+    setSaving(true);
+    await supabase.from('progress_ratings').insert({
+      session_id: sessionId,
+      student_id: student.id,
+      objective_index: parseInt(objectiveIndex, 10),
+      rating: parseInt(rating, 10),
+      notes: ratingNotes || null,
+    });
+    setSaving(false);
+    onClose(true);
+  };
+
+  return (
+    <div style={overlay} onClick={() => onClose(false)}>
+      <div style={{ ...modal, width: 460 }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={modalTitle}>Rate Progress</h3>
+        <form onSubmit={handleSave}>
+          <label className="form-label">Session *</label>
+          <select className="form-input" value={sessionId} onChange={(e) => setSessionId(e.target.value)} required style={{ marginBottom: 10 }}>
+            <option value="">Select session...</option>
+            {recentSessions.map((s) => (
+              <option key={s.id} value={s.id}>{s.session_date} — {s.session_type}</option>
+            ))}
+          </select>
+
+          <label className="form-label">Objective *</label>
+          {objOptions.length > 0 ? (
+            <select className="form-input" value={objectiveIndex} onChange={(e) => setObjectiveIndex(e.target.value)} style={{ marginBottom: 10 }}>
+              {objOptions.map(([label, { idx, desc }]) => (
+                <option key={label} value={idx}>{label}: {desc}</option>
+              ))}
+            </select>
+          ) : (
+            <select className="form-input" value={objectiveIndex} onChange={(e) => setObjectiveIndex(e.target.value)} style={{ marginBottom: 10 }}>
+              <option value={1}>Objective 1</option>
+              <option value={2}>Objective 2</option>
+              <option value={3}>Objective 3</option>
+            </select>
+          )}
+
+          <label className="form-label">Rating *</label>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+            {Object.entries(PROGRESS_LEVELS).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => setRating(parseInt(val, 10))}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  cursor: 'pointer', border: `2px solid ${rating === parseInt(val, 10) ? PROGRESS_COLORS[val] : '#d1d5db'}`,
+                  background: rating === parseInt(val, 10) ? PROGRESS_COLORS[val] + '20' : '#fff',
+                  color: rating === parseInt(val, 10) ? PROGRESS_COLORS[val] : '#6b7280',
+                }}
+              >
+                {val} — {label}
+              </button>
+            ))}
+          </div>
+
+          <label className="form-label">Notes</label>
+          <textarea className="form-input" rows={2} value={ratingNotes} onChange={(e) => setRatingNotes(e.target.value)} style={{ marginBottom: 16 }} placeholder="Optional notes on this rating..." />
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="button" className="btn btn-outline" onClick={() => onClose(false)} style={{ flex: 1 }}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving || !sessionId} style={{ flex: 1 }}>
+              {saving ? 'Saving...' : 'Save Rating'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ---- Main ---- */
 export default function StudentDetailPage() {
   const { id } = useParams();
@@ -306,6 +520,8 @@ export default function StudentDetailPage() {
   const [showLogContact, setShowLogContact] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const [editNote, setEditNote] = useState(null);
+  const [showEditStudent, setShowEditStudent] = useState(false);
+  const [showRateProgress, setShowRateProgress] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -459,6 +675,13 @@ export default function StudentDetailPage() {
             >
               {student.status}
             </span>
+            <button
+              className="btn btn-outline"
+              onClick={() => setShowEditStudent(true)}
+              style={{ padding: '4px 12px', fontSize: 12 }}
+            >
+              Edit
+            </button>
           </div>
         </div>
       </div>
@@ -492,6 +715,12 @@ export default function StudentDetailPage() {
           }}
         >
           Add Note
+        </button>
+        <button
+          className="btn btn-outline"
+          onClick={() => setShowRateProgress(true)}
+        >
+          Rate Progress
         </button>
         <button
           className="btn btn-outline"
@@ -1068,6 +1297,24 @@ export default function StudentDetailPage() {
         student={student}
         counselorId={counselor?.id}
         editNote={editNote}
+      />
+      <EditStudentModal
+        open={showEditStudent}
+        onClose={(s) => {
+          setShowEditStudent(false);
+          if (s) loadAll();
+        }}
+        student={student}
+      />
+      <RateProgressModal
+        open={showRateProgress}
+        onClose={(s) => {
+          setShowRateProgress(false);
+          if (s) loadAll();
+        }}
+        student={student}
+        counselorId={counselor?.id}
+        groups={groups}
       />
     </div>
   );
