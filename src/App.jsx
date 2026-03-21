@@ -14,6 +14,7 @@ import TimeTrackerPage from './pages/TimeTrackerPage';
 import LessonsPage from './pages/LessonsPage';
 import CommunicationsPage from './pages/CommunicationsPage';
 import SettingsPage from './pages/SettingsPage';
+import ReportsPage from './pages/ReportsPage';
 import LoginPage from './pages/LoginPage';
 import ReferralFormPage from './pages/ReferralFormPage';
 
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="time-tracker" element={<TimeTrackerPage />} />
         <Route path="lessons" element={<LessonsPage />} />
         <Route path="communications" element={<CommunicationsPage />} />
+        <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 

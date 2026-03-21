@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: '/time-tracker',  label: 'Time Tracker',    icon: TimeTrackerIcon },
   { to: '/lessons',       label: 'Lessons',         icon: LessonsIcon },
   { to: '/communications',label: 'Communications',  icon: CommsIcon },
+  { to: '/reports',       label: 'Reports',          icon: ReportsIcon },
   { to: '/settings',      label: 'Settings',        icon: SettingsIcon },
 ];
 
@@ -354,6 +355,14 @@ function CommsIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+    </svg>
+  );
+}
+
+function ReportsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 20V10M12 20V4M6 20v-6" />
     </svg>
   );
 }
