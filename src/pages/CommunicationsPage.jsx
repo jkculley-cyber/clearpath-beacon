@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { CONTACT_TYPES } from '../lib/constants';
 
 export default function CommunicationsPage() {
-  const { counselor } = useAuth();
+  const { counselor, isLocalMode } = useAuth();
   const [comms, setComms] = useState([]);
   const [students, setStudents] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -219,9 +219,11 @@ export default function CommunicationsPage() {
                 <button type="submit" className="btn btn-primary" disabled={saving || !studentId} style={{ flex: 1 }}>
                   {saving ? 'Saving...' : 'Log Contact'}
                 </button>
-                <button type="button" className="btn btn-outline" onClick={handleGenerate} disabled={generating || !studentId} style={{ flex: 1 }}>
-                  {generating ? 'Generating...' : 'Generate AI Update'}
-                </button>
+                {!isLocalMode && (
+                  <button type="button" className="btn btn-outline" onClick={handleGenerate} disabled={generating || !studentId} style={{ flex: 1 }}>
+                    {generating ? 'Generating...' : 'Generate AI Update'}
+                  </button>
+                )}
               </div>
             </form>
 

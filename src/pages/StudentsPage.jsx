@@ -100,17 +100,29 @@ function ImportModal({ open, onClose, counselorId, csvFile }) {
     const records = rows.map(buildStudent).filter(r => r.name);
     if (!records.length) { setError('No valid rows found.'); setImporting(false); return; }
 
+    // Deduplicate: fetch existing students and skip matches by name (case-insensitive)
+    const { data: existing } = await db.select('students', { eq: { counselor_id: counselorId } });
+    const existingNames = new Set((existing || []).map(s => (s.name || '').toLowerCase().trim()));
+    const newRecords = records.filter(r => !existingNames.has(r.name.toLowerCase().trim()));
+    const skipped = records.length - newRecords.length;
+
+    if (!newRecords.length) {
+      setImporting(false);
+      setResult({ success: 0, skipped, errors: [] });
+      return;
+    }
+
     // Batch insert in chunks of 50
     let success = 0;
     let errors = [];
-    for (let i = 0; i < records.length; i += 50) {
-      const chunk = records.slice(i, i + 50);
+    for (let i = 0; i < newRecords.length; i += 50) {
+      const chunk = newRecords.slice(i, i + 50);
       const { error: err, data } = await db.insertMany('students', chunk);
       if (err) errors.push(`Rows ${i + 1}-${i + chunk.length}: ${err.message}`);
       else success += (data?.length || chunk.length);
     }
     setImporting(false);
-    setResult({ success, errors });
+    setResult({ success, skipped, errors });
   };
 
   if (result) {
@@ -119,6 +131,9 @@ function ImportModal({ open, onClose, counselorId, csvFile }) {
         <div style={modal} onClick={(e) => e.stopPropagation()}>
           <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>Import Complete</h3>
           <p style={{ color: '#22c55e', fontWeight: 600, marginBottom: 8 }}>{result.success} student{result.success !== 1 ? 's' : ''} imported successfully.</p>
+          {result.skipped > 0 && (
+            <p style={{ color: '#f59e0b', fontSize: 13, marginBottom: 8 }}>{result.skipped} duplicate{result.skipped !== 1 ? 's' : ''} skipped (already in roster).</p>
+          )}
           {result.errors.length > 0 && (
             <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 12 }}>
               {result.errors.map((e, i) => <p key={i}>{e}</p>)}

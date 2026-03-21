@@ -95,7 +95,10 @@ export default function ReportsPage() {
     setLoading(true);
 
     const { from, to } = dateRange;
-    const yearStart = `${new Date().getFullYear()}-01-01`;
+    // Use school year start from counselor settings, fallback to Aug 1 of current school year
+    const schoolYearStart = counselor.school_year_start
+      || (new Date().getMonth() >= 7 ? `${new Date().getFullYear()}-08-01` : `${new Date().getFullYear() - 1}-08-01`);
+    const yearStart = schoolYearStart;
     const yearEnd = format(new Date(), 'yyyy-MM-dd');
 
     try {

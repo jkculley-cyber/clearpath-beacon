@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { db, isLocalMode } from '../lib/db';
 import { CONCERN_TYPES, URGENCY_LEVELS } from '../lib/constants';
 
 const GRADES = ['K', '1', '2', '3', '4', '5'];
@@ -20,7 +21,9 @@ export default function ReferralFormPage() {
     setSubmitting(true);
     setError('');
 
-    const { error: err } = await supabase.from('referrals').insert({
+    // In local mode, write to IndexedDB so the counselor can see it.
+    // In cloud mode, write to Supabase so it reaches the counselor's cloud DB.
+    const referralData = {
       student_name: studentName,
       grade,
       teacher_name: teacherName,
@@ -28,7 +31,10 @@ export default function ReferralFormPage() {
       urgency,
       notes: notes || null,
       status: 'open',
-    });
+    };
+    const { error: err } = isLocalMode()
+      ? await db.insert('referrals', referralData)
+      : await supabase.from('referrals').insert(referralData);
 
     if (err) {
       setError(err.message);

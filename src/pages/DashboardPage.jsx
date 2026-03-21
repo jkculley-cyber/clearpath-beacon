@@ -159,7 +159,9 @@ export default function DashboardPage() {
   const loadData = useCallback(async () => {
     if (!counselor?.id) return;
     const today = new Date().toISOString().slice(0, 10);
-    const yearStart = `${new Date().getFullYear()}-01-01`;
+    // Use school year start from counselor settings, fallback to Aug 1 of current school year
+    const yearStart = counselor.school_year_start
+      || (new Date().getMonth() >= 7 ? `${new Date().getFullYear()}-08-01` : `${new Date().getFullYear() - 1}-08-01`);
 
     const [sessionsRes, referralsRes, studentsRes, groupsRes, timeRes, missedRes] = await Promise.all([
       db.count('sessions', { counselor_id: counselor.id, session_date: today }),
