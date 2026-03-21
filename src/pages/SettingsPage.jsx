@@ -6,7 +6,10 @@ import { exportLocalBackup, importLocalBackup } from '../lib/db';
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
 export default function SettingsPage() {
-  const { counselor, refreshCounselor, isLocalMode, switchStorageMode } = useAuth();
+  const { counselor, refreshCounselor, isLocalMode, switchStorageMode, licenseState, saveLicenseKey, getLicenseKey } = useAuth();
+  const [licKey, setLicKey] = useState('');
+  const [licMsg, setLicMsg] = useState('');
+  const [licSaving, setLicSaving] = useState(false);
   const [name, setName] = useState('');
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
@@ -306,6 +309,74 @@ export default function SettingsPage() {
             Update Password
           </button>
         </div>
+
+        {/* License */}
+        {isLocalMode && (
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h2 style={sectionTitle}>License</h2>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
+              padding: '10px 14px', borderRadius: 8,
+              background: licenseState.valid ? '#f0fdfa' : '#fef2f2',
+              border: `1px solid ${licenseState.valid ? '#99f6e4' : '#fecaca'}`,
+            }}>
+              <span style={{
+                width: 10, height: 10, borderRadius: '50%',
+                background: licenseState.valid ? '#22c55e' : '#ef4444',
+              }} />
+              <span style={{ fontSize: 14, fontWeight: 600, color: licenseState.valid ? '#0f766e' : '#dc2626' }}>
+                {licenseState.valid ? 'License Active' :
+                  licenseState.reason === 'no_license' ? 'No License Key' :
+                  licenseState.reason === 'invalid_key' ? 'Invalid License Key' :
+                  licenseState.reason === 'expired' ? 'License Expired' :
+                  'License Verification Failed'}
+              </span>
+            </div>
+            {getLicenseKey() && (
+              <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
+                Current key: <code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>{getLicenseKey()}</code>
+              </p>
+            )}
+            {!licenseState.valid && (
+              <p style={{ fontSize: 13, color: '#ef4444', marginBottom: 12 }}>
+                Your license is inactive. You can view existing data but cannot create new records until you enter a valid license key.
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <label className="form-label">License Key</label>
+                <input
+                  className="form-input"
+                  value={licKey}
+                  onChange={(e) => setLicKey(e.target.value.toUpperCase())}
+                  placeholder="BCN-XXXX-XXXX"
+                  style={{ maxWidth: 280 }}
+                />
+              </div>
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: 13, whiteSpace: 'nowrap' }}
+                disabled={licSaving || !licKey.trim()}
+                onClick={async () => {
+                  setLicSaving(true);
+                  setLicMsg('');
+                  const result = await saveLicenseKey(licKey.trim());
+                  if (result.valid) {
+                    setLicMsg('License activated!');
+                    setLicKey('');
+                  } else {
+                    setLicMsg(result.reason === 'invalid_key' ? 'Invalid key.' : result.reason === 'expired' ? 'License expired.' : 'Could not verify.');
+                  }
+                  setLicSaving(false);
+                  setTimeout(() => setLicMsg(''), 4000);
+                }}
+              >
+                {licSaving ? 'Verifying...' : 'Activate'}
+              </button>
+            </div>
+            {licMsg && <div style={{ fontSize: 13, marginTop: 6, color: licMsg.includes('activated') ? '#22c55e' : '#ef4444' }}>{licMsg}</div>}
+          </div>
+        )}
 
         {/* Data Storage */}
         <div className="card" style={{ marginBottom: 20 }}>

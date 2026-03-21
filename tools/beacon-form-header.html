@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .banner {
+    width: 1600px;
+    height: 400px;
+    background: linear-gradient(135deg, #f0fdfa 0%, #e6f7f5 40%, #ffffff 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 50px;
+    border-bottom: 6px solid #2A9D8F;
+    position: relative;
+    overflow: hidden;
+  }
+  .banner::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 80% 20%, rgba(42,157,143,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 20% 80%, rgba(75,45,127,0.05) 0%, transparent 60%);
+  }
+  .logo-section {
+    position: relative;
+    z-index: 1;
+  }
+  .logo-section img {
+    height: 220px;
+    width: auto;
+  }
+  .text-section {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .divider {
+    width: 4px;
+    height: 180px;
+    background: linear-gradient(to bottom, #2A9D8F, #4B2D7F);
+    border-radius: 2px;
+    position: relative;
+    z-index: 1;
+  }
+  .beacon-text {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 96px;
+    font-weight: 800;
+    color: #2A9D8F;
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+  .tagline {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 24px;
+    font-weight: 400;
+    font-style: italic;
+    color: #6b7280;
+    margin-top: 8px;
+    letter-spacing: 0.5px;
+  }
+  .product-badge {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #2A9D8F, #1a7a6f);
+    padding: 6px 18px;
+    border-radius: 20px;
+    margin-top: 14px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+  <div class="banner">
+    <div class="logo-section">
+      <img src="file:///C:/Users/jkcul/OneDrive/Pictures/Screenshot 2026-03-07 151137.png" alt="Clear Path Education Group" />
+    </div>
+    <div class="divider"></div>
+    <div class="text-section">
+      <div class="beacon-text">Beacon</div>
+      <div class="tagline">Guiding every student forward.</div>
+      <div class="product-badge">Student Referral</div>
+    </div>
+  </div>
+</body>
+</html>

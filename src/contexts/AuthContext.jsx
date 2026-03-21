@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback } 
 import { supabase } from '../lib/supabase';
 import { isLocalMode, getStorageMode, setStorageMode, seedLocalLessons, seedLocalTemplates } from '../lib/db';
 import * as local from '../lib/localDb';
+import { checkLicense, getLicenseKey, setLicenseKey, clearLicense, getCachedLicense } from '../lib/license';
 
 const AuthContext = createContext(null);
 
@@ -88,6 +89,7 @@ export function AuthProvider({ children }) {
   const [counselor, setCounselor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [storageMode, setMode] = useState(getStorageMode);
+  const [licenseState, setLicenseState] = useState({ valid: true, softGated: false, reason: null });
 
   const switchStorageMode = useCallback((mode) => {
     setStorageMode(mode);
@@ -126,13 +128,19 @@ export function AuthProvider({ children }) {
     let mounted = true;
 
     if (storageMode === 'local') {
-      // Local mode — load profile from IndexedDB
-      getOrCreateLocalCounselor().then((profile) => {
+      // Local mode — load profile from IndexedDB + check license
+      getOrCreateLocalCounselor().then(async (profile) => {
         if (!mounted) return;
         setCounselor(profile);
-        // Create a synthetic session so RequireAuth doesn't block
         if (profile) {
           setSession({ user: { id: profile.id, email: profile.email } });
+        }
+        // Check license (non-blocking — app loads even if check fails)
+        try {
+          const lic = await checkLicense();
+          if (mounted) setLicenseState(lic);
+        } catch {
+          // License check failed — stay with default (valid: true)
         }
         setLoading(false);
       });
@@ -195,11 +203,28 @@ export function AuthProvider({ children }) {
   }, []);
 
   const { isSoftGated, trialDaysLeft } = useMemo(
-    () => storageMode === 'local'
-      ? { isSoftGated: false, trialDaysLeft: null }  // Local mode is never gated
-      : computeGateState(counselor),
-    [counselor, storageMode]
+    () => {
+      if (storageMode === 'local') {
+        // Local mode: gated by license, not trial
+        return { isSoftGated: licenseState.softGated || false, trialDaysLeft: null };
+      }
+      return computeGateState(counselor);
+    },
+    [counselor, storageMode, licenseState]
   );
+
+  // License key management
+  const saveLicenseKey = useCallback(async (key) => {
+    setLicenseKey(key);
+    const lic = await checkLicense();
+    setLicenseState(lic);
+    return lic;
+  }, []);
+
+  const removeLicense = useCallback(() => {
+    clearLicense();
+    setLicenseState({ valid: false, softGated: true, reason: 'no_license' });
+  }, []);
 
   const value = useMemo(() => ({
     session,
@@ -209,12 +234,17 @@ export function AuthProvider({ children }) {
     trialDaysLeft,
     storageMode,
     isLocalMode: storageMode === 'local',
+    licenseState,
     signIn,
     signOut,
     refreshCounselor,
     switchStorageMode,
     setupLocalProfile,
-  }), [session, counselor, loading, isSoftGated, trialDaysLeft, storageMode, signIn, signOut, refreshCounselor, switchStorageMode, setupLocalProfile]);
+    saveLicenseKey,
+    removeLicense,
+    getLicenseKey,
+    getCachedLicense,
+  }), [session, counselor, loading, isSoftGated, trialDaysLeft, storageMode, licenseState, signIn, signOut, refreshCounselor, switchStorageMode, setupLocalProfile, saveLicenseKey, removeLicense]);
 
   return (
     <AuthContext.Provider value={value}>

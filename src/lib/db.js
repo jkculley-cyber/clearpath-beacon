@@ -15,6 +15,7 @@
 
 import { supabase } from './supabase';
 import * as local from './localDb';
+import { checkLicense } from './license';
 
 // Storage mode: 'local' (IndexedDB) or 'cloud' (Supabase)
 // Persisted in localStorage so it survives reloads
@@ -32,6 +33,9 @@ export function setStorageMode(mode) {
 export function isLocalMode() {
   return getStorageMode() === 'local';
 }
+
+// Tables exempt from license soft gate (seeding, setup, internal)
+const LICENSE_EXEMPT_TABLES = ['lesson_library', 'communication_templates', 'settings', 'counselor'];
 
 // ─── Unified Data API ───
 
@@ -114,10 +118,18 @@ export const db = {
 
   /**
    * INSERT a new row. Returns the inserted row with generated id.
+   * Blocked in local mode when license is expired (soft gate).
    */
   async insert(table, record) {
     try {
       if (isLocalMode()) {
+        // Soft gate: block new records when license is invalid
+        if (!LICENSE_EXEMPT_TABLES.includes(table)) {
+          const lic = await checkLicense();
+          if (lic.softGated) {
+            return { data: null, error: new Error('License expired — renew to create new records.') };
+          }
+        }
         const row = await local.insert(table, record);
         return { data: row, error: null };
       }

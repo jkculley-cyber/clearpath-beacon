@@ -2,15 +2,33 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function LocalSetupPage() {
-  const { setupLocalProfile } = useAuth();
+  const { setupLocalProfile, saveLicenseKey } = useAuth();
   const [name, setName] = useState('');
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
+  const [licenseKeyInput, setLicenseKeyInput] = useState('');
+  const [licenseError, setLicenseError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    setLicenseError('');
+
+    // Validate license key if provided
+    if (licenseKeyInput.trim()) {
+      const result = await saveLicenseKey(licenseKeyInput.trim());
+      if (!result.valid) {
+        setLicenseError(
+          result.reason === 'invalid_key' ? 'Invalid license key. Please check and try again.'
+          : result.reason === 'expired' ? 'This license has expired. Please contact support.'
+          : 'Could not verify license. Please check your connection and try again.'
+        );
+        setSaving(false);
+        return;
+      }
+    }
+
     await setupLocalProfile({ name, campus, district });
     setSaving(false);
   };
@@ -62,6 +80,20 @@ export default function LocalSetupPage() {
             onChange={(e) => setDistrict(e.target.value)}
             placeholder="e.g. Lonestar ISD"
           />
+
+          <label style={labelStyle}>License Key</label>
+          <input
+            style={inputStyle}
+            value={licenseKeyInput}
+            onChange={(e) => setLicenseKeyInput(e.target.value.toUpperCase())}
+            placeholder="e.g. BCN-XXXX-XXXX"
+          />
+          {licenseError && (
+            <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>{licenseError}</div>
+          )}
+          <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+            Enter the license key from your purchase confirmation.
+          </div>
 
           <button
             type="submit"
