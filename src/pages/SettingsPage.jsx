@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { exportLocalBackup, importLocalBackup } from '../lib/db';
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
 export default function SettingsPage() {
-  const { counselor, refreshCounselor } = useAuth();
+  const { counselor, refreshCounselor, isLocalMode, switchStorageMode } = useAuth();
   const [name, setName] = useState('');
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
@@ -304,6 +305,86 @@ export default function SettingsPage() {
           <button className="btn btn-outline" onClick={handleChangePassword} disabled={!currentPw || !newPw}>
             Update Password
           </button>
+        </div>
+
+        {/* Data Storage */}
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h2 style={sectionTitle}>Data Storage</h2>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
+            padding: '10px 14px', borderRadius: 8,
+            background: isLocalMode ? '#f0fdfa' : '#eff6ff',
+            border: `1px solid ${isLocalMode ? '#99f6e4' : '#bfdbfe'}`,
+          }}>
+            <span style={{
+              width: 10, height: 10, borderRadius: '50%',
+              background: isLocalMode ? '#2A9D8F' : '#3b82f6',
+            }} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: isLocalMode ? '#0f766e' : '#1d4ed8' }}>
+              {isLocalMode ? 'Local Mode — data stays on this device' : 'Cloud Mode — synced to Supabase'}
+            </span>
+          </div>
+
+          {isLocalMode && (
+            <>
+              <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12, lineHeight: 1.5 }}>
+                All your data is stored in this browser's IndexedDB. Export a backup regularly to avoid data loss if you clear browser data.
+              </p>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={async () => {
+                  const data = await exportLocalBackup();
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `beacon-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}>
+                  Export Backup (JSON)
+                </button>
+                <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.json';
+                  input.onchange = async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const text = await file.text();
+                    if (confirm('This will replace ALL local data. Continue?')) {
+                      await importLocalBackup(text);
+                      window.location.reload();
+                    }
+                  };
+                  input.click();
+                }}>
+                  Restore from Backup
+                </button>
+              </div>
+              <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 12 }}>
+                <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>
+                  Have a district data agreement? Switch to cloud mode for cross-device sync and AI features.
+                </p>
+                <button
+                  className="btn btn-outline"
+                  style={{ fontSize: 12, padding: '6px 14px' }}
+                  onClick={() => {
+                    if (confirm('Switch to cloud mode? You will need to sign in with a district account. Your local data will remain available if you switch back.')) {
+                      switchStorageMode('cloud');
+                    }
+                  }}
+                >
+                  Switch to Cloud Mode
+                </button>
+              </div>
+            </>
+          )}
+
+          {!isLocalMode && (
+            <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+              Your data is synced to the cloud via Supabase. It is accessible from any device where you sign in.
+            </p>
+          )}
         </div>
 
         {/* Footer */}

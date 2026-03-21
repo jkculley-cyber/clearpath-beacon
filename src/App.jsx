@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import AppShell from './components/layout/AppShell';
 
-/* ── Page imports (placeholders until pages agent fills them) ── */
+/* ── Page imports ── */
 import DashboardPage from './pages/DashboardPage';
 import SchedulePage from './pages/SchedulePage';
 import GroupsPage from './pages/GroupsPage';
@@ -17,10 +17,11 @@ import SettingsPage from './pages/SettingsPage';
 import ReportsPage from './pages/ReportsPage';
 import LoginPage from './pages/LoginPage';
 import ReferralFormPage from './pages/ReferralFormPage';
+import LocalSetupPage from './pages/LocalSetupPage';
 
 /* ── Auth guard ── */
 function RequireAuth({ children }) {
-  const { session, loading } = useAuth();
+  const { session, counselor, loading, isLocalMode } = useAuth();
 
   if (loading) {
     return (
@@ -30,15 +31,23 @@ function RequireAuth({ children }) {
     );
   }
 
-  if (!session) return <Navigate to="/login" replace />;
+  // Local mode: no session and no counselor means needs setup
+  if (isLocalMode && !counselor) return <Navigate to="/setup" replace />;
+
+  // Cloud mode: no session means needs login
+  if (!isLocalMode && !session) return <Navigate to="/login" replace />;
+
   return children;
 }
 
 export default function App() {
+  const { isLocalMode } = useAuth();
+
   return (
     <Routes>
       {/* Public routes */}
-      <Route path="/login" element={<LoginPage />} />
+      <Route path="/login" element={isLocalMode ? <Navigate to="/setup" replace /> : <LoginPage />} />
+      <Route path="/setup" element={<LocalSetupPage />} />
       <Route path="/referral-form" element={<ReferralFormPage />} />
 
       {/* Authenticated routes inside AppShell */}

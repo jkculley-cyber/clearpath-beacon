@@ -294,6 +294,20 @@ export default function LoginPage() {
           Forgot Password?
         </button>
 
+        <div style={{ textAlign: 'center', marginTop: 20, paddingTop: 16, borderTop: '1px solid #f3f4f6' }}>
+          <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 6px' }}>No district account?</p>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.setItem('beacon_storage_mode', 'local');
+              window.location.href = '/setup';
+            }}
+            style={{ ...styles.link, marginTop: 0, fontSize: 13, fontWeight: 600 }}
+          >
+            Use Local Mode (data stays on this device)
+          </button>
+        </div>
+
         {renderFooter()}
       </div>
     </div>

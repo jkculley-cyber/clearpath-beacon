@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { isLocalMode, getStorageMode, setStorageMode, seedLocalLessons, seedLocalTemplates } from '../lib/db';
+import * as local from '../lib/localDb';
 
 const AuthContext = createContext(null);
 
@@ -43,13 +45,58 @@ function computeGateState(counselor) {
   return { isSoftGated: false, trialDaysLeft: null };
 }
 
+/* ─── Local mode counselor helpers ─── */
+
+const LOCAL_COUNSELOR_KEY = 'beacon_local_counselor_id';
+
+async function getOrCreateLocalCounselor() {
+  const existingId = localStorage.getItem(LOCAL_COUNSELOR_KEY);
+  if (existingId) {
+    const profile = await local.getById('counselor', existingId);
+    if (profile) return profile;
+  }
+  // No local profile yet — will be created during local setup
+  return null;
+}
+
+async function createLocalCounselor(profile) {
+  const record = {
+    id: local.uuid(),
+    name: profile.name,
+    email: profile.email || 'local@beacon.local',
+    campus: profile.campus || '',
+    district: profile.district || '',
+    subscription_status: 'active',
+    onboarding_complete: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  await local.put('counselor', record);
+  localStorage.setItem(LOCAL_COUNSELOR_KEY, record.id);
+
+  // Seed bundled lessons and templates
+  await seedLocalLessons(record.id);
+  await seedLocalTemplates(record.id);
+
+  return record;
+}
+
 /* ─── Provider ─── */
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [counselor, setCounselor] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [storageMode, setMode] = useState(getStorageMode);
 
+  const switchStorageMode = useCallback((mode) => {
+    setStorageMode(mode);
+    setMode(mode);
+    // Force reload to reinitialize with new mode
+    window.location.reload();
+  }, []);
+
+  // Cloud mode: fetch counselor from Supabase
   const fetchCounselor = useCallback(async (userId) => {
     const { data, error } = await supabase
       .from('counselors')
@@ -66,15 +113,33 @@ export function AuthProvider({ children }) {
   }, []);
 
   const refreshCounselor = useCallback(async () => {
-    if (session?.user?.id) {
+    if (storageMode === 'local') {
+      const profile = await getOrCreateLocalCounselor();
+      setCounselor(profile);
+    } else if (session?.user?.id) {
       await fetchCounselor(session.user.id);
     }
-  }, [session, fetchCounselor]);
+  }, [session, fetchCounselor, storageMode]);
 
-  // Bootstrap session
+  // Bootstrap
   useEffect(() => {
     let mounted = true;
 
+    if (storageMode === 'local') {
+      // Local mode — load profile from IndexedDB
+      getOrCreateLocalCounselor().then((profile) => {
+        if (!mounted) return;
+        setCounselor(profile);
+        // Create a synthetic session so RequireAuth doesn't block
+        if (profile) {
+          setSession({ user: { id: profile.id, email: profile.email } });
+        }
+        setLoading(false);
+      });
+      return () => { mounted = false; };
+    }
+
+    // Cloud mode — normal Supabase auth flow
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       if (!mounted) return;
       setSession(s);
@@ -101,24 +166,39 @@ export function AuthProvider({ children }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchCounselor]);
+  }, [fetchCounselor, storageMode]);
 
   // Auth actions
   const signIn = useCallback(async (email, password) => {
+    if (storageMode === 'local') {
+      throw new Error('Cloud sign-in not available in local mode');
+    }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
-  }, []);
+  }, [storageMode]);
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    if (storageMode === 'cloud') {
+      await supabase.auth.signOut();
+    }
     setSession(null);
     setCounselor(null);
+  }, [storageMode]);
+
+  // Local mode setup — called from LocalSetupPage
+  const setupLocalProfile = useCallback(async (profile) => {
+    const record = await createLocalCounselor(profile);
+    setCounselor(record);
+    setSession({ user: { id: record.id, email: record.email } });
+    return record;
   }, []);
 
   const { isSoftGated, trialDaysLeft } = useMemo(
-    () => computeGateState(counselor),
-    [counselor]
+    () => storageMode === 'local'
+      ? { isSoftGated: false, trialDaysLeft: null }  // Local mode is never gated
+      : computeGateState(counselor),
+    [counselor, storageMode]
   );
 
   const value = useMemo(() => ({
@@ -127,10 +207,14 @@ export function AuthProvider({ children }) {
     loading,
     isSoftGated,
     trialDaysLeft,
+    storageMode,
+    isLocalMode: storageMode === 'local',
     signIn,
     signOut,
     refreshCounselor,
-  }), [session, counselor, loading, isSoftGated, trialDaysLeft, signIn, signOut, refreshCounselor]);
+    switchStorageMode,
+    setupLocalProfile,
+  }), [session, counselor, loading, isSoftGated, trialDaysLeft, storageMode, signIn, signOut, refreshCounselor, switchStorageMode, setupLocalProfile]);
 
   return (
     <AuthContext.Provider value={value}>
