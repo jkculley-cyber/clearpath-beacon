@@ -18,6 +18,7 @@ import ReportsPage from './pages/ReportsPage';
 import LoginPage from './pages/LoginPage';
 import ReferralFormPage from './pages/ReferralFormPage';
 import LocalSetupPage from './pages/LocalSetupPage';
+import RequestAccessPage from './pages/RequestAccessPage';
 
 /* ── Auth guard ── */
 function RequireAuth({ children }) {
@@ -46,6 +47,7 @@ export default function App() {
   return (
     <Routes>
       {/* Public routes */}
+      <Route path="/request-access" element={<RequestAccessPage />} />
       <Route path="/login" element={isLocalMode ? <Navigate to="/setup" replace /> : <LoginPage />} />
       <Route path="/setup" element={<LocalSetupPage />} />
       <Route path="/referral-form" element={<ReferralFormPage />} />

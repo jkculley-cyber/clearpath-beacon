@@ -110,6 +110,12 @@ export default function LocalSetupPage() {
         </form>
 
         <div style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: '#9ca3af' }}>
+          Don't have a license key?{' '}
+          <a href="/request-access" style={{ color: '#2A9D8F', fontWeight: 600, textDecoration: 'none', fontSize: 12 }}>
+            Request access →
+          </a>
+        </div>
+        <div style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: '#9ca3af' }}>
           Have a district account?{' '}
           <button
             onClick={() => {
