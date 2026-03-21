@@ -5,6 +5,8 @@ import { db } from '../lib/db';
 import { TIME_DOMAINS } from '../lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { startOfWeek, subWeeks, format } from 'date-fns';
+import OnboardingChecklist from '../components/OnboardingChecklist';
+import Scorecard from '../components/Scorecard';
 
 /* ─── Helper: student display name ─── */
 const sName = (s) => s?.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s?.name || 'Unknown');
@@ -319,6 +321,16 @@ export default function DashboardPage() {
   return (
     <div style={styles.page}>
       <h1 style={styles.heading}>Dashboard</h1>
+
+      {/* Onboarding checklist — disappears once all steps complete */}
+      <div style={{ marginBottom: 20 }}>
+        <OnboardingChecklist counselorId={counselor?.id} />
+      </div>
+
+      {/* Weekly scorecard — "How am I doing?" */}
+      <div style={{ marginBottom: 20 }}>
+        <Scorecard counselorId={counselor?.id} counselor={counselor} />
+      </div>
 
       <div style={styles.grid}>
         {/* ─── Top Left: Today at a Glance ─── */}

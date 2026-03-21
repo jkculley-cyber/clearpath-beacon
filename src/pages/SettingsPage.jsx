@@ -414,6 +414,7 @@ export default function SettingsPage() {
                   a.download = `beacon-backup-${new Date().toISOString().slice(0, 10)}.json`;
                   a.click();
                   URL.revokeObjectURL(url);
+                  localStorage.setItem('beacon_last_backup', new Date().toISOString());
                 }}>
                   Export Backup (JSON)
                 </button>
