@@ -37,16 +37,20 @@ export default function AppShell() {
 
   const schoolName = counselor?.school_name || 'Beacon';
 
-  // Backup reminder — show if local mode and no backup in 14+ days
+  // Backup reminder — tiered urgency, non-dismissible when critical
   const [backupDismissed, setBackupDismissed] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const [showRestoreGuide, setShowRestoreGuide] = useState(false);
   const backupAge = useMemo(() => {
     if (!counselor) return null;
     const last = localStorage.getItem('beacon_last_backup');
     if (!last) return 999; // never backed up
     return Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
   }, [counselor]);
-  const showBackupBanner = backupAge !== null && backupAge >= 14 && !backupDismissed && !showTrialBanner && !isSoftGated;
+  // Urgency tiers: 7+ days = amber nudge, 14+ = orange warning, 30+/never = red critical
+  const backupUrgency = backupAge >= 30 || backupAge >= 999 ? 'critical' : backupAge >= 14 ? 'warning' : backupAge >= 7 ? 'nudge' : null;
+  // Critical banners cannot be dismissed. Nudge can be dismissed for this session.
+  const showBackupBanner = backupUrgency && !(backupUrgency === 'nudge' && backupDismissed);
 
   async function handleQuickBackup() {
     setBackingUp(true);
@@ -93,20 +97,88 @@ export default function AppShell() {
         </div>
       )}
       {showBackupBanner && (
-        <div className="backup-banner">
-          <span>
-            {backupAge >= 999
-              ? '🛡️ You\'ve never backed up your data. If your browser cache is cleared, everything is lost.'
-              : `🛡️ Your last backup was ${backupAge} days ago. Back up regularly to protect your work.`}
-          </span>
-          <span style={{ display: 'inline-flex', gap: 8, marginLeft: 12 }}>
-            <button className="backup-banner-btn" onClick={handleQuickBackup} disabled={backingUp}>
-              {backingUp ? 'Saving…' : 'Back Up Now'}
-            </button>
-            <button className="backup-banner-dismiss" onClick={() => setBackupDismissed(true)}>
-              Dismiss
-            </button>
-          </span>
+        <div className={`backup-banner backup-${backupUrgency}`}>
+          <div className="backup-banner-content">
+            <span className="backup-banner-text">
+              {backupAge >= 999
+                ? '⚠️ You have never backed up. Your students, sessions, and compliance data exist ONLY on this device. If your browser data is cleared, everything is permanently lost.'
+                : backupUrgency === 'critical'
+                ? `🚨 Your last backup was ${backupAge} days ago. Your data is at serious risk. Back up now — it takes 3 seconds.`
+                : backupUrgency === 'warning'
+                ? `⚠️ Your last backup was ${backupAge} days ago. Weekly backups protect months of work. One click and you're safe.`
+                : `🛡️ Your last backup was ${backupAge} days ago. A quick backup keeps your data safe.`}
+            </span>
+            <span className="backup-banner-actions">
+              <button className="backup-banner-btn" onClick={handleQuickBackup} disabled={backingUp}>
+                {backingUp ? 'Saving…' : '⬇ Back Up Now'}
+              </button>
+              <button className="backup-banner-btn-alt" onClick={() => setShowRestoreGuide(true)}>
+                How to restore?
+              </button>
+              {backupUrgency === 'nudge' && (
+                <button className="backup-banner-dismiss" onClick={() => setBackupDismissed(true)}>
+                  Later
+                </button>
+              )}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Restore Guide Modal */}
+      {showRestoreGuide && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }} onClick={() => setShowRestoreGuide(false)}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 32, maxWidth: 520, width: '92%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1a2332', margin: '0 0 4px' }}>How to Restore Your Data</h2>
+            <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 20px' }}>If you lose your data or move to a new device, follow these steps.</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={guideStep}>
+                <div style={guideNum}>1</div>
+                <div>
+                  <div style={guideTitle}>Back up regularly</div>
+                  <div style={guideDesc}>Click <strong>"Back Up Now"</strong> in the banner above or go to <strong>Settings → Data Storage → Export Backup</strong>. This downloads a JSON file to your device. Do this every week.</div>
+                </div>
+              </div>
+
+              <div style={guideStep}>
+                <div style={guideNum}>2</div>
+                <div>
+                  <div style={guideTitle}>Save the backup file somewhere safe</div>
+                  <div style={guideDesc}>Email it to yourself, save it to Google Drive, or put it on a USB drive. Don't leave it only in your Downloads folder — that gets cleared too.</div>
+                </div>
+              </div>
+
+              <div style={guideStep}>
+                <div style={guideNum}>3</div>
+                <div>
+                  <div style={guideTitle}>If you need to restore</div>
+                  <div style={guideDesc}>Open Beacon → <strong>Settings → Data Storage → Restore from Backup</strong> → select your JSON file. All your students, sessions, groups, time entries, and notes will be restored exactly as they were.</div>
+                </div>
+              </div>
+
+              <div style={guideStep}>
+                <div style={guideNum}>4</div>
+                <div>
+                  <div style={guideTitle}>Moving to a new device?</div>
+                  <div style={guideDesc}>Export a backup on your old device, then open <strong>beacon.clearpathedgroup.com</strong> on your new device, complete the setup, and immediately restore from backup. Your license key works on any device.</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 20, padding: '12px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: 13, color: '#15803d', lineHeight: 1.5 }}>
+              <strong>Pro tip:</strong> Set a weekly calendar reminder — "Friday 3pm: Back up Beacon." It takes 3 seconds and protects months of work.
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button onClick={() => { setShowRestoreGuide(false); navigate('/settings'); }} style={{ flex: 1, padding: '11px 0', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>
+                Go to Settings
+              </button>
+              <button onClick={() => { setShowRestoreGuide(false); handleQuickBackup(); }} style={{ flex: 1, padding: '11px 0', borderRadius: 8, border: 'none', background: '#2A9D8F', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                Back Up Now
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -146,6 +218,12 @@ export default function AppShell() {
 }
 
 /* ─── Inline styles (keeps the component self-contained) ─── */
+/* ── Restore guide inline styles ── */
+const guideStep = { display: 'flex', gap: 14, alignItems: 'flex-start' };
+const guideNum = { width: 28, height: 28, borderRadius: '50%', background: '#2A9D8F', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 };
+const guideTitle = { fontSize: 15, fontWeight: 600, color: '#1a2332', marginBottom: 2 };
+const guideDesc = { fontSize: 13, color: '#4b5563', lineHeight: 1.55 };
+
 const shellStyles = `
 .shell {
   display: flex;
@@ -236,38 +314,69 @@ const shellStyles = `
   top: 56px;
   left: 0;
   right: 0;
-  background: #fef3c7;
-  color: #92400e;
-  text-align: center;
-  padding: 8px 16px;
+  z-index: 39;
+  padding: 10px 20px;
   font-size: 0.8125rem;
   font-weight: 500;
-  z-index: 39;
+}
+.backup-banner-content {
+  max-width: 960px;
+  margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 4px;
-  border-bottom: 1px solid #fde68a;
+  gap: 8px;
 }
+.backup-banner-text { flex: 1; min-width: 200px; line-height: 1.4; }
+.backup-banner-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+/* Tier: nudge (7-13 days) */
+.backup-nudge { background: #fef3c7; color: #92400e; border-bottom: 1px solid #fde68a; }
+.backup-nudge .backup-banner-btn { background: #92400e; color: #fff; }
+
+/* Tier: warning (14-29 days) */
+.backup-warning { background: #fff7ed; color: #9a3412; border-bottom: 2px solid #fb923c; }
+.backup-warning .backup-banner-btn { background: #ea580c; color: #fff; }
+
+/* Tier: critical (30+ days or never) */
+.backup-critical { background: #fef2f2; color: #991b1b; border-bottom: 2px solid #ef4444; animation: pulse-bg 2s ease-in-out infinite; }
+.backup-critical .backup-banner-btn { background: #dc2626; color: #fff; font-size: 0.8125rem; padding: 5px 16px; }
+@keyframes pulse-bg {
+  0%, 100% { background: #fef2f2; }
+  50% { background: #fee2e2; }
+}
+
 .backup-banner-btn {
-  background: #92400e;
-  color: #fff;
   border: none;
-  border-radius: 4px;
-  padding: 3px 12px;
+  border-radius: 6px;
+  padding: 4px 14px;
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
 }
-.backup-banner-btn:hover { background: #78350f; }
+.backup-banner-btn:hover { opacity: 0.9; }
+.backup-banner-btn-alt {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 3px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: inherit;
+  white-space: nowrap;
+}
+.backup-banner-btn-alt:hover { opacity: 0.7; }
 .backup-banner-dismiss {
   background: none;
   border: none;
-  color: #b45309;
+  color: inherit;
   font-size: 0.75rem;
   cursor: pointer;
   text-decoration: underline;
+  opacity: 0.7;
 }
 
 /* ── Sidebar ── */
