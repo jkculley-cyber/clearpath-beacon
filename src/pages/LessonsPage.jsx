@@ -7,7 +7,8 @@ const GRADES = ['K', '1', '2', '3', '4', '5'];
 const SOURCE_PLATFORMS = ['Original', 'Second Step', 'Character Strong', 'Zones of Regulation', 'MindUp', 'Other'];
 const ENTRY_TYPES = ['file', 'link', 'text'];
 
-function AddLessonModal({ open, onClose, counselorId }) {
+function LessonModal({ open, onClose, counselorId, editLesson }) {
+  const isEdit = !!editLesson;
   const [title, setTitle] = useState('');
   const [entryType, setEntryType] = useState('link');
   const [url, setUrl] = useState('');
@@ -19,6 +20,23 @@ function AddLessonModal({ open, onClose, counselorId }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (editLesson) {
+      setTitle(editLesson.title || '');
+      setEntryType(editLesson.entry_type || 'link');
+      setUrl(editLesson.url || '');
+      setTextContent(editLesson.text_content || '');
+      setGradeTags(editLesson.grade_tags || []);
+      setDomainTag(editLesson.domain_tag || '');
+      setTopicTags((editLesson.topic_tags || []).join(', '));
+      setSourcePlatform(editLesson.source_platform || 'Original');
+    } else {
+      setTitle(''); setEntryType('link'); setUrl(''); setTextContent('');
+      setGradeTags([]); setDomainTag(''); setTopicTags(''); setSourcePlatform('Original');
+    }
+    setError('');
+  }, [editLesson, open]);
+
   if (!open) return null;
 
   const toggleGrade = (g) => {
@@ -29,8 +47,7 @@ function AddLessonModal({ open, onClose, counselorId }) {
     e.preventDefault();
     setSaving(true);
     setError('');
-    const { error: err } = await supabase.from('lessons').insert({
-      counselor_id: counselorId,
+    const payload = {
       title,
       entry_type: entryType,
       url: entryType === 'link' ? url : null,
@@ -39,7 +56,14 @@ function AddLessonModal({ open, onClose, counselorId }) {
       domain_tag: domainTag || null,
       topic_tags: topicTags ? topicTags.split(',').map((t) => t.trim()) : [],
       source_platform: sourcePlatform,
-    });
+    };
+    let err;
+    if (isEdit) {
+      ({ error: err } = await supabase.from('lessons').update(payload).eq('id', editLesson.id));
+    } else {
+      payload.counselor_id = counselorId;
+      ({ error: err } = await supabase.from('lessons').insert(payload));
+    }
     if (err) { setError(err.message); setSaving(false); return; }
     setSaving(false);
     onClose(true);
@@ -48,7 +72,7 @@ function AddLessonModal({ open, onClose, counselorId }) {
   return (
     <div style={overlay} onClick={() => onClose(false)}>
       <div style={{ ...modal, width: 520 }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={modalTitle}>Add Lesson</h3>
+        <h3 style={modalTitle}>{isEdit ? 'Edit Lesson' : 'Add Lesson'}</h3>
         {error && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 12 }}>{error}</div>}
         <form onSubmit={handleSubmit}>
           <label className="form-label">Title *</label>
@@ -121,7 +145,7 @@ function AddLessonModal({ open, onClose, counselorId }) {
 
           <div style={{ display: 'flex', gap: 10 }}>
             <button type="button" className="btn btn-outline" onClick={() => onClose(false)} style={{ flex: 1 }}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saving} style={{ flex: 1 }}>{saving ? 'Saving...' : 'Add Lesson'}</button>
+            <button type="submit" className="btn btn-primary" disabled={saving} style={{ flex: 1 }}>{saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Add Lesson'}</button>
           </div>
         </form>
       </div>
@@ -139,6 +163,7 @@ export default function LessonsPage() {
   const [filterSource, setFilterSource] = useState('');
   const [viewMode, setViewMode] = useState('grid');
   const [showAdd, setShowAdd] = useState(false);
+  const [editLesson, setEditLesson] = useState(null);
   const [previewLesson, setPreviewLesson] = useState(null);
 
   const loadLessons = useCallback(async () => {
@@ -158,6 +183,17 @@ export default function LessonsPage() {
   const toggleFavorite = async (lesson) => {
     await supabase.from('lessons').update({ is_favorite: !lesson.is_favorite }).eq('id', lesson.id);
     loadLessons();
+  };
+
+  const handleDelete = async (lesson) => {
+    if (!confirm(`Delete "${lesson.title}"? This cannot be undone.`)) return;
+    await supabase.from('lessons').delete().eq('id', lesson.id);
+    loadLessons();
+  };
+
+  const handleEdit = (lesson) => {
+    setEditLesson(lesson);
+    setShowAdd(true);
   };
 
   const filtered = lessons.filter((l) => {
@@ -212,12 +248,20 @@ export default function LessonsPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
           {filtered.map((l) => (
             <div key={l.id} className="card" style={{ cursor: 'pointer', position: 'relative' }} onClick={() => setPreviewLesson(l)}>
-              <button onClick={(e) => { e.stopPropagation(); toggleFavorite(l); }} style={{
-                position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', cursor: 'pointer', fontSize: 18,
-                color: l.is_favorite ? '#f59e0b' : '#d1d5db',
-              }}>
-                {l.is_favorite ? '\u2605' : '\u2606'}
-              </button>
+              <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 4, alignItems: 'center' }}>
+                <button onClick={(e) => { e.stopPropagation(); toggleFavorite(l); }} style={{
+                  background: 'none', border: 'none', cursor: 'pointer', fontSize: 18,
+                  color: l.is_favorite ? '#f59e0b' : '#d1d5db',
+                }}>
+                  {l.is_favorite ? '\u2605' : '\u2606'}
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); handleEdit(l); }} style={{
+                  background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#2A9D8F', fontWeight: 600,
+                }}>Edit</button>
+                <button onClick={(e) => { e.stopPropagation(); handleDelete(l); }} style={{
+                  background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#ef4444',
+                }}>Del</button>
+              </div>
               <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>
                 <span style={{ marginRight: 8 }}>{typeIcon(l.entry_type)}</span>
                 {l.source_platform && (
@@ -251,6 +295,7 @@ export default function LessonsPage() {
                 <th style={thStyle}>Domain</th>
                 <th style={thStyle}>Used</th>
                 <th style={{ ...thStyle, width: 40 }}></th>
+                <th style={{ ...thStyle, width: 100 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -266,6 +311,12 @@ export default function LessonsPage() {
                     <button onClick={(e) => { e.stopPropagation(); toggleFavorite(l); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: l.is_favorite ? '#f59e0b' : '#d1d5db' }}>
                       {l.is_favorite ? '\u2605' : '\u2606'}
                     </button>
+                  </td>
+                  <td style={tdStyle}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={(e) => { e.stopPropagation(); handleEdit(l); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#2A9D8F', fontWeight: 600 }}>Edit</button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(l); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#ef4444' }}>Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -306,7 +357,7 @@ export default function LessonsPage() {
         </div>
       )}
 
-      <AddLessonModal open={showAdd} onClose={(created) => { setShowAdd(false); if (created) loadLessons(); }} counselorId={counselor?.id} />
+      <LessonModal open={showAdd} onClose={(saved) => { setShowAdd(false); setEditLesson(null); if (saved) loadLessons(); }} counselorId={counselor?.id} editLesson={editLesson} />
     </div>
   );
 }

@@ -38,7 +38,7 @@ export default function CommunicationsPage() {
     if (!counselor?.id) return;
     setLoading(true);
     const [commsRes, studRes, templRes] = await Promise.all([
-      supabase.from('communications').select('*, students(name, first_name, last_name, grade)').eq('counselor_id', counselor.id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('communications').select('*, students(name, first_name, last_name, grade)').eq('counselor_id', counselor.id).order('contact_date', { ascending: false }).order('created_at', { ascending: false }).limit(100),
       supabase.from('students').select('id, name, first_name, last_name, grade').eq('counselor_id', counselor.id).eq('status', 'active').order('name'),
       supabase.from('communication_templates').select('*').eq('counselor_id', counselor.id).order('name').then(r => r).catch(() => ({ data: [] })),
     ]);
@@ -104,7 +104,19 @@ export default function CommunicationsPage() {
   };
 
   const loadTemplate = (tmpl) => {
-    setNotes(tmpl.body);
+    let body = tmpl.body || '';
+    const selectedStudent = students.find((s) => s.id === studentId);
+    if (selectedStudent) {
+      const today = new Date();
+      const dateStr = String(today.getMonth() + 1).padStart(2, '0') + '/' + String(today.getDate()).padStart(2, '0') + '/' + today.getFullYear();
+      body = body.replace(/\{\{student_name\}\}/g, sName(selectedStudent));
+      body = body.replace(/\{\{date\}\}/g, dateStr);
+      body = body.replace(/\{\{counselor_name\}\}/g, counselor?.full_name || counselor?.name || '');
+      body = body.replace(/\{\{group_name\}\}/g, 'their counseling group');
+      body = body.replace(/\{\{school_name\}\}/g, counselor?.campus || counselor?.school_name || 'our school');
+      body = body.replace(/\{\{grade\}\}/g, selectedStudent.grade || '');
+    }
+    setNotes(body);
   };
 
   const deleteTemplate = async (id) => {

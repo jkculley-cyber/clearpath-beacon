@@ -5,7 +5,7 @@ import { URGENCY_LEVELS } from '../lib/constants';
 
 const urgencyColor = { Urgent: '#ef4444', Soon: '#f59e0b', Routine: '#6b7280' };
 
-function AcceptModal({ open, onClose, referral, counselorId }) {
+function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
   const [mode, setMode] = useState('individual');
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
@@ -48,7 +48,28 @@ function AcceptModal({ open, onClose, referral, counselorId }) {
       response_date: new Date().toISOString().slice(0, 10),
     }).eq('id', referral.id);
 
+    // Log teacher notification as a communication record
+    const teacherName = referral.teacher_name || referral.submitted_by || 'Unknown';
+    const assignmentType = mode === 'group' ? 'group counseling' : 'individual services';
+    if (student) {
+      await supabase.from('communications').insert({
+        counselor_id: counselorId,
+        student_id: student.id,
+        contact_type: 'Written notice',
+        notes: `Referral for ${referral.student_name} accepted. Student assigned to ${assignmentType}. Teacher: ${teacherName}`,
+        duration_minutes: 5,
+        contact_date: new Date().toISOString().slice(0, 10),
+      });
+    }
+
     setSaving(false);
+    // Notify parent component to show toast
+    if (onAccepted) {
+      onAccepted({
+        studentName: referral.student_name,
+        teacherName,
+      });
+    }
     onClose(true);
   };
 
@@ -100,6 +121,7 @@ export default function ReferralsPage() {
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [acceptRef, setAcceptRef] = useState(null);
+  const [toast, setToast] = useState(null);
 
   const loadReferrals = useCallback(async () => {
     if (!counselor?.id) return;
@@ -141,6 +163,23 @@ export default function ReferralsPage() {
   return (
     <div className="page">
       <h1 className="page-title">Referrals</h1>
+
+      {/* Toast notification */}
+      {toast && (
+        <div style={toastStyle}>
+          <div style={{ flex: 1 }}>
+            <strong>Referral accepted!</strong> Remember to notify{' '}
+            <strong>{toast.teacherName}</strong> that{' '}
+            <strong>{toast.studentName}</strong> has been placed in services.
+          </div>
+          <button
+            onClick={() => setToast(null)}
+            style={{ background: 'none', border: 'none', color: '#065f46', cursor: 'pointer', fontWeight: 700, fontSize: 18, padding: '0 4px', lineHeight: 1 }}
+          >
+            &times;
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
@@ -221,11 +260,20 @@ export default function ReferralsPage() {
         onClose={(done) => { setAcceptRef(null); if (done) loadReferrals(); }}
         referral={acceptRef}
         counselorId={counselor?.id}
+        onAccepted={({ studentName, teacherName }) => {
+          setToast({ studentName, teacherName });
+          setTimeout(() => setToast(null), 15000);
+        }}
       />
     </div>
   );
 }
 
+const toastStyle = {
+  background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8,
+  padding: '12px 16px', marginBottom: 16, fontSize: 14, color: '#065f46',
+  display: 'flex', alignItems: 'flex-start', gap: 12,
+};
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
 const modal = { background: '#fff', borderRadius: 12, padding: 28, width: 460, boxShadow: '0 20px 60px rgba(0,0,0,0.15)' };
 const modalTitle = { fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 8px' };
