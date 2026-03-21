@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { TIME_DOMAINS } from '../lib/constants';
@@ -75,6 +76,7 @@ function QuickLogModal({ open, onClose, counselorId }) {
 /* ─── Dashboard ─── */
 export default function DashboardPage() {
   const { counselor } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     sessionsToday: 0,
     pendingReferrals: 0,
@@ -145,7 +147,7 @@ export default function DashboardPage() {
 
       <div style={styles.grid}>
         {/* ─── Top Left: Today at a Glance ─── */}
-        <div style={styles.card}>
+        <div style={{ ...styles.card, cursor: 'pointer' }} onClick={() => navigate('/schedule')}>
           <h2 style={styles.cardTitle}>Today at a Glance</h2>
           <div style={styles.statRow}>
             <div style={styles.statBlock}>
@@ -164,7 +166,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ─── Top Right: 80/20 Compliance ─── */}
-        <div style={{ ...styles.card, textAlign: 'center' }}>
+        <div style={{ ...styles.card, textAlign: 'center', cursor: 'pointer' }} onClick={() => navigate('/time-tracker')}>
           <h2 style={styles.cardTitle}>80/20 Compliance</h2>
           <div style={{ position: 'relative', display: 'inline-block', margin: '12px 0' }}>
             <ComplianceRing percentage={stats.compliancePct} />
@@ -179,7 +181,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ─── Bottom Left: Caseload Snapshot ─── */}
-        <div style={styles.card}>
+        <div style={{ ...styles.card, cursor: 'pointer' }} onClick={() => navigate('/students')}>
           <h2 style={styles.cardTitle}>Caseload Snapshot</h2>
           <div style={styles.statRow}>
             <div style={styles.statBlock}>
@@ -207,7 +209,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ─── Bottom Right: Time by Domain ─── */}
-        <div style={styles.card}>
+        <div style={{ ...styles.card, cursor: 'pointer' }} onClick={() => navigate('/time-tracker')}>
           <h2 style={styles.cardTitle}>Time by Domain (YTD)</h2>
           <div style={{ width: '100%', height: 200 }}>
             <ResponsiveContainer>

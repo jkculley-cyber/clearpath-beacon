@@ -27,7 +27,7 @@ function NewGroupModal({ open, onClose, counselorId, onCreated }) {
     setSaving(true);
     setError('');
 
-    const { data: group, error: gErr } = await supabase
+    const { error: gErr } = await supabase
       .from('groups')
       .insert({
         counselor_id: counselorId,
@@ -38,6 +38,12 @@ function NewGroupModal({ open, onClose, counselorId, onCreated }) {
         start_date: startDate || null,
         end_date: endDate || null,
         status: 'active',
+        obj_1: obj1 || null,
+        obj_2: obj2 || null,
+        obj_3: obj3 || null,
+        asca_1: obj1Domain || null,
+        asca_2: obj2Domain || null,
+        asca_3: obj3Domain || null,
       })
       .select()
       .single();
@@ -46,17 +52,6 @@ function NewGroupModal({ open, onClose, counselorId, onCreated }) {
       setError(gErr.message);
       setSaving(false);
       return;
-    }
-
-    // Insert objectives
-    const objectives = [
-      { group_id: group.id, description: obj1, asca_domain: obj1Domain, sort_order: 1 },
-      { group_id: group.id, description: obj2, asca_domain: obj2Domain, sort_order: 2 },
-      { group_id: group.id, description: obj3, asca_domain: obj3Domain, sort_order: 3 },
-    ].filter((o) => o.description.trim());
-
-    if (objectives.length) {
-      await supabase.from('group_objectives').insert(objectives);
     }
 
     setSaving(false);
@@ -139,12 +134,26 @@ export default function GroupsPage() {
   const loadGroups = useCallback(async () => {
     if (!counselor?.id) return;
     setLoading(true);
-    const { data } = await supabase
+    const { data: groupRows } = await supabase
       .from('groups')
-      .select('*, group_members(id)')
+      .select('*')
       .eq('counselor_id', counselor.id)
       .order('created_at', { ascending: false });
-    setGroups(data || []);
+
+    // Fetch member counts separately (more reliable than embedded join through RLS)
+    const gIds = (groupRows || []).map((g) => g.id);
+    let memberCounts = {};
+    if (gIds.length) {
+      const { data: members } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .in('group_id', gIds);
+      (members || []).forEach((m) => {
+        memberCounts[m.group_id] = (memberCounts[m.group_id] || 0) + 1;
+      });
+    }
+
+    setGroups((groupRows || []).map((g) => ({ ...g, member_count: memberCounts[g.id] || 0 })));
     setLoading(false);
   }, [counselor]);
 
@@ -186,7 +195,7 @@ export default function GroupsPage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#1a2332' }}>{g.group_members?.length || 0}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#1a2332' }}>{g.member_count}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Members</div>
                 </div>
                 <span style={{
