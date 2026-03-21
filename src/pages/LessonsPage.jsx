@@ -24,8 +24,8 @@ function LessonModal({ open, onClose, counselorId, editLesson }) {
     if (editLesson) {
       setTitle(editLesson.title || '');
       setEntryType(editLesson.entry_type || 'link');
-      setUrl(editLesson.url || '');
-      setTextContent(editLesson.text_content || '');
+      setUrl(editLesson.link_url || '');
+      setTextContent(editLesson.content_text || '');
       setGradeTags(editLesson.grade_tags || []);
       setDomainTag(editLesson.domain_tag || '');
       setTopicTags((editLesson.topic_tags || []).join(', '));
@@ -50,8 +50,8 @@ function LessonModal({ open, onClose, counselorId, editLesson }) {
     const payload = {
       title,
       entry_type: entryType,
-      url: entryType === 'link' ? url : null,
-      text_content: entryType === 'text' ? textContent : null,
+      link_url: entryType === 'link' ? url : null,
+      content_text: entryType === 'text' ? textContent : null,
       grade_tags: gradeTags,
       domain_tag: domainTag || null,
       topic_tags: topicTags ? topicTags.split(',').map((t) => t.trim()) : [],
@@ -59,10 +59,10 @@ function LessonModal({ open, onClose, counselorId, editLesson }) {
     };
     let err;
     if (isEdit) {
-      ({ error: err } = await supabase.from('lessons').update(payload).eq('id', editLesson.id));
+      ({ error: err } = await supabase.from('lesson_library').update(payload).eq('id', editLesson.id));
     } else {
       payload.counselor_id = counselorId;
-      ({ error: err } = await supabase.from('lessons').insert(payload));
+      ({ error: err } = await supabase.from('lesson_library').insert(payload));
     }
     if (err) { setError(err.message); setSaving(false); return; }
     setSaving(false);
@@ -170,8 +170,8 @@ export default function LessonsPage() {
     if (!counselor?.id) return;
     setLoading(true);
     const { data } = await supabase
-      .from('lessons')
-      .select('*, session_lessons(session_id)')
+      .from('lesson_library')
+      .select('*')
       .eq('counselor_id', counselor.id)
       .order('created_at', { ascending: false });
     setLessons(data || []);
@@ -181,13 +181,13 @@ export default function LessonsPage() {
   useEffect(() => { loadLessons(); }, [loadLessons]);
 
   const toggleFavorite = async (lesson) => {
-    await supabase.from('lessons').update({ is_favorite: !lesson.is_favorite }).eq('id', lesson.id);
+    await supabase.from('lesson_library').update({ is_favorite: !lesson.is_favorite }).eq('id', lesson.id);
     loadLessons();
   };
 
   const handleDelete = async (lesson) => {
     if (!confirm(`Delete "${lesson.title}"? This cannot be undone.`)) return;
-    await supabase.from('lessons').delete().eq('id', lesson.id);
+    await supabase.from('lesson_library').delete().eq('id', lesson.id);
     loadLessons();
   };
 
@@ -278,7 +278,7 @@ export default function LessonsPage() {
                 <span style={{ fontSize: 12, color: '#6b7280' }}>{l.domain_tag}</span>
               )}
               <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>
-                Used in {l.session_lessons?.length || 0} session{(l.session_lessons?.length || 0) !== 1 ? 's' : ''}
+                Lesson resource
               </div>
             </div>
           ))}
@@ -334,14 +334,14 @@ export default function LessonsPage() {
               {previewLesson.entry_type} &middot; {previewLesson.source_platform}
               {previewLesson.domain_tag && ` \u00b7 ${previewLesson.domain_tag}`}
             </div>
-            {previewLesson.entry_type === 'link' && previewLesson.url && (
-              <a href={previewLesson.url} target="_blank" rel="noopener noreferrer" style={{ color: '#2A9D8F', fontWeight: 600, fontSize: 14 }}>
+            {previewLesson.entry_type === 'link' && previewLesson.link_url && (
+              <a href={previewLesson.link_url} target="_blank" rel="noopener noreferrer" style={{ color: '#2A9D8F', fontWeight: 600, fontSize: 14 }}>
                 Open Link &rarr;
               </a>
             )}
             {previewLesson.entry_type === 'text' && (
               <div style={{ background: '#f9fafb', borderRadius: 8, padding: 16, fontSize: 14, whiteSpace: 'pre-wrap', maxHeight: 300, overflowY: 'auto' }}>
-                {previewLesson.text_content || 'No content.'}
+                {previewLesson.content_text || 'No content.'}
               </div>
             )}
             {previewLesson.entry_type === 'file' && (
@@ -349,7 +349,7 @@ export default function LessonsPage() {
             )}
             <div style={{ marginTop: 16 }}>
               <span style={{ fontSize: 13, color: '#6b7280' }}>
-                Used in {previewLesson.session_lessons?.length || 0} session(s)
+                Lesson resource
               </span>
             </div>
             <button className="btn btn-outline" onClick={() => setPreviewLesson(null)} style={{ width: '100%', marginTop: 16 }}>Close</button>
