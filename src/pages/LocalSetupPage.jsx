@@ -3,16 +3,35 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function LocalSetupPage() {
-  const { setupLocalProfile } = useAuth();
+  const { setupLocalProfile, saveLicenseKey } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
+  const [licenseKey, setLicenseKey] = useState('');
+  const [showLicenseField, setShowLicenseField] = useState(false);
+  const [licenseError, setLicenseError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    setLicenseError('');
+
+    // Validate license key if provided
+    if (licenseKey.trim()) {
+      const result = await saveLicenseKey(licenseKey.trim());
+      if (!result.valid) {
+        setLicenseError(
+          result.reason === 'invalid_key' ? 'Invalid license key. Please check and try again.'
+          : result.reason === 'expired' ? 'This license has expired. Contact support@clearpathedgroup.com.'
+          : 'Could not verify license. Check your internet connection and try again.'
+        );
+        setSaving(false);
+        return;
+      }
+    }
+
     await setupLocalProfile({ name, campus, district });
     navigate('/', { replace: true });
   };
@@ -20,23 +39,22 @@ export default function LocalSetupPage() {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%)',
+      background: 'linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%)', padding: 24,
     }}>
       <div style={{
-        background: '#fff', borderRadius: 16, padding: 40, width: 420,
+        background: '#fff', borderRadius: 16, padding: 40, width: '100%', maxWidth: 440,
         boxShadow: '0 20px 60px rgba(0,0,0,0.1)',
       }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ fontSize: 32, fontWeight: 800, color: '#2A9D8F', marginBottom: 4 }}>Beacon</div>
-          <div style={{ fontSize: 14, color: '#6b7280' }}>Local Mode Setup</div>
+          <div style={{ fontSize: 13, color: '#6b7280', letterSpacing: '.06em' }}>Counselor Command Center</div>
         </div>
 
         <div style={{
           background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 10,
           padding: 14, marginBottom: 20, fontSize: 13, color: '#0f766e', lineHeight: 1.5,
         }}>
-          <strong>Privacy-First Mode</strong><br />
-          All data stays on this device. Nothing is sent to any server. Perfect for individual counselors without a district data agreement.
+          <strong>Privacy-First</strong> — All data stays on this device. Nothing is sent to any server.
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -65,24 +83,53 @@ export default function LocalSetupPage() {
             placeholder="e.g. Lonestar ISD"
           />
 
+          {/* License key — collapsible */}
+          {showLicenseField ? (
+            <div style={{ marginTop: 12 }}>
+              <label style={labelStyle}>License Key</label>
+              <input
+                style={inputStyle}
+                value={licenseKey}
+                onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
+                placeholder="BCN-XXXXXX-XXXX"
+              />
+              {licenseError && (
+                <div style={{ fontSize: 12, color: '#ef4444', marginTop: 4 }}>{licenseError}</div>
+              )}
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                From your purchase confirmation email. Gives full access beyond the trial.
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowLicenseField(true)}
+              style={{ background: 'none', border: 'none', color: '#2A9D8F', cursor: 'pointer', fontWeight: 600, fontSize: 12, marginTop: 12, padding: 0 }}
+            >
+              Have a license key? Enter it here →
+            </button>
+          )}
+
           <button
             type="submit"
             disabled={saving || !name.trim()}
             style={{
-              width: '100%', padding: '12px 0', borderRadius: 10, border: 'none',
+              width: '100%', padding: '13px 0', borderRadius: 10, border: 'none',
               background: '#2A9D8F', color: '#fff', fontSize: 15, fontWeight: 700,
-              cursor: saving ? 'wait' : 'pointer', marginTop: 16,
+              cursor: saving ? 'wait' : 'pointer', marginTop: 20,
               opacity: saving || !name.trim() ? 0.6 : 1,
             }}
           >
-            {saving ? 'Setting up...' : 'Start Free Trial \u2014 14 Days'}
+            {saving ? 'Setting up...' : licenseKey.trim() ? 'Activate & Start Beacon' : 'Start Free Trial \u2014 14 Days'}
           </button>
-          <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', marginTop: 10, lineHeight: 1.5 }}>
-            No credit card or license key needed. You'll have full access for 14 days.
-          </div>
+          {!licenseKey.trim() && (
+            <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', marginTop: 8, lineHeight: 1.5 }}>
+              No credit card needed. Full access for 14 days.
+            </div>
+          )}
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12, color: '#9ca3af' }}>
+        <div style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: '#9ca3af' }}>
           Have a district account?{' '}
           <button
             onClick={() => {
