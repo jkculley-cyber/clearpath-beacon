@@ -245,11 +245,15 @@ export default function CommunicationsPage() {
                 Save Current as Template
               </button>
             </div>
-            {templates.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No saved templates.</p>
+            {(() => {
+              const filtered = templates.filter((t) => !t.language || t.language === language);
+              return filtered.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+                {language === 'es' ? 'No hay plantillas en español.' : 'No saved templates.'}
+              </p>
             ) : (
               <div style={{ display: 'grid', gap: 6 }}>
-                {templates.map((t) => (
+                {filtered.map((t) => (
                   <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #f3f4f6' }}>
                     <span style={{ fontSize: 14, fontWeight: 500, color: '#1a2332' }}>{t.name}</span>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -259,7 +263,8 @@ export default function CommunicationsPage() {
                   </div>
                 ))}
               </div>
-            )}
+            )
+              })()}
           </div>
         </div>
 
