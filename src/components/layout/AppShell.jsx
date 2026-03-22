@@ -37,8 +37,11 @@ export default function AppShell() {
 
   const schoolName = counselor?.school_name || 'Beacon';
 
-  // Backup reminder — tiered urgency, non-dismissible when critical
-  const [backupDismissed, setBackupDismissed] = useState(false);
+  // Backup reminder — tiered urgency, dismissible until next day
+  const [backupDismissed, setBackupDismissed] = useState(() => {
+    const dismissedUntil = localStorage.getItem('beacon_backup_dismissed_until');
+    return dismissedUntil && new Date(dismissedUntil) > new Date();
+  });
   const [backingUp, setBackingUp] = useState(false);
   const [showRestoreGuide, setShowRestoreGuide] = useState(false);
   const backupAge = useMemo(() => {
@@ -47,10 +50,16 @@ export default function AppShell() {
     if (!last) return 999; // never backed up
     return Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
   }, [counselor]);
-  // Urgency tiers: 7+ days = amber nudge, 14+ = orange warning, 30+/never = red critical
   const backupUrgency = backupAge >= 30 || backupAge >= 999 ? 'critical' : backupAge >= 14 ? 'warning' : backupAge >= 7 ? 'nudge' : null;
-  // Critical banners cannot be dismissed. Nudge can be dismissed for this session.
-  const showBackupBanner = backupUrgency && !(backupUrgency === 'nudge' && backupDismissed);
+  const showBackupBanner = backupUrgency && !backupDismissed;
+
+  function dismissBackupUntilTomorrow() {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    localStorage.setItem('beacon_backup_dismissed_until', tomorrow.toISOString());
+    setBackupDismissed(true);
+  }
 
   async function handleQuickBackup() {
     setBackingUp(true);
@@ -134,11 +143,9 @@ export default function AppShell() {
               <button className="backup-banner-btn-alt" onClick={() => setShowRestoreGuide(true)}>
                 How to restore?
               </button>
-              {backupUrgency === 'nudge' && (
-                <button className="backup-banner-dismiss" onClick={() => setBackupDismissed(true)}>
-                  Later
-                </button>
-              )}
+              <button className="backup-banner-dismiss" onClick={dismissBackupUntilTomorrow}>
+                Remind me tomorrow
+              </button>
             </span>
           </div>
         </div>
