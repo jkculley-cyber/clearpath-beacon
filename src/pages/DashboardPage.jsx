@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
 import { TIME_DOMAINS } from '../lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { startOfWeek, subWeeks, format } from 'date-fns';
+import { startOfWeek, subWeeks, format, subDays } from 'date-fns';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import Scorecard from '../components/Scorecard';
 import jsPDF from 'jspdf';
@@ -284,6 +284,7 @@ export default function DashboardPage() {
   const [trendData, setTrendData] = useState([]);
   const [overdueStudents, setOverdueStudents] = useState([]);
   const [weekDigest, setWeekDigest] = useState(null);
+  const [myDay, setMyDay] = useState(null);
 
   const loadData = useCallback(async () => {
     if (!counselor?.id) return;
@@ -540,11 +541,154 @@ export default function DashboardPage() {
     setTrendData(trend);
   }, [counselor]);
 
+  /* ─── My Day: priority view data ─── */
+  const loadMyDay = useCallback(async () => {
+    if (!counselor?.id) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const yearStart = counselor.school_year_start
+      || (new Date().getMonth() >= 7 ? `${new Date().getFullYear()}-08-01` : `${new Date().getFullYear() - 1}-08-01`);
+
+    // 1. Overdue Tier 2/3 students with last session notes
+    const [studentsRes, allSessionsRes, referralsRes, scheduledRes, timeEntriesRes] = await Promise.all([
+      db.select('students', { eq: { counselor_id: counselor.id, status: 'active' }, select: 'id, first_name, last_name, name, tier, created_at' }),
+      db.select('sessions', { eq: { counselor_id: counselor.id }, order: { column: 'session_date', ascending: false } }),
+      db.select('referrals', { eq: { status: 'open' }, order: { column: 'created_at', ascending: true } }),
+      db.select('sessions', { eq: { counselor_id: counselor.id, session_date: today, status: 'Scheduled' } }),
+      db.select('time_entries', { eq: { counselor_id: counselor.id }, gte: { entry_date: yearStart }, select: 'domain, duration_minutes, entry_date' }),
+    ]);
+
+    const students = studentsRes.data || [];
+    const allSessions = allSessionsRes.data || [];
+    const studentMap = Object.fromEntries(students.map(s => [s.id, s]));
+
+    // Build last session per student (with notes)
+    const lastSessionByStudent = {};
+    for (const sess of allSessions) {
+      if (!sess.student_id) continue;
+      if (!lastSessionByStudent[sess.student_id]) {
+        lastSessionByStudent[sess.student_id] = sess;
+      }
+    }
+
+    // Overdue: Tier 2/3 not seen in 14+ days
+    const now = new Date();
+    const higherTier = students.filter(s => s.tier === 2 || s.tier === 3);
+    const overdueList = higherTier
+      .map(s => {
+        const lastSess = lastSessionByStudent[s.id];
+        const lastDate = lastSess?.session_date;
+        let daysSince;
+        if (!lastDate) {
+          const created = s.created_at ? new Date(s.created_at) : now;
+          daysSince = Math.floor((now - created) / 86400000);
+        } else {
+          daysSince = Math.floor((now - new Date(lastDate + 'T00:00:00')) / 86400000);
+        }
+        if (daysSince < 14) return null;
+        const notes = lastSess?.notes || null;
+        return { ...s, daysSince, lastNotes: notes };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.daysSince - a.daysSince)
+      .slice(0, 5);
+
+    // 2. Today's scheduled sessions — resolve student/group names
+    const scheduled = scheduledRes.data || [];
+    let scheduledItems = [];
+    if (scheduled.length > 0) {
+      const [{ data: allGroups }] = await Promise.all([db.select('groups', { eq: { counselor_id: counselor.id } })]);
+      const groupMap = Object.fromEntries((allGroups || []).map(g => [g.id, g]));
+
+      // Also load group_students for group sessions
+      const { data: allGroupStudents } = await db.select('group_students');
+      const groupStudentNames = {};
+      for (const gs of (allGroupStudents || [])) {
+        const st = studentMap[gs.student_id];
+        if (st) {
+          if (!groupStudentNames[gs.group_id]) groupStudentNames[gs.group_id] = [];
+          groupStudentNames[gs.group_id].push(sName(st));
+        }
+      }
+
+      scheduledItems = scheduled
+        .map(sess => {
+          const time = sess.start_time ? sess.start_time.slice(0, 5) : null;
+          let label;
+          if (sess.group_id) {
+            const group = groupMap[sess.group_id];
+            const memberNames = groupStudentNames[sess.group_id] || [];
+            const namesStr = memberNames.length > 0 ? ` (${memberNames.slice(0, 3).join(', ')}${memberNames.length > 3 ? '...' : ''})` : '';
+            label = `${group?.name || 'Group'}${namesStr}`;
+          } else if (sess.student_id) {
+            const st = studentMap[sess.student_id];
+            label = `Check-in: ${sName(st)}`;
+          } else {
+            label = sess.notes || 'Scheduled session';
+          }
+          return { id: sess.id, time, label, studentId: sess.student_id, groupId: sess.group_id };
+        })
+        .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    }
+
+    // 3. Open referrals with urgency + age
+    const openReferrals = (referralsRes.data || []).map(r => {
+      const createdDate = r.created_at ? new Date(r.created_at) : now;
+      const daysOpen = Math.floor((now - createdDate) / 86400000);
+      // Resolve student name
+      const st = studentMap[r.student_id];
+      return { ...r, daysOpen, studentName: st ? sName(st) : 'Unknown' };
+    }).sort((a, b) => {
+      const urgOrder = { Urgent: 0, Soon: 1, Routine: 2 };
+      return (urgOrder[a.urgency] ?? 2) - (urgOrder[b.urgency] ?? 2);
+    }).slice(0, 5);
+
+    // 4. Students needing progress review (last progress_rating > 30 days ago or never)
+    const thirtyDaysAgo = format(subDays(now, 30), 'yyyy-MM-dd');
+    const { data: progressRows } = await db.select('progress_notes', { eq: { counselor_id: counselor.id } });
+    const lastProgressByStudent = {};
+    for (const p of (progressRows || [])) {
+      if (!p.student_id) continue;
+      if (!lastProgressByStudent[p.student_id] || (p.created_at > lastProgressByStudent[p.student_id].created_at)) {
+        lastProgressByStudent[p.student_id] = p;
+      }
+    }
+    const needsReview = students
+      .filter(s => {
+        const last = lastProgressByStudent[s.id];
+        if (!last) return true; // Never rated
+        const lastDate = last.created_at ? last.created_at.slice(0, 10) : '1970-01-01';
+        return lastDate < thirtyDaysAgo;
+      })
+      .slice(0, 5);
+
+    // 5. Quick stats for footer line
+    const timeEntries = timeEntriesRes.data || [];
+    const totalMin = timeEntries.reduce((s, e) => s + (e.duration_minutes || 0), 0) || 1;
+    const counselingMin = timeEntries.filter(e => ['guidance', 'planning', 'responsive'].includes(e.domain)).reduce((s, e) => s + (e.duration_minutes || 0), 0);
+    const compPct = Math.round((counselingMin / totalMin) * 100);
+
+    const weekMon = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const weekSessions = allSessions.filter(s => s.session_date >= weekMon && s.status === 'Completed').length;
+    const monthSessions = allSessions.filter(s => s.session_date >= monthStart && s.status === 'Completed').length;
+
+    setMyDay({
+      overdue: overdueList,
+      scheduled: scheduledItems,
+      referrals: openReferrals,
+      needsReview,
+      compPct,
+      weekSessions,
+      monthSessions,
+    });
+  }, [counselor]);
+
   useEffect(() => {
     loadData();
     loadMakeupQueue();
     loadTrend();
-  }, [loadData, loadMakeupQueue, loadTrend]);
+    loadMyDay();
+  }, [loadData, loadMakeupQueue, loadTrend, loadMyDay]);
 
   /* ─── "My Year" Impact Summary PDF ─── */
   const generateImpactPDF = async () => {
@@ -707,6 +851,120 @@ export default function DashboardPage() {
           {'\uD83D\uDCCA'} My Year
         </button>
       </div>
+
+      {/* ─── My Day: Priority View ─── */}
+      {myDay && (
+        <div style={{ marginBottom: 20, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          {/* Greeting */}
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', marginBottom: 16 }}>
+            {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {(counselor?.name || '').split(' ')[0] || 'Counselor'}.
+          </div>
+
+          {/* Priority: Overdue students */}
+          {myDay.overdue.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Priority</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {myDay.overdue.map(s => {
+                  const isTier3 = s.tier === 3;
+                  return (
+                    <div key={s.id} style={{
+                      padding: '10px 14px', borderRadius: 8, borderLeft: `4px solid ${isTier3 ? '#ef4444' : '#f59e0b'}`,
+                      background: isTier3 ? '#fef2f2' : '#fffbeb',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: '#1a2332' }}>
+                            {isTier3 ? '\uD83D\uDD34' : '\uD83D\uDFE1'} See {sName(s)} today
+                          </span>
+                          <span style={{ fontSize: 12, color: '#6b7280', marginLeft: 6 }}>
+                            (Tier {s.tier}, {s.daysSince} days overdue)
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/students/${s.id}`); }}
+                          style={{ fontSize: 12, fontWeight: 600, color: '#2A9D8F', background: 'none', border: '1px solid #2A9D8F', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        >
+                          Log Session &rarr;
+                        </button>
+                      </div>
+                      {s.lastNotes && (
+                        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4, fontStyle: 'italic' }}>
+                          Last: &ldquo;{s.lastNotes.length > 60 ? s.lastNotes.slice(0, 60) + '...' : s.lastNotes}&rdquo;
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Scheduled sessions */}
+          {myDay.scheduled.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Scheduled</div>
+              <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 14px' }}>
+                {myDay.scheduled.map((item, i) => (
+                  <div key={item.id || i} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0',
+                    borderBottom: i < myDay.scheduled.length - 1 ? '1px solid #f3f4f6' : 'none',
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#2A9D8F', minWidth: 42 }}>
+                      {item.time || '--:--'}
+                    </span>
+                    <span style={{ fontSize: 14, color: '#374151' }}>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Open referrals */}
+          {myDay.referrals.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Referrals Waiting</div>
+                <button
+                  onClick={() => navigate('/referrals')}
+                  style={{ fontSize: 12, fontWeight: 600, color: '#2A9D8F', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  Review Referrals &rarr;
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {myDay.referrals.map(r => {
+                  const urgColor = r.urgency === 'Urgent' ? '#ef4444' : r.urgency === 'Soon' ? '#f97316' : '#9ca3af';
+                  const urgIcon = r.urgency === 'Urgent' ? '\uD83D\uDD34' : r.urgency === 'Soon' ? '\uD83D\uDFE0' : '\u26AA';
+                  return (
+                    <div key={r.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                      background: '#f9fafb', borderRadius: 8, fontSize: 13,
+                    }}>
+                      <span>{urgIcon}</span>
+                      <span style={{ fontWeight: 600, color: '#1a2332' }}>{r.studentName}</span>
+                      <span style={{ color: '#6b7280' }}>&mdash; {r.concern_type || 'general'} ({r.urgency || 'Routine'})</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>{r.daysOpen}d ago</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {myDay.overdue.length === 0 && myDay.scheduled.length === 0 && myDay.referrals.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '12px 0', color: '#6b7280', fontSize: 14 }}>
+              No urgent items today. You&rsquo;re all caught up!
+            </div>
+          )}
+
+          {/* Footer stats */}
+          <div style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', paddingTop: 10, borderTop: '1px solid #f3f4f6', marginTop: 4 }}>
+            {myDay.compPct}% compliant &middot; {myDay.weekSessions} session{myDay.weekSessions !== 1 ? 's' : ''} this week &middot; {myDay.monthSessions} this month
+          </div>
+        </div>
+      )}
 
       {/* Onboarding checklist — disappears once all steps complete */}
       <div style={{ marginBottom: 20 }}>
