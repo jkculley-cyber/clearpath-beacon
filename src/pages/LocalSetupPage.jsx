@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function LocalSetupPage() {
   const { setupLocalProfile } = useAuth();
+  const navigate = useNavigate();
   const [name, setName] = useState('');
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
@@ -12,7 +14,7 @@ export default function LocalSetupPage() {
     e.preventDefault();
     setSaving(true);
     await setupLocalProfile({ name, campus, district });
-    setSaving(false);
+    navigate('/', { replace: true });
   };
 
   return (

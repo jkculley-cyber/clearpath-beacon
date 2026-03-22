@@ -466,7 +466,12 @@ export default function SettingsPage() {
                 Current key: <code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>{getLicenseKey()}</code>
               </p>
             )}
-            {!licenseState.valid && (
+            {!licenseState.valid && !getLicenseKey() && (
+              <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
+                Enter a license key to unlock full access after your trial ends.
+              </p>
+            )}
+            {!licenseState.valid && getLicenseKey() && (
               <p style={{ fontSize: 13, color: '#ef4444', marginBottom: 12 }}>
                 Your license is inactive. You can view existing data but cannot create new records until you enter a valid license key.
               </p>
@@ -491,19 +496,27 @@ export default function SettingsPage() {
                   setLicMsg('');
                   const result = await saveLicenseKey(licKey.trim());
                   if (result.valid) {
-                    setLicMsg('License activated!');
+                    setLicMsg('✓ License activated! You have full access to Beacon.');
                     setLicKey('');
                   } else {
-                    setLicMsg(result.reason === 'invalid_key' ? 'Invalid key.' : result.reason === 'expired' ? 'License expired.' : 'Could not verify.');
+                    setLicMsg(result.reason === 'invalid_key' ? 'Invalid license key. Please check and try again.' : result.reason === 'expired' ? 'This license has expired. Contact support@clearpathedgroup.com.' : 'Could not verify — check your internet connection and try again.');
                   }
                   setLicSaving(false);
-                  setTimeout(() => setLicMsg(''), 4000);
                 }}
               >
                 {licSaving ? 'Verifying...' : 'Activate'}
               </button>
             </div>
-            {licMsg && <div style={{ fontSize: 13, marginTop: 6, color: licMsg.includes('activated') ? '#22c55e' : '#ef4444' }}>{licMsg}</div>}
+            {licMsg && (
+              <div style={{
+                marginTop: 10, padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                background: licMsg.includes('activated') ? '#f0fdf4' : '#fef2f2',
+                border: `1px solid ${licMsg.includes('activated') ? '#bbf7d0' : '#fecaca'}`,
+                color: licMsg.includes('activated') ? '#15803d' : '#dc2626',
+              }}>
+                {licMsg}
+              </div>
+            )}
           </div>
         )}
 

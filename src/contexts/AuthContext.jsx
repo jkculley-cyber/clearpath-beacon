@@ -206,8 +206,18 @@ export function AuthProvider({ children }) {
   const { isSoftGated, trialDaysLeft } = useMemo(
     () => {
       if (storageMode === 'local') {
-        // Local mode: gated by license, not trial
-        return { isSoftGated: licenseState.softGated || false, trialDaysLeft: null };
+        // Local mode: valid license key = full access (not gated)
+        if (licenseState.valid && !licenseState.softGated && getLicenseKey()) {
+          return { isSoftGated: false, trialDaysLeft: null };
+        }
+        // No license key — use trial period from counselor record
+        const trialState = computeGateState(counselor);
+        // If trial is still active, not gated
+        if (!trialState.isSoftGated) {
+          return trialState;
+        }
+        // Trial expired AND no valid license = gated
+        return { isSoftGated: true, trialDaysLeft: trialState.trialDaysLeft };
       }
       return computeGateState(counselor);
     },
