@@ -1266,7 +1266,7 @@ const styles = {
     boxShadow: '0 2px 8px rgba(13,148,136,0.25)',
     transition: 'transform 0.15s, box-shadow 0.15s',
   },
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 },
   card: {
     background: '#fff',
     border: '1px solid #e5e7eb',

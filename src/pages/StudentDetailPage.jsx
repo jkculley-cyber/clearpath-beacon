@@ -88,7 +88,7 @@ function LogSessionModal({ open, onClose, student, counselorId }) {
       <div style={modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={modalTitle}>Log Individual Session</h3>
         <form onSubmit={handleSave}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 12 }}>
             <div>
               <label className="form-label">Date</label>
               <input
@@ -336,7 +336,7 @@ function EditStudentModal({ open, onClose, student }) {
       <div style={{ ...modal, width: 480 }} onClick={(e) => e.stopPropagation()}>
         <h3 style={modalTitle}>Edit Student</h3>
         <form onSubmit={handleSave}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
               <label className="form-label">First Name *</label>
               <input className="form-input" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
@@ -346,7 +346,7 @@ function EditStudentModal({ open, onClose, student }) {
               <input className="form-input" value={lastName} onChange={(e) => setLastName(e.target.value)} />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
               <label className="form-label">Grade</label>
               <select className="form-input" value={grade} onChange={(e) => setGrade(e.target.value)}>
@@ -363,7 +363,7 @@ function EditStudentModal({ open, onClose, student }) {
           </div>
           <label className="form-label">Teacher</label>
           <input className="form-input" value={teacher} onChange={(e) => setTeacher(e.target.value)} style={{ marginBottom: 10 }} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
               <label className="form-label">Status</label>
               <select className="form-input" value={status} onChange={(e) => setStatus(e.target.value)}>

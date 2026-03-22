@@ -245,6 +245,34 @@ tr:last-child td {
 /* ─── Responsive ─── */
 @media (max-width: 767px) {
   .page-title { font-size: 1.25rem; }
-  .card { padding: 16px; }
+  .page-sub { margin-bottom: 16px; }
+  .card { padding: 14px; }
   .hide-mobile { display: none; }
+
+  /* Stack 2-column grids to single column on mobile */
+  .page div[style*="grid-template-columns: 1fr 1fr"],
+  .page div[style*="gridTemplateColumns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Make tables scrollable */
+  table { min-width: 600px; }
+
+  /* Smaller buttons */
+  .btn { padding: 6px 12px; font-size: 0.8125rem; }
+
+  /* Stack button groups */
+  .page div[style*="display: flex"][style*="gap"] {
+    flex-wrap: wrap;
+  }
+}
+
+/* ─── Tablet ─── */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .page { padding-left: 16px; padding-right: 16px; }
+}
+
+/* ─── Desktop ─── */
+@media (min-width: 1025px) {
+  .page { padding-left: 24px; padding-right: 24px; }
 }

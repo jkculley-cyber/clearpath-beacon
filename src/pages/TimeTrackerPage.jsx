@@ -181,7 +181,7 @@ function DateRangeModal({ open, onClose, onExport }) {
     <div style={overlay} onClick={() => onClose()}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={modalTitle}>Custom Date Range Export</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 16 }}>
           <div>
             <label className="form-label">From</label>
             <input className="form-input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} required />
@@ -275,7 +275,7 @@ function EntryModal({ open, onClose, counselorId, editEntry }) {
       <div style={modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={modalTitle}>{editEntry ? 'Edit Entry' : 'New Time Entry'}</h3>
         <form onSubmit={handleSave}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
               <label className="form-label">Date</label>
               <input className="form-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
@@ -442,7 +442,7 @@ export default function TimeTrackerPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div>
           {/* Day entries */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>

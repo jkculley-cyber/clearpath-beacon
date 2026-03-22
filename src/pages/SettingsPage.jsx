@@ -550,7 +550,7 @@ export default function SettingsPage() {
         {/* Profile */}
         <div className="card" style={{ marginBottom: 20 }}>
           <h2 style={sectionTitle}>Profile</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
               <label className="form-label">Name</label>
               <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} />
@@ -560,7 +560,7 @@ export default function SettingsPage() {
               <input className="form-input" value={counselor?.email || ''} disabled style={{ background: '#f3f4f6' }} />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
             <div>
               <label className="form-label">Campus</label>
               <input className="form-input" value={campus} onChange={(e) => setCampus(e.target.value)} />
@@ -578,7 +578,7 @@ export default function SettingsPage() {
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
             Used for YTD compliance calculations.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
             <div>
               <label className="form-label">Start Date</label>
               <input className="form-input" type="date" value={yearStart} onChange={(e) => setYearStart(e.target.value)} />
@@ -630,7 +630,7 @@ export default function SettingsPage() {
               </h4>
               <label className="form-label">Block Name</label>
               <input className="form-input" value={blockName} onChange={(e) => setBlockName(e.target.value)} placeholder="e.g. Lunch" style={{ marginBottom: 8 }} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginBottom: 10 }}>
                 <div>
                   <label className="form-label">Day</label>
                   <select className="form-input" value={blockDay} onChange={(e) => setBlockDay(e.target.value)}>
@@ -1111,7 +1111,7 @@ export default function SettingsPage() {
           </p>
           {impactStats && (
             <div style={{ marginBottom: 14, padding: 14, background: '#f9fafb', borderRadius: 8 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginBottom: 8 }}>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: '#2A9D8F' }}>{impactStats.studentsServed}</div>
                   <div style={{ fontSize: 11, color: '#6b7280' }}>Students Served</div>
@@ -1125,7 +1125,7 @@ export default function SettingsPage() {
                   <div style={{ fontSize: 11, color: '#6b7280' }}>SB 179 Compliance</div>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: 16, fontWeight: 600, color: '#374151' }}>{impactStats.groupsActive}</div>
                   <div style={{ fontSize: 11, color: '#6b7280' }}>Active Groups</div>

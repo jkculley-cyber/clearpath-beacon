@@ -660,13 +660,13 @@ const styles = {
   sectionTitle: { fontSize: 15, fontWeight: 600, color: '#374151', margin: '0 0 16px' },
   summaryGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
     gap: 16,
     marginTop: 20,
   },
   twoCol: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: 20,
     marginTop: 20,
   },

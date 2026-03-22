@@ -63,7 +63,7 @@ function NewGroupModal({ open, onClose, counselorId, onCreated }) {
           <label className="form-label">Group Name *</label>
           <input className="form-input" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Friendship Skills" style={{ marginBottom: 10 }} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
               <label className="form-label">Grade Band</label>
               <input className="form-input" value={gradeBand} onChange={(e) => setGradeBand(e.target.value)} placeholder="e.g. K-2" />
@@ -81,7 +81,7 @@ function NewGroupModal({ open, onClose, counselorId, onCreated }) {
             ))}
           </select>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 14 }}>
             <div>
               <label className="form-label">Start Date</label>
               <input className="form-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />

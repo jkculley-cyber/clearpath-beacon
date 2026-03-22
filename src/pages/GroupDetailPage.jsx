@@ -126,7 +126,7 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
       <div style={{ ...modal, width: 520 }} onClick={(e) => e.stopPropagation()}>
         <h3 style={modalTitle}>Log Session</h3>
         <form onSubmit={handleSave}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 12 }}>
             <div>
               <label className="form-label">Date</label>
               <input className="form-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />

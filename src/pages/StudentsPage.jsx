@@ -247,7 +247,7 @@ function AddStudentModal({ open, onClose, counselorId }) {
         <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>Add Student</h3>
         {error && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 12 }}>{error}</div>}
         <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
               <label className="form-label">First Name *</label>
               <input className="form-input" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
@@ -257,7 +257,7 @@ function AddStudentModal({ open, onClose, counselorId }) {
               <input className="form-input" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
               <label className="form-label">Grade</label>
               <select className="form-input" value={grade} onChange={(e) => setGrade(e.target.value)}>

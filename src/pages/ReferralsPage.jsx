@@ -295,7 +295,7 @@ function AddReferralModal({ open, onClose, counselorId }) {
           <label className="form-label">Student Name *</label>
           <input className="form-input" required value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="First and last name" style={{ marginBottom: 10 }} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
               <label className="form-label">Grade</label>
               <select className="form-input" value={grade} onChange={(e) => setGrade(e.target.value)}>
@@ -309,7 +309,7 @@ function AddReferralModal({ open, onClose, counselorId }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>
               <label className="form-label">Concern Type *</label>
               <select className="form-input" required value={concernType} onChange={(e) => setConcernType(e.target.value)}>

@@ -117,7 +117,7 @@ export default function RequestAccessPage() {
             placeholder="sjohnson@school.edu"
           />
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
             <div>
               <label style={labelStyle}>School Name</label>
               <input

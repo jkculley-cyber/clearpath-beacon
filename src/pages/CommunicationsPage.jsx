@@ -161,7 +161,7 @@ export default function CommunicationsPage() {
     <div className="page">
       <h1 className="page-title">Communications</h1>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, alignItems: 'start' }}>
         {/* Left: Log Contact */}
         <div>
           <div className="card">
@@ -187,7 +187,7 @@ export default function CommunicationsPage() {
                 )}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
                 <div>
                   <label className="form-label">Contact Type</label>
                   <select className="form-input" value={contactType} onChange={(e) => setContactType(e.target.value)}>
