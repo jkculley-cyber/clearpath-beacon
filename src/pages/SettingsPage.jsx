@@ -828,7 +828,8 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Change Password */}
+        {/* Change Password — cloud mode only (local mode has no auth) */}
+        {!isLocalMode && (
         <div className="card" style={{ marginBottom: 20 }}>
           <h2 style={sectionTitle}>Change Password</h2>
           {pwError && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 10 }}>{pwError}</div>}
@@ -843,6 +844,7 @@ export default function SettingsPage() {
             Update Password
           </button>
         </div>
+        )}
 
         {/* License */}
         {isLocalMode && (

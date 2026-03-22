@@ -471,7 +471,7 @@ function AIPlanModal({ open, onClose, group, members, sessions, objectives }) {
    ==================================================================== */
 export default function GroupDetailPage() {
   const { id } = useParams();
-  const { counselor } = useAuth();
+  const { counselor, isLocalMode } = useAuth();
   const [tab, setTab] = useState('Members');
   const [group, setGroup] = useState(null);
   const [members, setMembers] = useState([]);
@@ -634,10 +634,12 @@ export default function GroupDetailPage() {
       {tab === 'Sessions' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 12 }}>
-            {/* Feature #9: Generate Next Session */}
-            <button className="btn btn-outline" onClick={() => setShowAIPlan(true)}>
-              Generate Next Session
-            </button>
+            {/* Feature #9: Generate Next Session — cloud mode only (needs edge function) */}
+            {!isLocalMode && (
+              <button className="btn btn-outline" onClick={() => setShowAIPlan(true)}>
+                Generate Next Session
+              </button>
+            )}
             <button className="btn btn-primary" onClick={() => setShowLogSession(true)}>Log Session</button>
           </div>
           {sessions.length === 0 ? (

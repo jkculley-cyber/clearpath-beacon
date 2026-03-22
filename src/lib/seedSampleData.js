@@ -80,7 +80,7 @@ export async function seedSampleData(counselorId) {
     await db.insert('time_entries', { counselor_id: counselorId, entry_date: dateStr, domain: 'responsive', activity_description: 'Individual and group counseling sessions', duration_minutes: 90 });
     await db.insert('time_entries', { counselor_id: counselorId, entry_date: dateStr, domain: 'guidance', activity_description: 'Classroom guidance lessons', duration_minutes: 60 });
     await db.insert('time_entries', { counselor_id: counselorId, entry_date: dateStr, domain: 'planning', activity_description: 'Student planning and goal setting', duration_minutes: 30 });
-    await db.insert('time_entries', { counselor_id: counselorId, entry_date: dateStr, domain: 'system_support', activity_description: 'Staff consultation, data entry, meetings', duration_minutes: 45 });
+    await db.insert('time_entries', { counselor_id: counselorId, entry_date: dateStr, domain: 'system', activity_description: 'Staff consultation, data entry, meetings', duration_minutes: 45 });
     if (daysAgo % 3 === 0) {
       await db.insert('time_entries', { counselor_id: counselorId, entry_date: dateStr, domain: 'non_counseling', activity_description: 'Lunch duty, testing coordination', duration_minutes: 40 });
     }

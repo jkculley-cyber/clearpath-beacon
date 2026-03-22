@@ -5,16 +5,16 @@
  * - 'counseling', 'session', 'individual', 'group', 'check-in' -> responsive
  * - 'lesson', 'guidance', 'classroom', 'class visit' -> guidance
  * - 'planning', 'goal', 'IEP', 'ARD', 'RTI', 'MTSS' -> planning
- * - 'meeting', 'PLC', 'staff', 'training', 'PD' -> system_support
+ * - 'meeting', 'PLC', 'staff', 'training', 'PD' -> system
  * - 'lunch', 'duty', 'testing', 'carpool', 'bus', 'recess', 'supervision' -> non_counseling
- * - Default (no keyword match) -> system_support
+ * - Default (no keyword match) -> system
  */
 
 const DOMAIN_KEYWORDS = [
   { domain: 'responsive', keywords: ['counseling', 'session', 'individual', 'group', 'check-in', 'checkin', 'check in'] },
   { domain: 'guidance', keywords: ['lesson', 'guidance', 'classroom', 'class visit'] },
   { domain: 'planning', keywords: ['planning', 'goal', 'iep', 'ard', 'rti', 'mtss'] },
-  { domain: 'system_support', keywords: ['meeting', 'plc', 'staff', 'training', 'pd'] },
+  { domain: 'system', keywords: ['meeting', 'plc', 'staff', 'training', 'pd'] },
   { domain: 'non_counseling', keywords: ['lunch', 'duty', 'testing', 'carpool', 'bus', 'recess', 'supervision'] },
 ];
 
@@ -22,14 +22,14 @@ const DOMAIN_KEYWORDS = [
  * Categorize an event title into a time-tracking domain.
  */
 export function categorizeDomain(title) {
-  if (!title) return 'system_support';
+  if (!title) return 'system';
   const lower = title.toLowerCase();
   for (const { domain, keywords } of DOMAIN_KEYWORDS) {
     for (const kw of keywords) {
       if (lower.includes(kw)) return domain;
     }
   }
-  return 'system_support';
+  return 'system';
 }
 
 /**
