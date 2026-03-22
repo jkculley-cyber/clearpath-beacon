@@ -219,10 +219,12 @@ export default function AppShell() {
       {/* Sidebar */}
       <aside className={`sidebar${drawerOpen ? ' sidebar--open' : ''}`}>
         <div className="sidebar-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <img src="/icons/Beacon-AppIcon-192.png" alt="" style={{ width: 32, height: 32, borderRadius: 8 }} />
             <span className="sidebar-logo">Beacon</span>
           </div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.03em' }}>Counselor Command Center</div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', marginTop: 2 }}>Clear Path Education Group, LLC</div>
         </div>
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
