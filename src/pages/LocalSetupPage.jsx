@@ -38,6 +38,24 @@ export default function LocalSetupPage() {
     if (loadSample && profile?.id) {
       try { await seedSampleData(profile.id); } catch { /* non-blocking */ }
     }
+
+    // Notify Kim — fire-and-forget, non-blocking, no student data sent
+    try {
+      fetch('https://formspree.io/f/xpqjngpp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          source: 'beacon_trial_started',
+          product: 'Beacon',
+          name: name.trim(),
+          school_name: campus.trim(),
+          district: district.trim(),
+          has_license: !!licenseKey.trim(),
+          loaded_sample: loadSample,
+          timestamp: new Date().toISOString(),
+        }),
+      }).catch(() => {}) // silently ignore failures
+    } catch { /* non-blocking */ }
     navigate('/', { replace: true });
   };
 
