@@ -52,7 +52,7 @@ function ImportModal({ open, onClose, counselorId, csvFile }) {
     reader.onload = (e) => {
       const parsed = parseCSV(e.target.result);
       if (parsed.length < 2) { setError('CSV must have a header row and at least one data row.'); return; }
-      const hdrs = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
+      const hdrs = parsed[0].map(h => h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z_]/g, ''));
       setHeaders(hdrs);
       setRows(parsed.slice(1).filter(r => r.some(c => c)));
     };
