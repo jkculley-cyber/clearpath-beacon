@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const TEAL = [42, 157, 143];
 
@@ -41,7 +41,7 @@ export function generateProgressPDF(student, groups, sessions) {
     doc.setTextColor(...TEAL);
     doc.text('Group Memberships', 14, y);
     y += 2;
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [['Group', 'Focus Area', 'Status']],
       body: groups.map(gm => [gm.groups?.name || '--', gm.groups?.focus_area || '--', gm.groups?.status || '--']),
@@ -57,7 +57,7 @@ export function generateProgressPDF(student, groups, sessions) {
     doc.setTextColor(...TEAL);
     doc.text('Session History', 14, y);
     y += 2;
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [['Date', 'Type', 'Duration', 'Status', 'Notes']],
       body: sessions.slice(0, 25).map(s => [
@@ -101,7 +101,7 @@ export function generateMTSSReport(student, groups, sessions, comms) {
   if (indivCount) rows.push(['Individual Counseling', `${indivCount} sessions`, '--', 'Active']);
 
   if (rows.length) {
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [['Type', 'Name/Count', 'Focus', 'Status']],
       body: rows,
@@ -133,7 +133,7 @@ export function generateMTSSReport(student, groups, sessions, comms) {
   doc.text('Parent/Guardian Contacts', 14, y);
   y += 2;
   if (comms.length) {
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [['Date', 'Type', 'Duration', 'Notes']],
       body: comms.slice(0, 15).map(c => [
@@ -179,7 +179,7 @@ export function generateGroupProgressPDF(group, members, sessions) {
     doc.text('Group Objectives', 14, y);
     y += 2;
     const ascas = [group.asca_1, group.asca_2, group.asca_3];
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [['#', 'Objective', 'ASCA Domain']],
       body: objs.map((o, i) => [i + 1, o, ascas[i] || '--']),
@@ -194,7 +194,7 @@ export function generateGroupProgressPDF(group, members, sessions) {
   doc.setTextColor(...TEAL);
   doc.text(`Members (${members.length})`, 14, y);
   y += 2;
-  doc.autoTable({
+  autoTable(doc, {
     startY: y,
     head: [['Student', 'Grade', 'Joined']],
     body: members.map(m => {
@@ -213,7 +213,7 @@ export function generateGroupProgressPDF(group, members, sessions) {
     doc.setTextColor(...TEAL);
     doc.text('Sessions', 14, y);
     y += 2;
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [['Date', 'Duration', 'Status', 'Notes']],
       body: sessions.map(s => [s.session_date, `${s.duration_minutes || '--'} min`, s.status, (s.notes || '--').slice(0, 50)]),

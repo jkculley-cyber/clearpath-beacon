@@ -8,7 +8,7 @@ import { startOfWeek, subWeeks, format, subDays } from 'date-fns';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import Scorecard from '../components/Scorecard';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 /* ─── Helper: student display name ─── */
 const sName = (s) => s?.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s?.name || 'Unknown');
@@ -790,7 +790,7 @@ export default function DashboardPage() {
       return [label, `${hrs} hrs`, `${pct}%`];
     });
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [['Domain', 'Hours', '% of Total']],
       body: domainRows,
@@ -810,7 +810,7 @@ export default function DashboardPage() {
     doc.text('Caseload Summary', 40, y);
     y += 10;
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       head: [['Category', 'Count']],
       body: [

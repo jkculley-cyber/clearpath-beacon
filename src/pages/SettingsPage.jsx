@@ -6,7 +6,7 @@ import { hasSampleData, clearSampleData } from '../lib/seedSampleData';
 import { parseIcs } from '../lib/calendarImport';
 import { TIME_DOMAINS } from '../lib/constants';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const GRADE_PROMOTIONS = [
   { from: 'K', to: '1' },
@@ -232,7 +232,7 @@ export default function SettingsPage() {
       doc.text(`School Year ${getSchoolYearLabel()}`, 14, 65);
 
       // Metrics table
-      doc.autoTable({
+      autoTable(doc, {
         startY: 75,
         head: [['Metric', 'Value']],
         body: [
@@ -256,7 +256,7 @@ export default function SettingsPage() {
       doc.setTextColor(30, 30, 30);
       doc.text('Caseload Breakdown', 14, afterTable);
 
-      doc.autoTable({
+      autoTable(doc, {
         startY: afterTable + 4,
         head: [['Tier', 'Students']],
         body: [
@@ -331,7 +331,7 @@ export default function SettingsPage() {
       if (cDistrict) { billToY += 7; doc.text(cDistrict, 14, billToY); }
 
       // Line items table
-      doc.autoTable({
+      autoTable(doc, {
         startY: billToY + 16,
         head: [['Description', 'Amount']],
         body: [

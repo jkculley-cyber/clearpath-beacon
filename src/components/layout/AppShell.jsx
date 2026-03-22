@@ -243,12 +243,19 @@ export default function AppShell() {
             {sidebarSessionCount} session{sidebarSessionCount !== 1 ? 's' : ''} &middot; {sidebarStudentCount} student{sidebarStudentCount !== 1 ? 's' : ''}
           </div>
         )}
+        <div className="sidebar-brand-footer">
+          <img src="/icons/Beacon-AppIcon-192.png" alt="" style={{ width: 16, height: 16, borderRadius: 4, opacity: 0.6 }} />
+          <span>Clear Path Education Group</span>
+        </div>
       </aside>
 
       {/* Main content — spacer pushes below fixed header-stack */}
       <main className="main-content">
         <div className="header-spacer" />
         <Outlet />
+        <div className="content-footer">
+          © {new Date().getFullYear()} Clear Path Education Group, LLC · Beacon Counselor Command Center
+        </div>
       </main>
 
       {/* Scoped styles */}
@@ -474,6 +481,17 @@ const shellStyles = `
   color: rgba(255,255,255,0.4);
   flex-shrink: 0;
 }
+.sidebar-brand-footer {
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 9px;
+  color: rgba(255,255,255,0.25);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
 
 /* ── Backdrop ── */
 .drawer-backdrop {
@@ -494,6 +512,14 @@ const shellStyles = `
 }
 .has-banner .header-spacer {
   height: 100px; /* topbar + banner */
+}
+.content-footer {
+  margin-top: 40px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border, #e2e8f0);
+  text-align: center;
+  font-size: 11px;
+  color: #9ca3af;
 }
 
 /* ── Desktop ── */

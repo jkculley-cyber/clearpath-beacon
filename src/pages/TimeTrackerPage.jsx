@@ -5,7 +5,7 @@ import { TIME_DOMAINS } from '../lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const DOMAIN_KEYS = Object.keys(TIME_DOMAINS);
 const COUNSELING_DOMAINS = ['guidance', 'planning', 'responsive'];
@@ -76,7 +76,7 @@ function generateRangePDF(entries, counselorName, rangeLabel, filename) {
   y += 10;
 
   // Entry detail table
-  doc.autoTable({
+  autoTable(doc, {
     startY: y,
     head: [['Date', 'Domain', 'Activity', 'Duration (min)', 'Notes']],
     body: entries.map((e) => [
@@ -135,7 +135,7 @@ function generateAnnualPDF(entries, counselorName, yearLabel, filename) {
   doc.setTextColor(...TEAL);
   doc.text('Monthly Breakdown', 14, y);
   y += 2;
-  doc.autoTable({
+  autoTable(doc, {
     startY: y,
     head: [['Month', 'Counseling Hrs', 'Non-Counseling Hrs', 'Compliance %']],
     body: monthRows,
@@ -150,7 +150,7 @@ function generateAnnualPDF(entries, counselorName, yearLabel, filename) {
   doc.setTextColor(...TEAL);
   doc.text('Detailed Entries', 14, y);
   y += 2;
-  doc.autoTable({
+  autoTable(doc, {
     startY: y,
     head: [['Date', 'Domain', 'Activity', 'Duration (min)', 'Notes']],
     body: entries.map((e) => [
