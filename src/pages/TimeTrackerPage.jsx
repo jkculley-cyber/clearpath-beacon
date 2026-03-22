@@ -402,7 +402,7 @@ export default function TimeTrackerPage() {
     const ms = format(startOfMonth(new Date(selectedDate)), 'yyyy-MM-dd');
     const me = format(endOfMonth(new Date(selectedDate)), 'yyyy-MM-dd');
     const entries = await fetchEntriesRange(counselor.id, ms, me);
-    const header = 'date,domain,activity_description,duration_minutes,notes';
+    const header = 'Date,Domain,Activity,Duration (min),Notes';
     const rows = entries.map((e) => {
       const escape = (v) => `"${String(v || '').replace(/"/g, '""')}"`;
       return [e.entry_date, TIME_DOMAINS[e.domain] || e.domain, escape(e.activity_description), e.duration_minutes, escape(e.notes || '')].join(',');
@@ -412,7 +412,7 @@ export default function TimeTrackerPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `time-entries-${ms.slice(0, 7)}.csv`;
+    a.download = `beacon-time-entries-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

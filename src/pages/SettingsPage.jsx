@@ -1,7 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { db, exportLocalBackup, importLocalBackup } from '../lib/db';
+
+const GRADE_PROMOTIONS = [
+  { from: 'K', to: '1' },
+  { from: '1', to: '2' },
+  { from: '2', to: '3' },
+  { from: '3', to: '4' },
+  { from: '4', to: '5' },
+  { from: '5', to: 'Graduated' },
+];
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
@@ -35,8 +44,20 @@ export default function SettingsPage() {
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState('');
 
+  // School Year Transition
+  const [showTransition, setShowTransition] = useState(false);
+  const [transitionPreview, setTransitionPreview] = useState(null);
+  const [archiveGroups, setArchiveGroups] = useState(true);
+  const [resetSessions, setResetSessions] = useState(true);
+  const [transitioning, setTransitioning] = useState(false);
+  const [transitionResult, setTransitionResult] = useState(null);
+
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+
+  // Share Beacon
+  const [compliancePct, setCompliancePct] = useState(null);
+  const [shareCopied, setShareCopied] = useState(false);
 
   useEffect(() => {
     if (counselor) {
@@ -66,6 +87,44 @@ export default function SettingsPage() {
   }, [counselor]);
 
   useEffect(() => { loadBlocks(); }, [loadBlocks]);
+
+  // Load compliance % for share message
+  useEffect(() => {
+    if (!counselor?.id) return;
+    (async () => {
+      const { data: entries } = await db.select('time_entries', { eq: { counselor_id: counselor.id } });
+      if (!entries || entries.length === 0) return;
+      const direct = entries.filter(e => e.category === 'direct' || e.service_type === 'direct').reduce((s, e) => s + (e.duration_minutes || 0), 0);
+      const total = entries.reduce((s, e) => s + (e.duration_minutes || 0), 0);
+      if (total > 0) setCompliancePct(Math.round((direct / total) * 100));
+    })();
+  }, [counselor]);
+
+  const shareMessage = useMemo(() => {
+    let msg = "I've been using Beacon to track my caseload and 80/20 compliance \u2014 it's been a game changer.";
+    if (compliancePct != null) {
+      msg += ` I'm at ${compliancePct}% compliance this year thanks to Beacon.`;
+    }
+    msg += ' Free 14-day trial, no setup needed: beacon.clearpathedgroup.com';
+    return msg;
+  }, [compliancePct]);
+
+  const [editableShareMsg, setEditableShareMsg] = useState('');
+  useEffect(() => { setEditableShareMsg(shareMessage); }, [shareMessage]);
+
+  const handleCopyShare = async () => {
+    try {
+      await navigator.clipboard.writeText(editableShareMsg);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch { /* fallback */ }
+  };
+
+  const handleEmailShare = () => {
+    const subject = encodeURIComponent('Check out Beacon');
+    const body = encodeURIComponent(editableShareMsg);
+    window.open(`mailto:?subject=${subject}&body=${body}`);
+  };
 
   const handleSaveProfile = async () => {
     setSaving(true);
@@ -148,6 +207,73 @@ export default function SettingsPage() {
     setCurrentPw('');
     setNewPw('');
     setConfirmPw('');
+  };
+
+  const handleStartTransition = async () => {
+    if (!counselor?.id) return;
+    const { data: allStudents } = await db.select('students', {
+      eq: { counselor_id: counselor.id, status: 'active' },
+    });
+    const students = allStudents || [];
+    const promoteCounts = {};
+    let graduateCount = 0;
+    for (const s of students) {
+      const grade = (s.grade || '').toString().trim();
+      const promo = GRADE_PROMOTIONS.find((p) => p.from === grade);
+      if (promo) {
+        if (promo.to === 'Graduated') {
+          graduateCount++;
+        } else {
+          promoteCounts[`${promo.from} -> ${promo.to}`] = (promoteCounts[`${promo.from} -> ${promo.to}`] || 0) + 1;
+        }
+      }
+    }
+    setTransitionPreview({
+      totalStudents: students.length,
+      promoteCounts,
+      graduateCount,
+      students,
+    });
+    setArchiveGroups(true);
+    setResetSessions(true);
+    setTransitionResult(null);
+    setShowTransition(true);
+  };
+
+  const handleConfirmTransition = async () => {
+    if (!transitionPreview || !counselor?.id) return;
+    setTransitioning(true);
+    let promoted = 0;
+    let graduated = 0;
+    let archived = 0;
+
+    // Promote / graduate each student
+    for (const s of transitionPreview.students) {
+      const grade = (s.grade || '').toString().trim();
+      const promo = GRADE_PROMOTIONS.find((p) => p.from === grade);
+      if (!promo) continue;
+      if (promo.to === 'Graduated') {
+        await db.update('students', s.id, { status: 'graduated' });
+        graduated++;
+      } else {
+        await db.update('students', s.id, { grade: promo.to });
+        promoted++;
+      }
+    }
+
+    // Archive completed groups if checked
+    if (archiveGroups) {
+      const { data: groups } = await db.select('groups', {
+        eq: { counselor_id: counselor.id, status: 'completed' },
+      });
+      for (const g of (groups || [])) {
+        await db.update('groups', g.id, { status: 'archived' });
+        archived++;
+      }
+    }
+
+    setTransitioning(false);
+    setTransitionResult({ promoted, graduated, archived });
   };
 
   return (
@@ -381,6 +507,83 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {/* School Year Transition */}
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h2 style={sectionTitle}>School Year Transition</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+            Archive this year's data and promote students to the next grade. Your history is preserved.
+          </p>
+          <button
+            className="btn btn-primary"
+            style={{ background: '#2A9D8F', borderColor: '#2A9D8F', fontWeight: 600, fontSize: 14, padding: '10px 24px' }}
+            onClick={handleStartTransition}
+          >
+            Start New School Year
+          </button>
+        </div>
+
+        {/* Transition Confirmation Modal */}
+        {showTransition && transitionPreview && (
+          <div style={transitionOverlay} onClick={() => { if (!transitioning) { setShowTransition(false); setTransitionResult(null); } }}>
+            <div style={transitionModal} onClick={(e) => e.stopPropagation()}>
+              {transitionResult ? (
+                <>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>Transition Complete</h3>
+                  <div style={{ marginBottom: 16 }}>
+                    <p style={{ color: '#22c55e', fontWeight: 600, marginBottom: 6 }}>{transitionResult.promoted} student{transitionResult.promoted !== 1 ? 's' : ''} promoted.</p>
+                    <p style={{ color: '#f59e0b', fontWeight: 600, marginBottom: 6 }}>{transitionResult.graduated} 5th grader{transitionResult.graduated !== 1 ? 's' : ''} graduated.</p>
+                    {transitionResult.archived > 0 && (
+                      <p style={{ color: '#6b7280', fontSize: 13 }}>{transitionResult.archived} completed group{transitionResult.archived !== 1 ? 's' : ''} archived.</p>
+                    )}
+                  </div>
+                  <button className="btn btn-primary" onClick={() => { setShowTransition(false); setTransitionResult(null); }} style={{ width: '100%' }}>Done</button>
+                </>
+              ) : (
+                <>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 4px' }}>Promote & Archive</h3>
+                  <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
+                    {transitionPreview.totalStudents - transitionPreview.graduateCount} student{transitionPreview.totalStudents - transitionPreview.graduateCount !== 1 ? 's' : ''} will be promoted, {transitionPreview.graduateCount} 5th grader{transitionPreview.graduateCount !== 1 ? 's' : ''} will be graduated.
+                  </p>
+
+                  {/* Grade promotion preview */}
+                  <div style={{ marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8 }}>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8 }}>Grade Promotions</p>
+                    {GRADE_PROMOTIONS.map((p) => (
+                      <div key={p.from} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 14 }}>
+                        <span style={{ color: '#374151' }}>{p.from === '5' ? 'Grade 5' : p.from === 'K' ? 'Kindergarten' : `Grade ${p.from}`}</span>
+                        <span style={{ color: '#6b7280' }}>&rarr;</span>
+                        <span style={{ fontWeight: 600, color: p.to === 'Graduated' ? '#f59e0b' : '#2A9D8F' }}>{p.to === 'Graduated' ? 'Graduated' : `Grade ${p.to}`}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Options */}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, cursor: 'pointer', marginBottom: 8 }}>
+                    <input type="checkbox" checked={archiveGroups} onChange={(e) => setArchiveGroups(e.target.checked)} />
+                    Archive completed groups
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, cursor: 'pointer', marginBottom: 16 }}>
+                    <input type="checkbox" checked={resetSessions} onChange={(e) => setResetSessions(e.target.checked)} />
+                    Reset session counts (sessions have dates, so historical data is preserved)
+                  </label>
+
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button className="btn btn-outline" onClick={() => setShowTransition(false)} disabled={transitioning} style={{ flex: 1 }}>Cancel</button>
+                    <button
+                      className="btn btn-primary"
+                      style={{ flex: 1, background: '#2A9D8F', borderColor: '#2A9D8F' }}
+                      disabled={transitioning}
+                      onClick={handleConfirmTransition}
+                    >
+                      {transitioning ? 'Promoting...' : 'Promote & Archive'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Data Storage */}
         <div className="card" style={{ marginBottom: 20 }}>
           <h2 style={sectionTitle}>Data Storage</h2>
@@ -462,6 +665,29 @@ export default function SettingsPage() {
           )}
         </div>
 
+        {/* Share Beacon */}
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h2 style={sectionTitle}>Share Beacon with a colleague</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Know another counselor who could use this?
+          </p>
+          <textarea
+            className="form-input"
+            rows={4}
+            value={editableShareMsg}
+            onChange={(e) => setEditableShareMsg(e.target.value)}
+            style={{ marginBottom: 12, fontSize: 13, lineHeight: 1.6 }}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={handleCopyShare}>
+              {shareCopied ? 'Copied!' : 'Copy Message'}
+            </button>
+            <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={handleEmailShare}>
+              Email This
+            </button>
+          </div>
+        </div>
+
         {/* Footer */}
         <div style={{ textAlign: 'center', padding: '24px 0', borderTop: '1px solid var(--border)' }}>
           <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>
@@ -477,3 +703,5 @@ export default function SettingsPage() {
 }
 
 const sectionTitle = { fontSize: 15, fontWeight: 600, color: '#374151', margin: '0 0 12px' };
+const transitionOverlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
+const transitionModal = { background: '#fff', borderRadius: 12, padding: 28, width: 460, boxShadow: '0 20px 60px rgba(0,0,0,0.15)', maxHeight: '80vh', overflowY: 'auto' };

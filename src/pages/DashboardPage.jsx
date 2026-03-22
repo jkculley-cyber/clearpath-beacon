@@ -7,6 +7,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { startOfWeek, subWeeks, format } from 'date-fns';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import Scorecard from '../components/Scorecard';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 /* ─── Helper: student display name ─── */
 const sName = (s) => s?.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s?.name || 'Unknown');
@@ -157,6 +159,7 @@ export default function DashboardPage() {
   const [showQuickLog, setShowQuickLog] = useState(false);
   const [makeupQueue, setMakeupQueue] = useState([]);
   const [trendData, setTrendData] = useState([]);
+  const [overdueStudents, setOverdueStudents] = useState([]);
 
   const loadData = useCallback(async () => {
     if (!counselor?.id) return;
@@ -178,6 +181,37 @@ export default function DashboardPage() {
     const tier1 = students.filter((s) => s.tier === 1).length;
     const tier2 = students.filter((s) => s.tier === 2).length;
     const tier3 = students.filter((s) => s.tier === 3).length;
+
+    // Compute overdue students (Tier 2/3 with no session in 14+ days)
+    const higherTierStudents = students.filter((s) => s.tier === 2 || s.tier === 3);
+    if (higherTierStudents.length > 0) {
+      const { data: allSessions } = await db.select('sessions', { eq: { counselor_id: counselor.id } });
+      const sessionsByStudent = {};
+      (allSessions || []).forEach((sess) => {
+        if (!sess.student_id) return;
+        if (!sessionsByStudent[sess.student_id] || sess.session_date > sessionsByStudent[sess.student_id]) {
+          sessionsByStudent[sess.student_id] = sess.session_date;
+        }
+      });
+      const now = new Date();
+      const overdue = higherTierStudents
+        .map((s) => {
+          const lastDate = sessionsByStudent[s.id];
+          if (!lastDate) {
+            // Never had a session — treat as overdue from creation
+            const createdDate = s.created_at ? new Date(s.created_at) : now;
+            const daysSince = Math.floor((now - createdDate) / (1000 * 60 * 60 * 24));
+            return daysSince >= 14 ? { ...s, daysSince, lastSessionDate: null } : null;
+          }
+          const daysSince = Math.floor((now - new Date(lastDate + 'T00:00:00')) / (1000 * 60 * 60 * 24));
+          return daysSince >= 14 ? { ...s, daysSince, lastSessionDate: lastDate } : null;
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.daysSince - a.daysSince);
+      setOverdueStudents(overdue);
+    } else {
+      setOverdueStudents([]);
+    }
 
     // Aggregate time by domain
     const domainMap = {};
@@ -318,9 +352,167 @@ export default function DashboardPage() {
     loadTrend();
   }, [loadData, loadMakeupQueue, loadTrend]);
 
+  /* ─── "My Year" Impact Summary PDF ─── */
+  const generateImpactPDF = async () => {
+    if (!counselor?.id) return;
+
+    const yearStart = counselor.school_year_start
+      || (new Date().getMonth() >= 7 ? `${new Date().getFullYear()}-08-01` : `${new Date().getFullYear() - 1}-08-01`);
+
+    // Gather additional counts for the PDF
+    const [sessionsRes, groupsRes, commsRes, timeRes] = await Promise.all([
+      db.select('sessions', {
+        eq: { counselor_id: counselor.id },
+        gte: { session_date: yearStart },
+        select: 'id, status',
+      }),
+      db.select('groups', { eq: { counselor_id: counselor.id, status: 'active' }, select: 'id' }),
+      db.select('communications', { eq: { counselor_id: counselor.id }, gte: { created_at: yearStart }, select: 'id' }),
+      db.select('time_entries', { eq: { counselor_id: counselor.id }, gte: { entry_date: yearStart }, select: 'domain, duration_minutes' }),
+    ]);
+
+    const allSessions = (sessionsRes.data || []).filter((s) => s.status !== 'Cancelled');
+    const totalSessionsYTD = allSessions.length;
+    const totalGroups = (groupsRes.data || []).length;
+    const totalComms = (commsRes.data || []).length;
+
+    // Recalculate compliance from time entries
+    const domainMap = {};
+    (timeRes.data || []).forEach((e) => {
+      domainMap[e.domain] = (domainMap[e.domain] || 0) + e.duration_minutes;
+    });
+    const totalMin = Object.values(domainMap).reduce((a, b) => a + b, 0) || 1;
+    const counselingMin = (domainMap.guidance || 0) + (domainMap.planning || 0) + (domainMap.responsive || 0);
+    const compPct = Math.round((counselingMin / totalMin) * 100);
+
+    // Build PDF
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const teal = [42, 157, 143];
+    let y = 40;
+
+    // Header
+    doc.setFillColor(...teal);
+    doc.rect(0, 0, pageW, 70, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Beacon \u2014 Annual Impact Summary', pageW / 2, 32, { align: 'center' });
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    const counselorName = counselor.name || 'Counselor';
+    const schoolName = counselor.school_name || '';
+    const dateLine = `${counselorName}${schoolName ? ' | ' + schoolName : ''} | ${format(new Date(), 'MMMM d, yyyy')}`;
+    doc.text(dateLine, pageW / 2, 52, { align: 'center' });
+
+    y = 95;
+
+    // Key Metrics Row
+    doc.setTextColor(42, 157, 143);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Key Metrics (Year-to-Date)', 40, y);
+    y += 20;
+
+    const metrics = [
+      { label: 'Students Served', value: String(stats.totalStudents) },
+      { label: 'Sessions Logged', value: String(totalSessionsYTD) },
+      { label: 'Groups Run', value: String(totalGroups) },
+      { label: '80/20 Compliance', value: `${compPct}%` },
+    ];
+
+    const boxW = (pageW - 80 - 30) / 4;
+    metrics.forEach((m, i) => {
+      const x = 40 + i * (boxW + 10);
+      doc.setFillColor(240, 253, 250);
+      doc.roundedRect(x, y, boxW, 55, 4, 4, 'F');
+      doc.setTextColor(42, 157, 143);
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.text(m.value, x + boxW / 2, y + 25, { align: 'center' });
+      doc.setTextColor(107, 114, 128);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(m.label, x + boxW / 2, y + 42, { align: 'center' });
+    });
+
+    y += 75;
+
+    // Time by Domain Table
+    doc.setTextColor(42, 157, 143);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Time by Domain', 40, y);
+    y += 10;
+
+    const domainRows = Object.entries(TIME_DOMAINS).map(([key, label]) => {
+      const mins = domainMap[key] || 0;
+      const hrs = Math.round((mins / 60) * 10) / 10;
+      const pct = totalMin > 0 ? Math.round((mins / totalMin) * 100) : 0;
+      return [label, `${hrs} hrs`, `${pct}%`];
+    });
+
+    doc.autoTable({
+      startY: y,
+      head: [['Domain', 'Hours', '% of Total']],
+      body: domainRows,
+      theme: 'grid',
+      styles: { fontSize: 10, cellPadding: 6 },
+      headStyles: { fillColor: teal, textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      margin: { left: 40, right: 40 },
+    });
+
+    y = doc.lastAutoTable.finalY + 25;
+
+    // Caseload Summary Table
+    doc.setTextColor(42, 157, 143);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Caseload Summary', 40, y);
+    y += 10;
+
+    doc.autoTable({
+      startY: y,
+      head: [['Category', 'Count']],
+      body: [
+        ['Active Students', String(stats.totalStudents)],
+        ['Tier 1 (Universal)', String(stats.tier1)],
+        ['Tier 2 (Targeted)', String(stats.tier2)],
+        ['Tier 3 (Intensive)', String(stats.tier3)],
+        ['Active Groups', String(stats.activeGroups)],
+        ['Parent/Family Communications', String(totalComms)],
+      ],
+      theme: 'grid',
+      styles: { fontSize: 10, cellPadding: 6 },
+      headStyles: { fillColor: teal, textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      margin: { left: 40, right: 40 },
+    });
+
+    // Footer
+    const footerY = doc.internal.pageSize.getHeight() - 30;
+    doc.setTextColor(156, 163, 175);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      'Generated by Beacon \u2014 Counselor Command Center | Clear Path Education Group',
+      pageW / 2,
+      footerY,
+      { align: 'center' }
+    );
+
+    doc.save(`Beacon_Impact_Summary_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+  };
+
   return (
     <div style={styles.page}>
-      <h1 style={styles.heading}>Dashboard</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <h1 style={{ ...styles.heading, margin: 0 }}>Dashboard</h1>
+        <button onClick={generateImpactPDF} style={styles.impactBtn}>
+          {'\uD83D\uDCCA'} My Year
+        </button>
+      </div>
 
       {/* Onboarding checklist — disappears once all steps complete */}
       <div style={{ marginBottom: 20 }}>
@@ -416,6 +608,70 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── Overdue Students Widget ─── */}
+      {overdueStudents.length > 0 && (
+        <div style={{ ...styles.card, marginTop: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <h2 style={{ ...styles.cardTitle, margin: 0 }}>Students Need Follow-Up</h2>
+            <span style={{ ...styles.badge, background: '#ef4444' }}>{overdueStudents.length}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {overdueStudents.slice(0, 6).map((s) => {
+              const isRed = s.daysSince >= 21;
+              const bgColor = isRed ? '#fef2f2' : '#fffbeb';
+              const borderColor = isRed ? '#fecaca' : '#fef3c7';
+              const textColor = isRed ? '#991b1b' : '#92400e';
+              const initial = (s.first_name || s.name || '?')[0].toUpperCase();
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => navigate(`/students/${s.id}`)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                    background: bgColor, border: `1px solid ${borderColor}`,
+                    transition: 'background 0.15s',
+                  }}
+                >
+                  <div style={{
+                    width: 32, height: 32, borderRadius: '50%',
+                    background: isRed ? '#fca5a5' : '#fcd34d',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontWeight: 700, fontSize: 14, color: '#fff', flexShrink: 0,
+                  }}>
+                    {initial}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontWeight: 600, color: '#1a2332', fontSize: 14 }}>{sName(s)}</span>
+                  </div>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                    background: s.tier === 3 ? '#fecaca' : '#fef3c7',
+                    color: s.tier === 3 ? '#991b1b' : '#92400e',
+                  }}>
+                    Tier {s.tier}
+                  </span>
+                  <span style={{ fontSize: 13, color: textColor, fontWeight: 500, whiteSpace: 'nowrap' }}>
+                    {s.daysSince} days since last session
+                  </span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </div>
+              );
+            })}
+          </div>
+          {overdueStudents.length > 6 && (
+            <div
+              onClick={() => navigate('/students')}
+              style={{ textAlign: 'center', marginTop: 12, fontSize: 13, fontWeight: 600, color: '#2A9D8F', cursor: 'pointer' }}
+            >
+              View all &rarr;
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── Feature #6: Make-up Session Tracker ─── */}
       {makeupQueue.length > 0 && (
@@ -552,6 +808,21 @@ const styles = {
     padding: '2px 8px',
     borderRadius: 4,
     fontWeight: 500,
+    whiteSpace: 'nowrap',
+  },
+  impactBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '7px 16px',
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#2A9D8F',
+    background: '#fff',
+    border: '1.5px solid #2A9D8F',
+    borderRadius: 8,
+    cursor: 'pointer',
+    transition: 'background 0.15s',
     whiteSpace: 'nowrap',
   },
 };

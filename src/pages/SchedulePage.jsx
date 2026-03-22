@@ -218,6 +218,132 @@ function MonthlyView({ currentMonth, sessions, groups, onPrevMonth, onNextMonth,
   );
 }
 
+/* ---- Add Session Modal ---- */
+function AddSessionModal({ open, onClose, counselorId }) {
+  const [sessionType, setSessionType] = useState('individual');
+  const [studentId, setStudentId] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [sessionDate, setSessionDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [startTime, setStartTime] = useState('09:00');
+  const [duration, setDuration] = useState(30);
+  const [notes, setNotes] = useState('');
+  const [students, setStudents] = useState([]);
+  const [groupList, setGroupList] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open || !counselorId) return;
+    Promise.all([
+      db.select('students', { eq: { counselor_id: counselorId, status: 'active' }, order: { column: 'first_name', ascending: true } }),
+      db.select('groups', { eq: { counselor_id: counselorId, status: 'active' }, order: { column: 'name', ascending: true } }),
+    ]).then(([sRes, gRes]) => {
+      setStudents(sRes.data || []);
+      setGroupList(gRes.data || []);
+    });
+  }, [open, counselorId]);
+
+  if (!open) return null;
+
+  const computeEndTime = (start, dur) => {
+    const [h, m] = start.split(':').map(Number);
+    const totalMin = h * 60 + m + dur;
+    const eH = Math.floor(totalMin / 60);
+    const eM = totalMin % 60;
+    return `${String(eH).padStart(2, '0')}:${String(eM).padStart(2, '0')}`;
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    const endTime = computeEndTime(startTime, duration);
+    const record = {
+      counselor_id: counselorId,
+      session_date: sessionDate,
+      start_time: startTime,
+      end_time: endTime,
+      duration_minutes: duration,
+      status: 'Scheduled',
+      notes: notes || null,
+    };
+    if (sessionType === 'individual') {
+      record.student_id = studentId || null;
+      record.group_id = null;
+    } else {
+      record.student_id = null;
+      record.group_id = groupId || null;
+    }
+    await db.insert('sessions', record);
+    setSaving(false);
+    // Reset form
+    setSessionType('individual');
+    setStudentId('');
+    setGroupId('');
+    setSessionDate(format(new Date(), 'yyyy-MM-dd'));
+    setStartTime('09:00');
+    setDuration(30);
+    setNotes('');
+    onClose(true);
+  };
+
+  return (
+    <div style={overlay} onClick={() => onClose(false)}>
+      <div style={modal} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>Add Session</h3>
+        <form onSubmit={handleSave}>
+          <label style={lbl}>Type</label>
+          <select className="form-input" value={sessionType} onChange={(e) => setSessionType(e.target.value)}>
+            <option value="individual">Individual</option>
+            <option value="group">Group</option>
+          </select>
+
+          {sessionType === 'individual' ? (
+            <>
+              <label style={lbl}>Student</label>
+              <select className="form-input" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+                <option value="">-- Select student --</option>
+                {students.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.first_name} {s.last_name || ''}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <>
+              <label style={lbl}>Group</label>
+              <select className="form-input" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+                <option value="">-- Select group --</option>
+                {groupList.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            </>
+          )}
+
+          <label style={lbl}>Date</label>
+          <input className="form-input" type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} required />
+
+          <label style={lbl}>Start Time</label>
+          <input className="form-input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+
+          <label style={lbl}>Duration (minutes)</label>
+          <input className="form-input" type="number" min="5" max="120" value={duration} onChange={(e) => setDuration(parseInt(e.target.value, 10) || 30)} required />
+
+          <label style={lbl}>Notes</label>
+          <textarea className="form-input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <button type="button" className="btn btn-outline" onClick={() => onClose(false)} style={{ flex: 1 }}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving} style={{ flex: 1 }}>
+              {saving ? 'Saving...' : 'Add Session'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ---- Main Page ---- */
 export default function SchedulePage() {
   const { counselor } = useAuth();
@@ -226,6 +352,7 @@ export default function SchedulePage() {
   const [groups, setGroups] = useState([]);
   const [selected, setSelected] = useState(null);
   const [scheduleBlocks, setScheduleBlocks] = useState([]);
+  const [showAddSession, setShowAddSession] = useState(false);
 
   // Feature #10 — Monthly view state
   const [viewMode, setViewMode] = useState('weekly'); // 'weekly' | 'monthly'
@@ -333,7 +460,13 @@ export default function SchedulePage() {
   if (viewMode === 'monthly') {
     return (
       <div className="page">
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, gap: 8 }}>
+          <button
+            onClick={() => setShowAddSession(true)}
+            style={{ padding: '6px 16px', fontSize: 13, fontWeight: 600, color: '#fff', background: '#2A9D8F', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+          >
+            + Add Session
+          </button>
           <button className="btn btn-outline" onClick={toggleView} style={{ fontSize: 13, padding: '6px 14px' }}>
             Weekly View
           </button>
@@ -345,6 +478,11 @@ export default function SchedulePage() {
           onPrevMonth={goPrevMonth}
           onNextMonth={goNextMonth}
           onToday={goMonthToday}
+        />
+        <AddSessionModal
+          open={showAddSession}
+          onClose={(saved) => { setShowAddSession(false); if (saved) loadMonthlyData(); }}
+          counselorId={counselor?.id}
         />
       </div>
     );
@@ -364,6 +502,12 @@ export default function SchedulePage() {
           </span>
           <button className="btn btn-outline" onClick={toggleView} style={{ marginLeft: 8, fontSize: 13, padding: '6px 14px' }}>
             Monthly View
+          </button>
+          <button
+            onClick={() => setShowAddSession(true)}
+            style={{ marginLeft: 4, padding: '6px 16px', fontSize: 13, fontWeight: 600, color: '#fff', background: '#2A9D8F', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+          >
+            + Add Session
           </button>
         </div>
       </div>
@@ -463,6 +607,12 @@ export default function SchedulePage() {
         groups={groups}
         onClose={() => setSelected(null)}
         onSave={() => { setSelected(null); loadData(); }}
+      />
+
+      <AddSessionModal
+        open={showAddSession}
+        onClose={(saved) => { setShowAddSession(false); if (saved) loadData(); }}
+        counselorId={counselor?.id}
       />
     </div>
   );

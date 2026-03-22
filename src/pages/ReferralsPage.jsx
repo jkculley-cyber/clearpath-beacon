@@ -338,6 +338,82 @@ function AddReferralModal({ open, onClose, counselorId }) {
   );
 }
 
+// --- Share Referral Form Modal ---
+function ShareReferralModal({ open, onClose }) {
+  const [copied, setCopied] = useState(false);
+  if (!open) return null;
+
+  const referralUrl = `${window.location.origin}/referral-form`;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(referralUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* fallback */ }
+  };
+
+  const handlePrintPoster = () => {
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html><head><title>Referral Form Link</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 60px 40px; }
+        h1 { font-size: 36px; font-weight: 800; color: #1a2332; margin-bottom: 16px; }
+        .url { font-size: 28px; font-weight: 700; color: #2A9D8F; word-break: break-all; margin: 32px 0; padding: 24px; border: 3px solid #2A9D8F; border-radius: 12px; }
+        p { font-size: 18px; color: #6b7280; line-height: 1.6; max-width: 500px; margin: 0 auto; }
+        .footer { margin-top: 40px; font-size: 14px; color: #9ca3af; }
+      </style>
+    </head><body>
+      <h1>Need to refer a student to the counselor?</h1>
+      <p>Open this link on your phone, tablet, or computer to submit a referral form.</p>
+      <div class="url">${referralUrl}</div>
+      <p>Fill out the form with the student's name, grade, and concern. The counselor will be notified.</p>
+      <div class="footer">Beacon by Clear Path Education Group</div>
+    </body></html>`);
+    w.document.close();
+    w.print();
+  };
+
+  return (
+    <div style={overlay} onClick={() => onClose()}>
+      <div style={{ ...modal, width: 500 }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={modalTitle}>Share Referral Form</h3>
+        <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
+          Share this link with teachers. They can submit referrals from any device.
+        </p>
+
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 4 }}>Referral Form URL</label>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <input
+            className="form-input"
+            value={referralUrl}
+            readOnly
+            onClick={(e) => e.target.select()}
+            style={{ flex: 1, fontSize: 13, fontFamily: 'monospace' }}
+          />
+          <button className="btn btn-primary" style={{ fontSize: 13, whiteSpace: 'nowrap' }} onClick={handleCopy}>
+            {copied ? 'Copied!' : 'Copy Link'}
+          </button>
+        </div>
+
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 14, marginBottom: 16, fontSize: 13, color: '#92400e', lineHeight: 1.6 }}>
+          <strong>Note:</strong> In local mode, teachers must be on this same device to submit referrals.
+          For cross-device referrals, ask teachers to email you or use a Google Form and import via CSV.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={handlePrintPoster} style={{ flex: 1, fontSize: 13 }}>
+            Print Poster
+          </button>
+          <button className="btn btn-outline" onClick={() => onClose()} style={{ flex: 1, fontSize: 13 }}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ReferralsPage() {
   const { counselor } = useAuth();
   const [referrals, setReferrals] = useState([]);
@@ -346,6 +422,7 @@ export default function ReferralsPage() {
   const [toast, setToast] = useState(null);
   const [showImport, setShowImport] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [showShare, setShowShare] = useState(false);
 
   const loadReferrals = useCallback(async () => {
     if (!counselor?.id) return;
@@ -390,6 +467,9 @@ export default function ReferralsPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <h1 className="page-title" style={{ margin: 0 }}>Referrals</h1>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => setShowShare(true)}>
+            Share Referral Form
+          </button>
           <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => setShowImport(true)}>
             Import CSV
           </button>
@@ -516,6 +596,11 @@ export default function ReferralsPage() {
         open={showAdd}
         onClose={(saved) => { setShowAdd(false); if (saved) loadReferrals(); }}
         counselorId={counselor?.id}
+      />
+
+      <ShareReferralModal
+        open={showShare}
+        onClose={() => setShowShare(false)}
       />
     </div>
   );

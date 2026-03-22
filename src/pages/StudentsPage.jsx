@@ -193,6 +193,22 @@ function ImportModal({ open, onClose, counselorId, csvFile }) {
   );
 }
 
+/* ── CSV Download Helper ── */
+function downloadCSV(rows, headers, filename) {
+  const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = [
+    headers.join(','),
+    ...rows.map((r) => r.map(escape).join(',')),
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function AddStudentModal({ open, onClose, counselorId }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -316,6 +332,21 @@ export default function StudentsPage() {
 
   const studentName = (s) => s.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s.name || '');
 
+  const handleExportCSV = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const headers = ['Name', 'Grade', 'Teacher', 'Tier', 'Status', 'Sessions Count', 'Last Seen'];
+    const rows = filtered.map((s) => [
+      studentName(s),
+      s.grade || '',
+      s.teacher || '',
+      s.tier || '',
+      s.status || '',
+      s.sessions?.length || 0,
+      s.last_seen_date || '',
+    ]);
+    downloadCSV(rows, headers, `beacon-students-${today}.csv`);
+  };
+
   const filtered = students.filter((s) => {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -340,6 +371,7 @@ export default function StudentsPage() {
         <h1 className="page-title" style={{ margin: 0 }}>Students</h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <input type="file" accept=".csv" ref={csvInputRef} style={{ display: 'none' }} onChange={handleCsvSelect} />
+          <button className="btn btn-outline" onClick={handleExportCSV} disabled={filtered.length === 0}>Export CSV</button>
           <button className="btn btn-outline" onClick={() => csvInputRef.current?.click()}>Import CSV</button>
           <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Student</button>
         </div>

@@ -19,6 +19,7 @@ import LoginPage from './pages/LoginPage';
 import ReferralFormPage from './pages/ReferralFormPage';
 import LocalSetupPage from './pages/LocalSetupPage';
 import RequestAccessPage from './pages/RequestAccessPage';
+import LandingPage from './pages/LandingPage';
 
 /* ── Auth guard ── */
 function RequireAuth({ children }) {
@@ -33,10 +34,10 @@ function RequireAuth({ children }) {
   }
 
   // Local mode: no session and no counselor means needs setup
-  if (isLocalMode && !counselor) return <Navigate to="/setup" replace />;
+  if (isLocalMode && !counselor) return <Navigate to="/welcome" replace />;
 
   // Cloud mode: no session means needs login
-  if (!isLocalMode && !session) return <Navigate to="/login" replace />;
+  if (!isLocalMode && !session) return <Navigate to="/welcome" replace />;
 
   return children;
 }
@@ -47,6 +48,7 @@ export default function App() {
   return (
     <Routes>
       {/* Public routes */}
+      <Route path="/welcome" element={<LandingPage />} />
       <Route path="/request-access" element={<RequestAccessPage />} />
       <Route path="/login" element={isLocalMode ? <Navigate to="/setup" replace /> : <LoginPage />} />
       <Route path="/setup" element={<LocalSetupPage />} />
