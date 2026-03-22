@@ -15,7 +15,25 @@
 
 import { supabase } from './supabase';
 import * as local from './localDb';
-import { checkLicense } from './license';
+import { checkLicense, getLicenseKey } from './license';
+
+// Check if the local counselor is in an active trial (no license key needed)
+const TRIAL_DAYS = 14;
+async function isTrialActive() {
+  try {
+    const counselorData = await local.getAll('counselor');
+    const counselor = counselorData[0];
+    if (!counselor) return false;
+    // Active/extended subscription = not gated
+    if (counselor.subscription_status === 'active' || counselor.subscription_status === 'extended') return true;
+    // Trial with valid start date
+    if (counselor.subscription_status === 'trial' && counselor.trial_started_at) {
+      const elapsed = (Date.now() - new Date(counselor.trial_started_at).getTime()) / 86400000;
+      return elapsed <= TRIAL_DAYS;
+    }
+    return false;
+  } catch { return false; }
+}
 
 // Storage mode: 'local' (IndexedDB) or 'cloud' (Supabase)
 // Persisted in localStorage so it survives reloads
@@ -123,11 +141,20 @@ export const db = {
   async insert(table, record) {
     try {
       if (isLocalMode()) {
-        // Soft gate: block new records when license is invalid
+        // Soft gate: block new records when license is invalid AND trial is expired
         if (!LICENSE_EXEMPT_TABLES.includes(table)) {
-          const lic = await checkLicense();
-          if (lic.softGated) {
-            return { data: null, error: new Error('License expired — renew to create new records.') };
+          // If they have a valid license key, check it
+          if (getLicenseKey()) {
+            const lic = await checkLicense();
+            if (lic.softGated) {
+              return { data: null, error: new Error('License expired — renew to create new records.') };
+            }
+          } else {
+            // No license key — check if trial is still active
+            const trialOk = await isTrialActive();
+            if (!trialOk) {
+              return { data: null, error: new Error('Your free trial has ended. Enter a license key in Settings to continue.') };
+            }
           }
         }
         const row = await local.insert(table, record);
@@ -145,6 +172,15 @@ export const db = {
   async insertMany(table, records) {
     try {
       if (isLocalMode()) {
+        if (!LICENSE_EXEMPT_TABLES.includes(table)) {
+          if (getLicenseKey()) {
+            const lic = await checkLicense();
+            if (lic.softGated) return { data: null, error: new Error('License expired — renew to create new records.') };
+          } else {
+            const trialOk = await isTrialActive();
+            if (!trialOk) return { data: null, error: new Error('Your free trial has ended. Enter a license key in Settings to continue.') };
+          }
+        }
         const rows = [];
         for (const r of records) {
           rows.push(await local.insert(table, r));
