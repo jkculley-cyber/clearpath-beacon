@@ -1205,22 +1205,6 @@ export default function SettingsPage() {
             </p>
           )}
 
-          {/* Campus/District license interest */}
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border, #e2e8f0)' }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
-              Ready to use Beacon across your campus or district?
-            </div>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-              We offer campus and district licenses with volume pricing, cloud sync, and admin dashboards. Let us know you're interested and we'll set up a conversation.
-            </p>
-            <a
-              href={`mailto:support@clearpathedgroup.com?subject=${encodeURIComponent('Interest in Beacon Campus/District License')}&body=${encodeURIComponent(`Hi Clear Path team,\n\nI've been using Beacon as an individual counselor and I'm interested in learning about campus or district licensing options.\n\nName: ${name || ''}\nSchool: ${campus || ''}\nDistrict: ${district || ''}\n\nI'd love to discuss:\n- [ ] Campus license for our school\n- [ ] District license for multiple campuses\n\nPlease reach out at your convenience.\n\nThank you!`)}`}
-              className="btn btn-outline"
-              style={{ fontSize: 13, textDecoration: 'none', display: 'inline-flex' }}
-            >
-              Contact Us About Campus/District Licensing →
-            </a>
-          </div>
         </div>
 
         {/* Share Beacon */}
