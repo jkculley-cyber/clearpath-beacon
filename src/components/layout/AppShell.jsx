@@ -104,7 +104,10 @@ export default function AppShell() {
           <button className="topbar-hamburger" onClick={() => setDrawerOpen(o => !o)} aria-label="Toggle menu">
             <HamburgerIcon />
           </button>
-          <div className="topbar-brand">{schoolName}</div>
+          <div className="topbar-brand" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <img src="/icons/Beacon-AppIcon-192.png" alt="" style={{ width: 24, height: 24, borderRadius: 6 }} />
+            {schoolName}
+          </div>
           <div className="topbar-right">
             <span className="topbar-counselor">{counselor?.name || ''}</span>
             <button className="btn-ghost" onClick={handleSignOut}>Sign out</button>
@@ -216,7 +219,10 @@ export default function AppShell() {
       {/* Sidebar */}
       <aside className={`sidebar${drawerOpen ? ' sidebar--open' : ''}`}>
         <div className="sidebar-header">
-          <span className="sidebar-logo">Beacon</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src="/icons/Beacon-AppIcon-192.png" alt="" style={{ width: 32, height: 32, borderRadius: 8 }} />
+            <span className="sidebar-logo">Beacon</span>
+          </div>
         </div>
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
