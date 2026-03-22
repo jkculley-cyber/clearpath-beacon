@@ -69,19 +69,22 @@ export default function AppShell() {
     setBackingUp(false);
   }
 
+  const hasBanner = showTrialBanner || isSoftGated || showBackupBanner;
+
   return (
-    <div className="shell">
-      {/* Mobile topbar */}
-      <header className="topbar">
-        <button className="topbar-hamburger" onClick={() => setDrawerOpen(o => !o)} aria-label="Toggle menu">
-          <HamburgerIcon />
-        </button>
-        <div className="topbar-brand">{schoolName}</div>
-        <div className="topbar-right">
-          <span className="topbar-counselor">{counselor?.full_name || ''}</span>
-          <button className="btn-ghost" onClick={handleSignOut}>Sign out</button>
-        </div>
-      </header>
+    <div className={`shell${hasBanner ? ' has-banner' : ''}`}>
+      {/* Fixed header stack: topbar + banners */}
+      <div className="header-stack">
+        <header className="topbar">
+          <button className="topbar-hamburger" onClick={() => setDrawerOpen(o => !o)} aria-label="Toggle menu">
+            <HamburgerIcon />
+          </button>
+          <div className="topbar-brand">{schoolName}</div>
+          <div className="topbar-right">
+            <span className="topbar-counselor">{counselor?.full_name || ''}</span>
+            <button className="btn-ghost" onClick={handleSignOut}>Sign out</button>
+          </div>
+        </header>
 
       {/* Trial / gate banners */}
       {showTrialBanner && (
@@ -182,6 +185,8 @@ export default function AppShell() {
         </div>
       )}
 
+      </div>{/* /header-stack */}
+
       {/* Backdrop */}
       {drawerOpen && <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)} />}
 
@@ -206,8 +211,9 @@ export default function AppShell() {
         </nav>
       </aside>
 
-      {/* Main content */}
+      {/* Main content — spacer pushes below fixed header-stack */}
       <main className="main-content">
+        <div className="header-spacer" />
         <Outlet />
       </main>
 
@@ -227,23 +233,28 @@ const guideDesc = { fontSize: 13, color: '#4b5563', lineHeight: 1.55 };
 const shellStyles = `
 .shell {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
   background: var(--bg);
 }
 
-/* ── Topbar ── */
-.topbar {
+/* ── Header Stack (topbar + banners, fixed) ── */
+.header-stack {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
+  z-index: 40;
+}
+
+/* ── Topbar ── */
+.topbar {
   height: 56px;
   background: var(--navy);
   color: #fff;
   display: flex;
   align-items: center;
   padding: 0 16px;
-  z-index: 40;
   gap: 12px;
 }
 .topbar-hamburger {
@@ -282,39 +293,24 @@ const shellStyles = `
 }
 .btn-ghost:hover { background: rgba(255,255,255,0.1); }
 
-/* ── Banners ── */
+/* ── Banners (inside header-stack, flow naturally below topbar) ── */
 .trial-banner {
-  position: fixed;
-  top: 56px;
-  left: 0;
-  right: 0;
   background: #f59e0b;
   color: #1a2332;
   text-align: center;
-  padding: 6px 16px;
+  padding: 8px 16px;
   font-size: 0.8125rem;
-  font-weight: 500;
-  z-index: 39;
+  font-weight: 600;
 }
 .gate-banner {
-  position: fixed;
-  top: 56px;
-  left: 0;
-  right: 0;
   background: #ef4444;
   color: #fff;
   text-align: center;
-  padding: 6px 16px;
+  padding: 8px 16px;
   font-size: 0.8125rem;
-  font-weight: 500;
-  z-index: 39;
+  font-weight: 600;
 }
 .backup-banner {
-  position: fixed;
-  top: 56px;
-  left: 0;
-  right: 0;
-  z-index: 39;
   padding: 10px 20px;
   font-size: 0.8125rem;
   font-weight: 500;
@@ -382,7 +378,7 @@ const shellStyles = `
 /* ── Sidebar ── */
 .sidebar {
   position: fixed;
-  top: 56px;
+  top: 0;
   left: 0;
   bottom: 0;
   width: 240px;
@@ -394,6 +390,7 @@ const shellStyles = `
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  padding-top: 56px;
 }
 .sidebar--open { transform: translateX(0); }
 
@@ -447,9 +444,14 @@ const shellStyles = `
 /* ── Main content ── */
 .main-content {
   flex: 1;
-  margin-top: 56px;
-  padding: 24px;
-  min-height: calc(100vh - 56px);
+  padding: 0 24px 24px;
+  min-height: 100vh;
+}
+.header-spacer {
+  height: 56px; /* topbar height — banners add to this automatically via header-stack */
+}
+.has-banner .header-spacer {
+  height: 100px; /* topbar + banner */
 }
 
 /* ── Desktop ── */
@@ -458,12 +460,12 @@ const shellStyles = `
   .sidebar {
     transform: translateX(0);
   }
+  .header-stack {
+    left: 240px;
+  }
   .drawer-backdrop { display: none; }
   .main-content {
     margin-left: 240px;
-  }
-  .topbar {
-    left: 240px;
   }
 }
 `;
