@@ -140,6 +140,128 @@ function QuickLogModal({ open, onClose, counselorId }) {
   );
 }
 
+/* ─── Quick Session Modal ─── */
+function QuickSessionModal({ open, onClose, counselorId }) {
+  const [studentId, setStudentId] = useState('');
+  const [search, setSearch] = useState('');
+  const [duration, setDuration] = useState('30');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [students, setStudents] = useState([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open || !counselorId) return;
+    db.select('students', { eq: { counselor_id: counselorId, status: 'active' }, order: { column: 'name' } })
+      .then(({ data }) => setStudents(data || []));
+  }, [open, counselorId]);
+
+  if (!open) return null;
+
+  const filtered = search
+    ? students.filter((s) => {
+        const name = s.first_name ? `${s.first_name} ${s.last_name || ''}` : (s.name || '');
+        return name.toLowerCase().includes(search.toLowerCase());
+      })
+    : students;
+
+  const selectedStudent = students.find((s) => s.id === studentId);
+  const selectedLabel = selectedStudent
+    ? (selectedStudent.first_name ? `${selectedStudent.first_name} ${selectedStudent.last_name || ''}`.trim() : selectedStudent.name)
+    : '';
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!studentId) return;
+    setSaving(true);
+    const today = new Date().toISOString().slice(0, 10);
+    const mins = parseInt(duration, 10) || 30;
+
+    // Insert session
+    await db.insert('sessions', {
+      counselor_id: counselorId,
+      student_id: studentId,
+      session_date: today,
+      duration_minutes: mins,
+      notes: notes || null,
+      status: 'Completed',
+      session_type: 'individual',
+    });
+
+    // Auto-log time entry for responsive domain
+    await db.insert('time_entries', {
+      counselor_id: counselorId,
+      entry_date: today,
+      domain: 'responsive',
+      activity_description: `Individual session \u2014 ${selectedLabel}`,
+      duration_minutes: mins,
+    });
+
+    setSaving(false);
+    setStudentId('');
+    setSearch('');
+    setDuration('30');
+    setNotes('');
+    onClose(true);
+  };
+
+  return (
+    <div style={modalStyles.overlay} onClick={() => onClose(false)}>
+      <div style={modalStyles.content} onClick={(e) => e.stopPropagation()}>
+        <h3 style={modalStyles.title}>Log Session</h3>
+        <form onSubmit={handleSave}>
+          <label style={modalStyles.label}>Student</label>
+          <div style={{ position: 'relative' }}>
+            <input
+              style={modalStyles.input}
+              placeholder="Search students..."
+              value={studentId ? selectedLabel : search}
+              onChange={(e) => { setSearch(e.target.value); setStudentId(''); setDropdownOpen(true); }}
+              onFocus={() => setDropdownOpen(true)}
+              required
+            />
+            {dropdownOpen && filtered.length > 0 && !studentId && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff',
+                border: '1px solid #d1d5db', borderRadius: 8, maxHeight: 180, overflowY: 'auto',
+                zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              }}>
+                {filtered.map((s) => {
+                  const label = s.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : s.name;
+                  return (
+                    <div
+                      key={s.id}
+                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 14, borderBottom: '1px solid #f3f4f6' }}
+                      onMouseDown={(e) => { e.preventDefault(); setStudentId(s.id); setSearch(''); setDropdownOpen(false); }}
+                    >
+                      {label} <span style={{ color: '#9ca3af', fontSize: 12 }}>Grade {s.grade}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <label style={modalStyles.label}>Duration (minutes)</label>
+          <input style={modalStyles.input} type="number" min="1" value={duration} onChange={(e) => setDuration(e.target.value)} required />
+          <label style={modalStyles.label}>Notes (optional)</label>
+          <textarea
+            style={{ ...modalStyles.input, minHeight: 60, resize: 'vertical', fontFamily: 'inherit' }}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Brief session notes..."
+          />
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <button type="button" onClick={() => onClose(false)} style={modalStyles.cancelBtn}>Cancel</button>
+            <button type="submit" disabled={saving || !studentId} style={{ ...modalStyles.saveBtn, opacity: (!studentId || saving) ? 0.6 : 1 }}>
+              {saving ? 'Saving...' : 'Log Session'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Dashboard ─── */
 export default function DashboardPage() {
   const { counselor } = useAuth();
@@ -157,9 +279,11 @@ export default function DashboardPage() {
     domainHours: [],
   });
   const [showQuickLog, setShowQuickLog] = useState(false);
+  const [showQuickSession, setShowQuickSession] = useState(false);
   const [makeupQueue, setMakeupQueue] = useState([]);
   const [trendData, setTrendData] = useState([]);
   const [overdueStudents, setOverdueStudents] = useState([]);
+  const [weekDigest, setWeekDigest] = useState(null);
 
   const loadData = useCallback(async () => {
     if (!counselor?.id) return;
@@ -227,6 +351,76 @@ export default function DashboardPage() {
       hours: Math.round(((domainMap[key] || 0) / 60) * 10) / 10,
       fill: key === 'non_counseling' ? '#94a3b8' : '#2A9D8F',
     }));
+
+    // ─── This Week digest ───
+    const weekMonday = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const weekMondayStr = format(weekMonday, 'yyyy-MM-dd');
+    const todayDate = new Date();
+
+    const [weekSessionsRes, weekTimeRes, weekReferralsRes] = await Promise.all([
+      db.select('sessions', {
+        eq: { counselor_id: counselor.id },
+        gte: { session_date: weekMondayStr },
+        select: 'id, session_date, student_id, status',
+      }),
+      db.select('time_entries', {
+        eq: { counselor_id: counselor.id },
+        gte: { entry_date: weekMondayStr },
+        select: 'id, entry_date',
+      }),
+      db.select('referrals', {
+        eq: { status: 'closed' },
+        gte: { updated_at: weekMondayStr },
+        select: 'id',
+      }),
+    ]);
+
+    const weekSessions = (weekSessionsRes.data || []).filter(s => s.status !== 'Cancelled');
+    const weekTimeEntries = weekTimeRes.data || [];
+    const weekReferralsClosed = (weekReferralsRes.data || []).length;
+
+    // Build day-by-day activity map (Mon=0 through Fri=4)
+    const dayActivity = [false, false, false, false, false];
+    const activityDates = new Set();
+    weekSessions.forEach(s => activityDates.add(s.session_date));
+    weekTimeEntries.forEach(e => activityDates.add(e.entry_date));
+
+    for (const dateStr of activityDates) {
+      const d = new Date(dateStr + 'T00:00:00');
+      const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon, ...
+      const idx = dayOfWeek - 1; // Mon=0, Tue=1, ..., Fri=4
+      if (idx >= 0 && idx <= 4) dayActivity[idx] = true;
+    }
+
+    // Count unique students seen this week
+    const uniqueStudents = new Set();
+    weekSessions.forEach(s => { if (s.student_id) uniqueStudents.add(s.student_id); });
+
+    // Find last activity date for nudge
+    let lastActivityDate = null;
+    for (const dateStr of activityDates) {
+      if (!lastActivityDate || dateStr > lastActivityDate) lastActivityDate = dateStr;
+    }
+    let daysSinceActivity = null;
+    if (lastActivityDate) {
+      daysSinceActivity = Math.floor((todayDate - new Date(lastActivityDate + 'T00:00:00')) / 86400000);
+    } else {
+      daysSinceActivity = 999; // never logged
+    }
+
+    // Current day index (0=Mon, 4=Fri, -1/5+ = weekend)
+    const currentDayIdx = todayDate.getDay() - 1;
+
+    setWeekDigest({
+      dayActivity,
+      sessionCount: weekSessions.length,
+      studentCount: uniqueStudents.size,
+      referralCount: weekReferralsClosed,
+      daysSinceActivity,
+      lastActivityDay: lastActivityDate ? format(new Date(lastActivityDate + 'T00:00:00'), 'EEEE') : null,
+      currentDayIdx,
+      weekMonday,
+    });
 
     setStats({
       sessionsToday: sessionsRes.count ?? 0,
@@ -524,6 +718,23 @@ export default function DashboardPage() {
         <Scorecard counselorId={counselor?.id} counselor={counselor} />
       </div>
 
+      {/* Quick Session Log action card */}
+      <div
+        onClick={() => setShowQuickSession(true)}
+        style={styles.sessionCard}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+          <span style={{ fontSize: 22 }}>{'\uD83D\uDCDD'}</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#134e4a' }}>Just finished a session?</div>
+            <div style={{ fontSize: 13, color: '#5eead4', marginTop: 2 }}>Log it now &mdash; takes 10 seconds.</div>
+          </div>
+        </div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5eead4" strokeWidth="2.5" strokeLinecap="round">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </div>
+
       <div style={styles.grid}>
         {/* ─── Top Left: Today at a Glance ─── */}
         <div style={{ ...styles.card, cursor: 'pointer' }} onClick={() => navigate('/schedule')}>
@@ -608,6 +819,55 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── This Week Digest ─── */}
+      {weekDigest && (
+        <div style={{ ...styles.card, marginTop: 20 }}>
+          <h2 style={{ ...styles.cardTitle, margin: '0 0 14px' }}>This Week</h2>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 0, marginBottom: 16 }}>
+            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day, i) => {
+              const isCurrent = i === weekDigest.currentDayIdx;
+              const isPast = i < weekDigest.currentDayIdx || (weekDigest.currentDayIdx < 0 && true);
+              const hasActivity = weekDigest.dayActivity[i];
+              return (
+                <div key={day} style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  background: isCurrent ? '#f0fdfa' : 'transparent',
+                  border: isCurrent ? '1.5px solid #2A9D8F' : '1.5px solid transparent',
+                }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: isCurrent ? '#2A9D8F' : '#6b7280', marginBottom: 6 }}>{day}</span>
+                  {hasActivity ? (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="11" fill="#22c55e" />
+                      <path d="M7 12.5l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="11" fill="none" stroke={isPast && !isCurrent ? '#d1d5db' : '#e5e7eb'} strokeWidth="2" />
+                    </svg>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ textAlign: 'center', fontSize: 14, color: '#374151', fontWeight: 500 }}>
+            {weekDigest.sessionCount} session{weekDigest.sessionCount !== 1 ? 's' : ''} &middot; {weekDigest.studentCount} student{weekDigest.studentCount !== 1 ? 's' : ''} seen &middot; {weekDigest.referralCount} referral{weekDigest.referralCount !== 1 ? 's' : ''} addressed
+          </div>
+          {weekDigest.daysSinceActivity >= 3 && (
+            <div style={{
+              marginTop: 12, padding: '10px 14px', borderRadius: 8,
+              background: '#fffbeb', border: '1px solid #fde68a',
+              fontSize: 13, color: '#92400e', lineHeight: 1.5,
+            }}>
+              {weekDigest.lastActivityDay
+                ? `You haven't logged any activity since ${weekDigest.lastActivityDay}. Your 80/20 tracking needs daily entries to be accurate.`
+                : 'You haven\'t logged any activity this week. Your 80/20 tracking needs daily entries to be accurate.'}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── Overdue Students Widget ─── */}
       {overdueStudents.length > 0 && (
@@ -722,6 +982,12 @@ export default function DashboardPage() {
         onClose={(saved) => { setShowQuickLog(false); if (saved) loadData(); }}
         counselorId={counselor?.id}
       />
+
+      <QuickSessionModal
+        open={showQuickSession}
+        onClose={(saved) => { setShowQuickSession(false); if (saved) { loadData(); loadMakeupQueue(); } }}
+        counselorId={counselor?.id}
+      />
     </div>
   );
 }
@@ -730,6 +996,18 @@ export default function DashboardPage() {
 const styles = {
   page: { padding: '24px 32px', maxWidth: 1200, margin: '0 auto' },
   heading: { fontSize: 24, fontWeight: 700, color: '#1a2332', margin: '0 0 24px' },
+  sessionCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '14px 20px',
+    marginBottom: 20,
+    background: 'linear-gradient(135deg, #0d9488 0%, #2dd4bf 100%)',
+    borderRadius: 12,
+    cursor: 'pointer',
+    boxShadow: '0 2px 8px rgba(13,148,136,0.25)',
+    transition: 'transform 0.15s, box-shadow 0.15s',
+  },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 },
   card: {
     background: '#fff',

@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { exportLocalBackup } from '../../lib/db';
+import { db, exportLocalBackup } from '../../lib/db';
 
 /* ─── Nav items ─── */
 const NAV_ITEMS = [
@@ -68,6 +68,22 @@ export default function AppShell() {
     } catch { /* ignore */ }
     setBackingUp(false);
   }
+
+  // Sidebar value counter — lifetime totals
+  const [sidebarSessionCount, setSidebarSessionCount] = useState(null);
+  const [sidebarStudentCount, setSidebarStudentCount] = useState(null);
+
+  useEffect(() => {
+    if (!counselor?.id) return;
+    (async () => {
+      const [sessRes, stuRes] = await Promise.all([
+        db.count('sessions', { counselor_id: counselor.id }),
+        db.count('students', { counselor_id: counselor.id, status: 'active' }),
+      ]);
+      setSidebarSessionCount(sessRes.count ?? 0);
+      setSidebarStudentCount(stuRes.count ?? 0);
+    })();
+  }, [counselor?.id]);
 
   const hasBanner = showTrialBanner || isSoftGated || showBackupBanner;
 
@@ -209,6 +225,11 @@ export default function AppShell() {
             </NavLink>
           ))}
         </nav>
+        {sidebarSessionCount !== null && (
+          <div className="sidebar-footer">
+            {sidebarSessionCount} session{sidebarSessionCount !== 1 ? 's' : ''} &middot; {sidebarStudentCount} student{sidebarStudentCount !== 1 ? 's' : ''}
+          </div>
+        )}
       </aside>
 
       {/* Main content — spacer pushes below fixed header-stack */}
@@ -430,6 +451,14 @@ const shellStyles = `
 .sidebar-link svg {
   width: 20px;
   height: 20px;
+  flex-shrink: 0;
+}
+.sidebar-footer {
+  padding: 12px 20px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  text-align: center;
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
   flex-shrink: 0;
 }
 

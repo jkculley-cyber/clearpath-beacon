@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { seedSampleData } from '../lib/seedSampleData';
 
 export default function LocalSetupPage() {
   const { setupLocalProfile, saveLicenseKey } = useAuth();
@@ -11,6 +12,7 @@ export default function LocalSetupPage() {
   const [licenseKey, setLicenseKey] = useState('');
   const [showLicenseField, setShowLicenseField] = useState(false);
   const [licenseError, setLicenseError] = useState('');
+  const [loadSample, setLoadSample] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -32,7 +34,10 @@ export default function LocalSetupPage() {
       }
     }
 
-    await setupLocalProfile({ name, campus, district });
+    const profile = await setupLocalProfile({ name, campus, district });
+    if (loadSample && profile?.id) {
+      try { await seedSampleData(profile.id); } catch { /* non-blocking */ }
+    }
     navigate('/', { replace: true });
   };
 
@@ -82,6 +87,23 @@ export default function LocalSetupPage() {
             onChange={(e) => setDistrict(e.target.value)}
             placeholder="e.g. Lonestar ISD"
           />
+
+          {/* Sample data option */}
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 10, marginTop: 16,
+            cursor: 'pointer', fontSize: 13, color: '#374151',
+          }}>
+            <input
+              type="checkbox"
+              checked={loadSample}
+              onChange={(e) => setLoadSample(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: '#2A9D8F' }}
+            />
+            <span>Load sample data so I can explore Beacon</span>
+          </label>
+          <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4, paddingLeft: 26 }}>
+            Adds 5 students, 2 groups, and 2 weeks of sessions. You can delete it anytime in Settings.
+          </div>
 
           {/* License key — collapsible */}
           {showLicenseField ? (
