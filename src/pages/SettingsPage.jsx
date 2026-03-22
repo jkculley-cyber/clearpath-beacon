@@ -1183,31 +1183,40 @@ export default function SettingsPage() {
         <div className="card" style={{ marginBottom: 20 }}>
           <h2 style={sectionTitle}>Billing</h2>
 
-          {/* Receipt */}
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
-            If your campus allows reimbursement for professional tools, you can generate a receipt below.
-          </p>
-          <div style={{ marginBottom: 14 }}>
-            <label className="form-label">License Type</label>
-            <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, cursor: 'pointer' }}>
-                <input type="radio" name="receiptType" value="annual" checked={receiptType === 'annual'} onChange={() => setReceiptType('annual')} />
-                Annual — $79.00
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, cursor: 'pointer' }}>
-                <input type="radio" name="receiptType" value="monthly" checked={receiptType === 'monthly'} onChange={() => setReceiptType('monthly')} />
-                Monthly — $8.00
-              </label>
-            </div>
-          </div>
-          <button
-            className="btn btn-primary"
-            style={{ fontSize: 13, background: '#2A9D8F', borderColor: '#2A9D8F' }}
-            disabled={receiptGenerating}
-            onClick={handleGenerateReceipt}
-          >
-            {receiptGenerating ? 'Generating...' : 'Generate Receipt'}
-          </button>
+          {/* Receipt — only for verified license holders */}
+          {licenseState.valid && getLicenseKey() ? (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+                If your campus allows reimbursement for professional tools, you can generate a receipt below.
+              </p>
+              <div style={{ marginBottom: 14 }}>
+                <label className="form-label">License Type</label>
+                <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, cursor: 'pointer' }}>
+                    <input type="radio" name="receiptType" value="annual" checked={receiptType === 'annual'} onChange={() => setReceiptType('annual')} />
+                    Annual — $79.00
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, cursor: 'pointer' }}>
+                    <input type="radio" name="receiptType" value="monthly" checked={receiptType === 'monthly'} onChange={() => setReceiptType('monthly')} />
+                    Monthly — $8.00
+                  </label>
+                </div>
+              </div>
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: 13, background: '#2A9D8F', borderColor: '#2A9D8F' }}
+                disabled={receiptGenerating}
+                onClick={handleGenerateReceipt}
+              >
+                {receiptGenerating ? 'Generating...' : 'Generate Receipt'}
+              </button>
+            </>
+          ) : (
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+              Receipts are available after you purchase a license. Enter your license key above to activate, or subscribe at{' '}
+              <a href="https://clearpathedgroup.com/store.html#beacon" target="_blank" rel="noopener" style={{ color: '#2A9D8F', fontWeight: 600 }}>clearpathedgroup.com</a>.
+            </p>
+          )}
 
           {/* Campus/District license interest */}
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border, #e2e8f0)' }}>
