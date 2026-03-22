@@ -21,8 +21,8 @@ export default function ReferralFormPage() {
     setSubmitting(true);
     setError('');
 
-    // In local mode, write to IndexedDB so the counselor can see it.
-    // In cloud mode, write to Supabase so it reaches the counselor's cloud DB.
+    // In local mode, write to IndexedDB with the local counselor's ID.
+    // In cloud mode, write to Supabase (counselor_id assigned by RLS or app logic).
     const referralData = {
       student_name: studentName,
       grade,
@@ -32,6 +32,13 @@ export default function ReferralFormPage() {
       notes: notes || null,
       status: 'open',
     };
+
+    if (isLocalMode()) {
+      // Get the local counselor ID so the referral appears in their queue
+      const localCounselorId = localStorage.getItem('beacon_local_counselor_id');
+      if (localCounselorId) referralData.counselor_id = localCounselorId;
+    }
+
     const { error: err } = isLocalMode()
       ? await db.insert('referrals', referralData)
       : await supabase.from('referrals').insert(referralData);

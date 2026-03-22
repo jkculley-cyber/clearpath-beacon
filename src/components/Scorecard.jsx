@@ -53,7 +53,7 @@ async function computeScorecard(counselorId, counselor) {
     db.select('students', { eq: { counselor_id: counselorId, status: 'active' } }),
     db.select('sessions', { eq: { counselor_id: counselorId }, gte: { session_date: schoolYearStart } }),
     db.select('sessions', { eq: { counselor_id: counselorId }, gte: { session_date: thirtyDaysAgo } }),
-    db.select('referrals', { eq: { status: 'open' } }),
+    db.select('referrals', { eq: { counselor_id: counselorId, status: 'open' } }),
     db.select('referrals', { eq: { counselor_id: counselorId } }),
     db.select('time_entries', { eq: { counselor_id: counselorId }, gte: { entry_date: schoolYearStart } }),
     db.select('communications', { eq: { counselor_id: counselorId }, gte: { contact_date: thirtyDaysAgo } }),

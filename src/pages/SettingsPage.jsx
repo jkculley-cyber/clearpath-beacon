@@ -93,7 +93,7 @@ export default function SettingsPage() {
 
   const loadBlocks = useCallback(async () => {
     if (!counselor?.id) return;
-    const { data } = await db.select('schedule_blocks', {
+    const { data } = await db.select('campus_schedule_blocks', {
       eq: { counselor_id: counselor.id },
       order: { column: 'day_of_week', ascending: true },
     });
@@ -426,9 +426,9 @@ export default function SettingsPage() {
       end_time: blockEnd,
     };
     if (editBlock) {
-      await db.update('schedule_blocks', editBlock.id, row);
+      await db.update('campus_schedule_blocks', editBlock.id, row);
     } else {
-      await db.insert('schedule_blocks', row);
+      await db.insert('campus_schedule_blocks', row);
     }
     setShowBlockForm(false);
     setEditBlock(null);
@@ -449,7 +449,7 @@ export default function SettingsPage() {
 
   const handleDeleteBlock = async (id) => {
     if (!confirm('Delete this schedule block?')) return;
-    await db.del('schedule_blocks', id);
+    await db.del('campus_schedule_blocks', id);
     loadBlocks();
   };
 

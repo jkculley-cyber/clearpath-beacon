@@ -97,7 +97,7 @@ export default function AppShell() {
           </button>
           <div className="topbar-brand">{schoolName}</div>
           <div className="topbar-right">
-            <span className="topbar-counselor">{counselor?.full_name || ''}</span>
+            <span className="topbar-counselor">{counselor?.name || ''}</span>
             <button className="btn-ghost" onClick={handleSignOut}>Sign out</button>
           </div>
         </header>

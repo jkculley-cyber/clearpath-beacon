@@ -295,7 +295,7 @@ export default function DashboardPage() {
 
     const [sessionsRes, referralsRes, studentsRes, groupsRes, timeRes, missedRes] = await Promise.all([
       db.count('sessions', { counselor_id: counselor.id, session_date: today }),
-      db.count('referrals', { status: 'open' }),
+      db.count('referrals', { counselor_id: counselor.id, status: 'open' }),
       db.select('students', { eq: { counselor_id: counselor.id, status: 'active' }, select: 'id, tier' }),
       db.count('groups', { counselor_id: counselor.id, status: 'active' }),
       db.select('time_entries', { eq: { counselor_id: counselor.id }, gte: { entry_date: yearStart }, select: 'domain, duration_minutes' }),
@@ -370,7 +370,7 @@ export default function DashboardPage() {
         select: 'id, entry_date',
       }),
       db.select('referrals', {
-        eq: { status: 'closed' },
+        eq: { counselor_id: counselor.id, status: 'closed' },
         gte: { updated_at: weekMondayStr },
         select: 'id',
       }),
@@ -552,7 +552,7 @@ export default function DashboardPage() {
     const [studentsRes, allSessionsRes, referralsRes, scheduledRes, timeEntriesRes] = await Promise.all([
       db.select('students', { eq: { counselor_id: counselor.id, status: 'active' }, select: 'id, first_name, last_name, name, tier, created_at' }),
       db.select('sessions', { eq: { counselor_id: counselor.id }, order: { column: 'session_date', ascending: false } }),
-      db.select('referrals', { eq: { status: 'open' }, order: { column: 'created_at', ascending: true } }),
+      db.select('referrals', { eq: { counselor_id: counselor.id, status: 'open' }, order: { column: 'created_at', ascending: true } }),
       db.select('sessions', { eq: { counselor_id: counselor.id, session_date: today, status: 'Scheduled' } }),
       db.select('time_entries', { eq: { counselor_id: counselor.id }, gte: { entry_date: yearStart }, select: 'domain, duration_minutes, entry_date' }),
     ]);
@@ -599,8 +599,8 @@ export default function DashboardPage() {
       const [{ data: allGroups }] = await Promise.all([db.select('groups', { eq: { counselor_id: counselor.id } })]);
       const groupMap = Object.fromEntries((allGroups || []).map(g => [g.id, g]));
 
-      // Also load group_students for group sessions
-      const { data: allGroupStudents } = await db.select('group_students');
+      // Also load group_members for group sessions
+      const { data: allGroupStudents } = await db.select('group_members');
       const groupStudentNames = {};
       for (const gs of (allGroupStudents || [])) {
         const st = studentMap[gs.student_id];
@@ -644,7 +644,7 @@ export default function DashboardPage() {
 
     // 4. Students needing progress review (last progress_rating > 30 days ago or never)
     const thirtyDaysAgo = format(subDays(now, 30), 'yyyy-MM-dd');
-    const { data: progressRows } = await db.select('progress_notes', { eq: { counselor_id: counselor.id } });
+    const { data: progressRows } = await db.select('progress_ratings', { eq: { counselor_id: counselor.id } });
     const lastProgressByStudent = {};
     for (const p of (progressRows || [])) {
       if (!p.student_id) continue;
