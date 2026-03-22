@@ -387,6 +387,9 @@ export default function SettingsPage() {
       doc.text('Clear Path Education Group, LLC · clearpathedgroup.com', 105, pageHeight - 16, { align: 'center' });
 
       doc.save(`Beacon_Receipt_${today.toISOString().slice(0, 10)}.pdf`);
+    } catch (e) {
+      console.error('Receipt PDF error:', e);
+      alert('Receipt generation failed: ' + (e.message || 'Unknown error'));
     } finally {
       setReceiptGenerating(false);
     }

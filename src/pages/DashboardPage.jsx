@@ -693,6 +693,7 @@ export default function DashboardPage() {
   /* ─── "My Year" Impact Summary PDF ─── */
   const generateImpactPDF = async () => {
     if (!counselor?.id) return;
+    try {
 
     const yearStart = counselor.school_year_start
       || (new Date().getMonth() >= 7 ? `${new Date().getFullYear()}-08-01` : `${new Date().getFullYear() - 1}-08-01`);
@@ -841,6 +842,10 @@ export default function DashboardPage() {
     );
 
     doc.save(`Beacon_Impact_Summary_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    } catch (e) {
+      console.error('Impact PDF error:', e);
+      alert('PDF generation failed: ' + (e.message || 'Unknown error'));
+    }
   };
 
   return (
