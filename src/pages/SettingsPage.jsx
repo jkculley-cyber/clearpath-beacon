@@ -308,24 +308,37 @@ export default function SettingsPage() {
       doc.setFont('helvetica', 'normal');
       doc.text('Clear Path Education Group, LLC', 14, 32);
 
+      // License dates
+      const purchaseDate = today;
+      const endDate = new Date(today);
+      if (isAnnual) {
+        endDate.setFullYear(endDate.getFullYear() + 1);
+      } else {
+        endDate.setMonth(endDate.getMonth() + 1);
+      }
+      const purchaseDateStr = purchaseDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const endDateStr = endDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
       // Invoice details
       doc.setTextColor(30, 30, 30);
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.text('Invoice #:', 14, 56);
-      doc.text('Date:', 14, 64);
+      doc.text('Purchase Date:', 14, 64);
+      doc.text('License Expires:', 14, 72);
       doc.setFont('helvetica', 'normal');
-      doc.text(invoiceNum, 55, 56);
-      doc.text(dateStr, 55, 64);
+      doc.text(invoiceNum, 65, 56);
+      doc.text(purchaseDateStr, 65, 64);
+      doc.text(endDateStr, 65, 72);
 
       // Bill To
       doc.setFont('helvetica', 'bold');
-      doc.text('Bill To:', 14, 80);
+      doc.text('Bill To:', 14, 88);
       doc.setFont('helvetica', 'normal');
       const cName = name || 'Counselor';
       const cCampus = campus || '';
       const cDistrict = district || '';
-      let billToY = 88;
+      let billToY = 96;
       doc.text(cName, 14, billToY);
       if (cCampus) { billToY += 7; doc.text(cCampus, 14, billToY); }
       if (cDistrict) { billToY += 7; doc.text(cDistrict, 14, billToY); }
