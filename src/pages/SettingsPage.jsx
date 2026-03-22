@@ -74,8 +74,8 @@ export default function SettingsPage() {
   const [impactCopied, setImpactCopied] = useState(false);
   const [impactGenerating, setImpactGenerating] = useState(false);
 
-  // Billing / Receipt
-  const [receiptType, setReceiptType] = useState('annual'); // 'annual' | 'monthly'
+  // Billing / Receipt — annual only
+  const receiptType = 'annual';
   const [receiptGenerating, setReceiptGenerating] = useState(false);
 
   useEffect(() => {
@@ -1189,26 +1189,13 @@ export default function SettingsPage() {
               <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
                 If your campus allows reimbursement for professional tools, you can generate a receipt below.
               </p>
-              <div style={{ marginBottom: 14 }}>
-                <label className="form-label">License Type</label>
-                <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, cursor: 'pointer' }}>
-                    <input type="radio" name="receiptType" value="annual" checked={receiptType === 'annual'} onChange={() => setReceiptType('annual')} />
-                    Annual — $79.00
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, cursor: 'pointer' }}>
-                    <input type="radio" name="receiptType" value="monthly" checked={receiptType === 'monthly'} onChange={() => setReceiptType('monthly')} />
-                    Monthly — $8.00
-                  </label>
-                </div>
-              </div>
               <button
                 className="btn btn-primary"
                 style={{ fontSize: 13, background: '#2A9D8F', borderColor: '#2A9D8F' }}
                 disabled={receiptGenerating}
                 onClick={handleGenerateReceipt}
               >
-                {receiptGenerating ? 'Generating...' : 'Generate Receipt'}
+                {receiptGenerating ? 'Generating...' : 'Generate Annual Receipt ($79)'}
               </button>
             </>
           ) : (
