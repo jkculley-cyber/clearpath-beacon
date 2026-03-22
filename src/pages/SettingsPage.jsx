@@ -1166,11 +1166,13 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Billing — Reimbursement Receipt */}
+        {/* Billing — Receipt + Campus/District Interest */}
         <div className="card" style={{ marginBottom: 20 }}>
           <h2 style={sectionTitle}>Billing</h2>
+
+          {/* Receipt */}
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
-            Generate a receipt for professional development reimbursement.
+            If your campus allows reimbursement for professional tools, you can generate a receipt below.
           </p>
           <div style={{ marginBottom: 14 }}>
             <label className="form-label">License Type</label>
@@ -1191,8 +1193,25 @@ export default function SettingsPage() {
             disabled={receiptGenerating}
             onClick={handleGenerateReceipt}
           >
-            {receiptGenerating ? 'Generating...' : 'Generate Receipt for Reimbursement'}
+            {receiptGenerating ? 'Generating...' : 'Generate Receipt'}
           </button>
+
+          {/* Campus/District license interest */}
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border, #e2e8f0)' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
+              Ready to use Beacon across your campus or district?
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+              We offer campus and district licenses with volume pricing, cloud sync, and admin dashboards. Let us know you're interested and we'll set up a conversation.
+            </p>
+            <a
+              href={`mailto:support@clearpathedgroup.com?subject=${encodeURIComponent('Interest in Beacon Campus/District License')}&body=${encodeURIComponent(`Hi Clear Path team,\n\nI've been using Beacon as an individual counselor and I'm interested in learning about campus or district licensing options.\n\nName: ${name || ''}\nSchool: ${campus || ''}\nDistrict: ${district || ''}\n\nI'd love to discuss:\n- [ ] Campus license for our school\n- [ ] District license for multiple campuses\n\nPlease reach out at your convenience.\n\nThank you!`)}`}
+              className="btn btn-outline"
+              style={{ fontSize: 13, textDecoration: 'none', display: 'inline-flex' }}
+            >
+              Contact Us About Campus/District Licensing →
+            </a>
+          </div>
         </div>
 
         {/* Share Beacon */}
