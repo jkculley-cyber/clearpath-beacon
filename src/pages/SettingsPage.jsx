@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { db, exportLocalBackup, importLocalBackup } from '../lib/db';
+import { hasSampleData, clearSampleData } from '../lib/seedSampleData';
 
 const GRADE_PROMOTIONS = [
   { from: 'K', to: '1' },
@@ -652,6 +653,26 @@ export default function SettingsPage() {
                   Restore from Backup
                 </button>
               </div>
+              {hasSampleData() && (
+                <div style={{ marginBottom: 12, padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 6 }}>Sample Data Loaded</div>
+                  <p style={{ fontSize: 12, color: '#92400e', marginBottom: 8, lineHeight: 1.5 }}>
+                    You have demo data from setup. Clear it to start fresh with your own students and sessions.
+                  </p>
+                  <button
+                    className="btn btn-outline"
+                    style={{ fontSize: 12, color: '#92400e', borderColor: '#f59e0b' }}
+                    onClick={async () => {
+                      if (!confirm('Clear all sample students, groups, sessions, time entries, and referrals? Your profile, lessons, and templates will be kept.')) return;
+                      await clearSampleData(counselor.id);
+                      window.location.reload();
+                    }}
+                  >
+                    Clear Sample Data & Start Fresh
+                  </button>
+                </div>
+              )}
+
               <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 12 }}>
                 <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>
                   Have a district data agreement? Switch to cloud mode for cross-device sync and AI features.

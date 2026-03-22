@@ -97,3 +97,26 @@ export async function seedSampleData(counselorId) {
 export function hasSampleData() {
   return localStorage.getItem('beacon_sample_data') === 'true';
 }
+
+export async function clearSampleData(counselorId) {
+  // Delete all data for this counselor except profile, lessons, and templates
+  const tables = ['students', 'groups', 'group_members', 'sessions', 'attendance', 'progress_ratings', 'referrals', 'communications', 'time_entries', 'counselor_notes'];
+  for (const table of tables) {
+    const { data } = await db.select(table, { eq: { counselor_id: counselorId } });
+    if (data) {
+      for (const row of data) {
+        await db.del(table, row.id);
+      }
+    }
+  }
+  // Also clear group_members and attendance that reference by other FKs
+  for (const table of ['group_members', 'attendance', 'progress_ratings']) {
+    const { data } = await db.select(table);
+    if (data) {
+      for (const row of data) {
+        await db.del(table, row.id);
+      }
+    }
+  }
+  localStorage.removeItem('beacon_sample_data');
+}
