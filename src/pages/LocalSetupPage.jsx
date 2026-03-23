@@ -40,12 +40,15 @@ export default function LocalSetupPage() {
     }
 
     // Notify Kim — fire-and-forget, non-blocking, no student data sent
+    const FLAGGED_DISTRICTS = ['spring isd', 'spring']
+    const districtLower = district.trim().toLowerCase()
+    const isFlagged = FLAGGED_DISTRICTS.some(d => districtLower.includes(d))
     try {
       fetch('https://formspree.io/f/xpqjngpp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
-          source: 'beacon_trial_started',
+          source: isFlagged ? 'FLAGGED_DISTRICT_beacon_trial' : 'beacon_trial_started',
           product: 'Beacon',
           name: name.trim(),
           school_name: campus.trim(),
@@ -53,8 +56,11 @@ export default function LocalSetupPage() {
           has_license: !!licenseKey.trim(),
           loaded_sample: loadSample,
           timestamp: new Date().toISOString(),
+          _subject: isFlagged
+            ? `ACTION REQUIRED: Spring ISD user signed up for Beacon — ${name.trim()}`
+            : `New Beacon trial: ${name.trim()} — ${campus.trim() || district.trim()}`,
         }),
-      }).catch(() => {}) // silently ignore failures
+      }).catch(() => {})
     } catch { /* non-blocking */ }
     navigate('/', { replace: true });
   };
