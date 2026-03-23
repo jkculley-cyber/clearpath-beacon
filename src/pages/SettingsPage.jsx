@@ -439,8 +439,15 @@ export default function SettingsPage() {
     setTimeout(() => setSaveMsg(''), 3000);
   };
 
+  const [blockError, setBlockError] = useState('');
+
   const handleSaveBlock = async () => {
+    setBlockError('');
     if (!blockName || !blockStart || !blockEnd) return;
+    if (blockEnd <= blockStart) {
+      setBlockError('End time must be after start time.');
+      return;
+    }
     const row = {
       counselor_id: counselor.id,
       block_name: blockName,
@@ -448,16 +455,22 @@ export default function SettingsPage() {
       start_time: blockStart,
       end_time: blockEnd,
     };
+    let err;
     if (editBlock) {
-      await db.update('campus_schedule_blocks', editBlock.id, row);
+      ({ error: err } = await db.update('campus_schedule_blocks', editBlock.id, row));
     } else {
-      await db.insert('campus_schedule_blocks', row);
+      ({ error: err } = await db.insert('campus_schedule_blocks', row));
+    }
+    if (err) {
+      setBlockError(err.message || String(err));
+      return;
     }
     setShowBlockForm(false);
     setEditBlock(null);
     setBlockName('');
     setBlockStart('');
     setBlockEnd('');
+    setBlockError('');
     loadBlocks();
   };
 
@@ -669,8 +682,13 @@ export default function SettingsPage() {
                   <input className="form-input" type="time" value={blockEnd} onChange={(e) => setBlockEnd(e.target.value)} />
                 </div>
               </div>
+              {blockError && (
+                <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 10 }}>
+                  {blockError}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-outline" onClick={() => { setShowBlockForm(false); setEditBlock(null); }} style={{ fontSize: 13 }}>Cancel</button>
+                <button className="btn btn-outline" onClick={() => { setShowBlockForm(false); setEditBlock(null); setBlockError(''); }} style={{ fontSize: 13 }}>Cancel</button>
                 <button className="btn btn-primary" onClick={handleSaveBlock} style={{ fontSize: 13 }}>
                   {editBlock ? 'Update' : 'Add'}
                 </button>

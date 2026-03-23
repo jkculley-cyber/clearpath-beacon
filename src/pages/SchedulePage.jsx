@@ -272,7 +272,12 @@ function AddSessionModal({ open, onClose, counselorId }) {
       record.student_id = null;
       record.group_id = groupId || null;
     }
-    await db.insert('sessions', record);
+    const { error: err } = await db.insert('sessions', record);
+    if (err) {
+      alert(err.message || String(err));
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     // Reset form
     setSessionType('individual');

@@ -231,6 +231,7 @@ function EntryModal({ open, onClose, counselorId, editEntry }) {
   const [duration, setDuration] = useState(editEntry?.duration_minutes?.toString() || '');
   const [notes, setNotes] = useState(editEntry?.notes || '');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (editEntry) {
@@ -252,6 +253,7 @@ function EntryModal({ open, onClose, counselorId, editEntry }) {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    setError('');
     setSaving(true);
     const row = {
       counselor_id: counselorId,
@@ -261,10 +263,16 @@ function EntryModal({ open, onClose, counselorId, editEntry }) {
       duration_minutes: parseInt(duration, 10),
       notes: notes || null,
     };
+    let err;
     if (editEntry) {
-      await db.update('time_entries', editEntry.id, row);
+      ({ error: err } = await db.update('time_entries', editEntry.id, row));
     } else {
-      await db.insert('time_entries', row);
+      ({ error: err } = await db.insert('time_entries', row));
+    }
+    if (err) {
+      setError(err.message || String(err));
+      setSaving(false);
+      return;
     }
     setSaving(false);
     onClose(true);
@@ -274,6 +282,11 @@ function EntryModal({ open, onClose, counselorId, editEntry }) {
     <div style={overlay} onClick={() => onClose(false)}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={modalTitle}>{editEntry ? 'Edit Entry' : 'New Time Entry'}</h3>
+        {error && (
+          <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSave}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
             <div>

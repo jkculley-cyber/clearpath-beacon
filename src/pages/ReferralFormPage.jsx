@@ -37,6 +37,11 @@ export default function ReferralFormPage() {
       // Get the local counselor ID so the referral appears in their queue
       const localCounselorId = localStorage.getItem('beacon_local_counselor_id');
       if (localCounselorId) referralData.counselor_id = localCounselorId;
+    } else {
+      // In cloud mode, get counselor_id from URL query parameter (?c=UUID)
+      const params = new URLSearchParams(window.location.search);
+      const counselorIdParam = params.get('c');
+      if (counselorIdParam) referralData.counselor_id = counselorIdParam;
     }
 
     const { error: err } = isLocalMode()

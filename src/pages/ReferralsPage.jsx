@@ -10,9 +10,13 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [matchedStudent, setMatchedStudent] = useState(null);
 
   useEffect(() => {
     if (open) {
+      setError('');
+      setMatchedStudent(null);
       db.select('groups', { eq: { counselor_id: counselorId, status: 'active' } }).then(({ data }) => setGroups(data || []));
     }
   }, [open, counselorId]);
@@ -21,24 +25,51 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
 
   const handleAccept = async () => {
     setSaving(true);
+    setError('');
 
-    // Create student record
-    const nameParts = (referral.student_name || '').split(' ');
-    const { data: student } = await db.insert('students', {
-      counselor_id: counselorId,
-      name: referral.student_name,
-      first_name: nameParts[0] || referral.student_name,
-      last_name: nameParts.slice(1).join(' ') || '',
-      grade: referral.grade,
-      teacher: referral.teacher_name || referral.submitted_by,
-      referral_source: referral.concern_type,
-      tier: referral.urgency === 'Urgent' ? 3 : referral.urgency === 'Soon' ? 2 : 1,
-      status: 'active',
+    // Dedup: check if a student with matching name already exists for this counselor
+    let student = null;
+    const normalizedName = (referral.student_name || '').trim().toLowerCase();
+    const { data: existingStudents } = await db.select('students', {
+      eq: { counselor_id: counselorId },
     });
+    const match = (existingStudents || []).find(
+      (s) => (s.name || '').trim().toLowerCase() === normalizedName
+    );
+
+    if (match) {
+      student = match;
+      setMatchedStudent(match);
+    } else {
+      // Create student record
+      const nameParts = (referral.student_name || '').split(' ');
+      const { data: newStudent, error: insertErr } = await db.insert('students', {
+        counselor_id: counselorId,
+        name: referral.student_name,
+        first_name: nameParts[0] || referral.student_name,
+        last_name: nameParts.slice(1).join(' ') || '',
+        grade: referral.grade,
+        teacher: referral.teacher_name || referral.submitted_by,
+        referral_source: referral.concern_type,
+        tier: referral.urgency === 'Urgent' ? 3 : referral.urgency === 'Soon' ? 2 : 1,
+        status: 'active',
+      });
+      if (insertErr) {
+        setError(insertErr.message || String(insertErr));
+        setSaving(false);
+        return;
+      }
+      student = newStudent;
+    }
 
     // Link to group if selected
     if (mode === 'group' && selectedGroup && student) {
-      await db.insert('group_members', { group_id: selectedGroup, student_id: student.id });
+      const { error: gmErr } = await db.insert('group_members', { group_id: selectedGroup, student_id: student.id });
+      if (gmErr) {
+        setError(gmErr.message || String(gmErr));
+        setSaving(false);
+        return;
+      }
     }
 
     // Update referral status
@@ -52,7 +83,7 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
     const teacherName = referral.teacher_name || referral.submitted_by || 'Unknown';
     const assignmentType = mode === 'group' ? 'group counseling' : 'individual services';
     if (student) {
-      await db.insert('communications', {
+      const { error: commErr } = await db.insert('communications', {
         counselor_id: counselorId,
         student_id: student.id,
         contact_type: 'Written notice',
@@ -60,6 +91,11 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
         duration_minutes: 5,
         contact_date: new Date().toISOString().slice(0, 10),
       });
+      if (commErr) {
+        setError(commErr.message || String(commErr));
+        setSaving(false);
+        return;
+      }
     }
 
     setSaving(false);
@@ -68,6 +104,7 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
       onAccepted({
         studentName: referral.student_name,
         teacherName,
+        matched: !!match,
       });
     }
     onClose(true);
@@ -80,6 +117,18 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
         <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>
           Student: <strong>{referral.student_name}</strong> &middot; {referral.concern_type}
         </p>
+
+        {error && (
+          <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
+
+        {matchedStudent && (
+          <div style={{ background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>
+            Linked to existing student: <strong>{matchedStudent.name}</strong> (Grade {matchedStudent.grade || 'N/A'})
+          </div>
+        )}
 
         <label className="form-label">Assign To</label>
         <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
@@ -265,12 +314,14 @@ function AddReferralModal({ open, onClose, counselorId }) {
   const [urgency, setUrgency] = useState('Routine');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   if (!open) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    setError('');
     const record = {
       counselor_id: counselorId,
       student_name: studentName,
@@ -282,7 +333,12 @@ function AddReferralModal({ open, onClose, counselorId }) {
       submitted_by: teacherName,
       status: 'open',
     };
-    await db.insert('referrals', record);
+    const { error: err } = await db.insert('referrals', record);
+    if (err) {
+      setError(err.message || String(err));
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     onClose(true);
   };
@@ -291,6 +347,11 @@ function AddReferralModal({ open, onClose, counselorId }) {
     <div style={overlay} onClick={() => onClose(false)}>
       <div style={{ ...modal, width: 480 }} onClick={(e) => e.stopPropagation()}>
         <h3 style={modalTitle}>Add Referral</h3>
+        {error && (
+          <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSubmit}>
           <label className="form-label">Student Name *</label>
           <input className="form-input" required value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="First and last name" style={{ marginBottom: 10 }} />
@@ -339,11 +400,13 @@ function AddReferralModal({ open, onClose, counselorId }) {
 }
 
 // --- Share Referral Form Modal ---
-function ShareReferralModal({ open, onClose }) {
+function ShareReferralModal({ open, onClose, counselorId }) {
   const [copied, setCopied] = useState(false);
   if (!open) return null;
 
-  const referralUrl = `${window.location.origin}/referral-form`;
+  const referralUrl = counselorId
+    ? `${window.location.origin}/referral-form?c=${counselorId}`
+    : `${window.location.origin}/referral-form`;
 
   const handleCopy = async () => {
     try {
@@ -601,6 +664,7 @@ export default function ReferralsPage() {
       <ShareReferralModal
         open={showShare}
         onClose={() => setShowShare(false)}
+        counselorId={counselor?.id}
       />
     </div>
   );

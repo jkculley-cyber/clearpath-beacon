@@ -53,13 +53,15 @@ function LogSessionModal({ open, onClose, student, counselorId }) {
   const [duration, setDuration] = useState('30');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   if (!open) return null;
 
   const handleSave = async (e) => {
     e.preventDefault();
+    setError('');
     setSaving(true);
-    const { data: sess } = await db.insert('sessions', {
+    const { data: sess, error: sessErr } = await db.insert('sessions', {
       counselor_id: counselorId,
       student_id: student.id,
       session_date: date,
@@ -68,6 +70,12 @@ function LogSessionModal({ open, onClose, student, counselorId }) {
       session_type: 'individual',
       status: 'Completed',
     });
+
+    if (sessErr) {
+      setError(sessErr.message || String(sessErr));
+      setSaving(false);
+      return;
+    }
 
     if (sess) {
       await autoLogTime({
@@ -87,6 +95,11 @@ function LogSessionModal({ open, onClose, student, counselorId }) {
     <div style={overlay} onClick={() => onClose(false)}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={modalTitle}>Log Individual Session</h3>
+        {error && (
+          <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSave}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 12 }}>
             <div>
@@ -148,13 +161,15 @@ function LogContactModal({ open, onClose, student, counselorId }) {
   const [duration, setDuration] = useState('15');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   if (!open) return null;
 
   const handleSave = async (e) => {
     e.preventDefault();
+    setError('');
     setSaving(true);
-    await db.insert('communications', {
+    const { error: err } = await db.insert('communications', {
       counselor_id: counselorId,
       student_id: student.id,
       contact_type: contactType,
@@ -162,6 +177,11 @@ function LogContactModal({ open, onClose, student, counselorId }) {
       notes,
       contact_date: new Date().toISOString().slice(0, 10),
     });
+    if (err) {
+      setError(err.message || String(err));
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     onClose(true);
   };
@@ -170,6 +190,11 @@ function LogContactModal({ open, onClose, student, counselorId }) {
     <div style={overlay} onClick={() => onClose(false)}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={modalTitle}>Log Contact</h3>
+        {error && (
+          <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSave}>
           <label className="form-label">Contact Type</label>
           <select
@@ -226,6 +251,7 @@ function LogContactModal({ open, onClose, student, counselorId }) {
 function NoteModal({ open, onClose, student, counselorId, editNote }) {
   const [text, setText] = useState(editNote?.note_text || '');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     setText(editNote?.note_text || '');
@@ -235,15 +261,22 @@ function NoteModal({ open, onClose, student, counselorId, editNote }) {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    setError('');
     setSaving(true);
+    let err;
     if (editNote) {
-      await db.update('counselor_notes', editNote.id, { note_text: text });
+      ({ error: err } = await db.update('counselor_notes', editNote.id, { note_text: text }));
     } else {
-      await db.insert('counselor_notes', {
+      ({ error: err } = await db.insert('counselor_notes', {
         counselor_id: counselorId,
         student_id: student.id,
         note_text: text,
-      });
+      }));
+    }
+    if (err) {
+      setError(err.message || String(err));
+      setSaving(false);
+      return;
     }
     setSaving(false);
     onClose(true);
@@ -253,6 +286,11 @@ function NoteModal({ open, onClose, student, counselorId, editNote }) {
     <div style={overlay} onClick={() => onClose(false)}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={modalTitle}>{editNote ? 'Edit Note' : 'Add Note'}</h3>
+        {error && (
+          <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSave}>
           <textarea
             className="form-input"
@@ -427,13 +465,18 @@ function RateProgressModal({ open, onClose, student, counselorId, groups }) {
     e.preventDefault();
     if (!sessionId) return;
     setSaving(true);
-    await db.insert('progress_ratings', {
+    const { error: err } = await db.insert('progress_ratings', {
       session_id: sessionId,
       student_id: student.id,
       objective_index: parseInt(objectiveIndex, 10),
       rating: parseInt(rating, 10),
       notes: ratingNotes || null,
     });
+    if (err) {
+      alert(err.message || String(err));
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     onClose(true);
   };

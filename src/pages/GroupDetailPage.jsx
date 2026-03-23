@@ -47,6 +47,7 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
   const [attendance, setAttendance] = useState({});
   const [coveredObjs, setCoveredObjs] = useState({});
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (open && members.length) {
@@ -68,21 +69,33 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
 
   const handleSave = async (e) => {
     e.preventDefault();
+    setError('');
+    const dur = parseInt(duration, 10);
+    if (isNaN(dur) || dur <= 0) {
+      setError('Duration must be a positive number.');
+      return;
+    }
     setSaving(true);
 
     const coveredArr = Object.entries(coveredObjs)
       .filter(([, v]) => v)
       .map(([idx]) => parseInt(idx, 10));
 
-    const { data: sess } = await db.insert('sessions', {
+    const { data: sess, error: sessErr } = await db.insert('sessions', {
         counselor_id: counselorId,
         group_id: group.id,
         session_date: date,
-        duration_minutes: parseInt(duration, 10),
+        duration_minutes: dur,
         objectives_covered: coveredArr.length ? coveredArr : null,
         notes,
         status,
       });
+
+    if (sessErr) {
+      setError(sessErr.message || String(sessErr));
+      setSaving(false);
+      return;
+    }
 
     if (sess) {
       // Save attendance to `attendance` table
@@ -117,6 +130,11 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
     <div style={overlay} onClick={() => onClose(false)}>
       <div style={{ ...modal, width: 520 }} onClick={(e) => e.stopPropagation()}>
         <h3 style={modalTitle}>Log Session</h3>
+        {error && (
+          <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSave}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 12 }}>
             <div>
@@ -209,8 +227,12 @@ function AddMemberModal({ open, onClose, groupId, existingIds }) {
 
   const handleAdd = async (studentId) => {
     setAdding(studentId);
-    await db.insert('group_members', { group_id: groupId, student_id: studentId });
+    const { error: err } = await db.insert('group_members', { group_id: groupId, student_id: studentId });
     setAdding(null);
+    if (err) {
+      alert(err.message || String(err));
+      return;
+    }
     onClose(true);
   };
 

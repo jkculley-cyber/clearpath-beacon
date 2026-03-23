@@ -105,13 +105,18 @@ function QuickLogModal({ open, onClose, counselorId }) {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
-    await db.insert('time_entries', {
+    const { error: err } = await db.insert('time_entries', {
       counselor_id: counselorId,
       entry_date: new Date().toISOString().slice(0, 10),
       domain,
       activity_description: activity,
       duration_minutes: parseInt(duration, 10),
     });
+    if (err) {
+      alert(err.message || String(err));
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     onClose(true);
   };
