@@ -319,7 +319,10 @@ export default function TimeTrackerPage() {
   const loadAll = useCallback(async () => {
     if (!counselor?.id) return;
     setLoading(true);
-    const yearStart = `${new Date().getFullYear()}-01-01`;
+    // Use school year start (Aug 1 default), not calendar year
+    const syStart = counselor.school_year_start
+      || (new Date().getMonth() >= 7 ? `${new Date().getFullYear()}-08-01` : `${new Date().getFullYear() - 1}-08-01`);
+    const yearStart = syStart;
     const ws = format(startOfWeek(new Date(selectedDate), { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const we = format(endOfWeek(new Date(selectedDate), { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const ms = format(startOfMonth(new Date(selectedDate)), 'yyyy-MM-dd');
@@ -387,7 +390,7 @@ export default function TimeTrackerPage() {
     const me = format(endOfMonth(new Date(selectedDate)), 'yyyy-MM-dd');
     const entries = await fetchEntriesRange(counselor.id, ms, me);
     const monthLabel = new Date(selectedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-    generateRangePDF(entries, counselor.full_name || 'Counselor', monthLabel, `time-report-${ms.slice(0, 7)}.pdf`);
+    generateRangePDF(entries, counselor.name || counselor.full_name || 'Counselor', monthLabel, `time-report-${ms.slice(0, 7)}.pdf`);
   };
 
   const handleExportAnnualPDF = async () => {
@@ -395,7 +398,7 @@ export default function TimeTrackerPage() {
     const end = counselor.school_year_end || `${new Date().getFullYear() + 1}-07-31`;
     const entries = await fetchEntriesRange(counselor.id, start, end);
     const yearLabel = `School Year ${start.slice(0, 4)}\u2013${end.slice(0, 4)}`;
-    generateAnnualPDF(entries, counselor.full_name || 'Counselor', yearLabel, `time-report-annual-${start.slice(0, 4)}.pdf`);
+    generateAnnualPDF(entries, counselor.name || counselor.full_name || 'Counselor', yearLabel, `time-report-annual-${start.slice(0, 4)}.pdf`);
   };
 
   const handleExportCSV = async () => {
@@ -420,7 +423,7 @@ export default function TimeTrackerPage() {
   const handleCustomRangeExport = async (from, to) => {
     const entries = await fetchEntriesRange(counselor.id, from, to);
     const rangeLabel = `${from} to ${to}`;
-    generateRangePDF(entries, counselor.full_name || 'Counselor', rangeLabel, `time-report-${from}-to-${to}.pdf`);
+    generateRangePDF(entries, counselor.name || counselor.full_name || 'Counselor', rangeLabel, `time-report-${from}-to-${to}.pdf`);
   };
 
   const dayTotal = dayEntries.reduce((s, e) => s + (e.duration_minutes || 0), 0);

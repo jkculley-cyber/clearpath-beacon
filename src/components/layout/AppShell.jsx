@@ -35,7 +35,7 @@ export default function AppShell() {
     counselor?.subscription_status !== 'active' &&
     counselor?.subscription_status !== 'extended';
 
-  const schoolName = counselor?.school_name || 'Beacon';
+  const schoolName = counselor?.school_name || counselor?.campus || 'Beacon';
 
   // Backup reminder — tiered urgency, dismissible until next day
   const [backupDismissed, setBackupDismissed] = useState(() => {

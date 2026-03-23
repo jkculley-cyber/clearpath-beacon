@@ -199,6 +199,16 @@ export const db = {
   async update(table, id, changes) {
     try {
       if (isLocalMode()) {
+        // Soft gate: block edits when license is expired (exempt: counselor profile + license tables)
+        if (!LICENSE_EXEMPT_TABLES.includes(table) && table !== 'counselor') {
+          if (getLicenseKey()) {
+            const lic = await checkLicense();
+            if (lic.softGated) return { data: null, error: new Error('License expired — renew to edit records.') };
+          } else {
+            const trialOk = await isTrialActive();
+            if (!trialOk) return { data: null, error: new Error('Your free trial has ended. Enter a license key in Settings to continue.') };
+          }
+        }
         const row = await local.update(table, id, changes);
         return { data: row, error: null };
       }
@@ -214,6 +224,15 @@ export const db = {
   async del(table, id) {
     try {
       if (isLocalMode()) {
+        if (!LICENSE_EXEMPT_TABLES.includes(table)) {
+          if (getLicenseKey()) {
+            const lic = await checkLicense();
+            if (lic.softGated) return { error: new Error('License expired — renew to delete records.') };
+          } else {
+            const trialOk = await isTrialActive();
+            if (!trialOk) return { error: new Error('Your free trial has ended. Enter a license key in Settings to continue.') };
+          }
+        }
         await local.del(table, id);
         return { error: null };
       }

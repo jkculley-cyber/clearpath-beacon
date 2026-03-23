@@ -17,7 +17,14 @@ const GRADE_PROMOTIONS = [
   { from: '5', to: 'Graduated' },
 ];
 
-const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const DAYS_OF_WEEK = [
+  { label: 'Monday', value: 1 },
+  { label: 'Tuesday', value: 2 },
+  { label: 'Wednesday', value: 3 },
+  { label: 'Thursday', value: 4 },
+  { label: 'Friday', value: 5 },
+];
+const DAY_LABEL = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday' };
 
 export default function SettingsPage() {
   const { counselor, refreshCounselor, isLocalMode, switchStorageMode, licenseState, saveLicenseKey, getLicenseKey } = useAuth();
@@ -38,7 +45,7 @@ export default function SettingsPage() {
   const [showBlockForm, setShowBlockForm] = useState(false);
   const [editBlock, setEditBlock] = useState(null);
   const [blockName, setBlockName] = useState('');
-  const [blockDay, setBlockDay] = useState('Monday');
+  const [blockDay, setBlockDay] = useState(1);
   const [blockStart, setBlockStart] = useState('');
   const [blockEnd, setBlockEnd] = useState('');
 
@@ -113,7 +120,7 @@ export default function SettingsPage() {
     (async () => {
       const { data: entries } = await db.select('time_entries', { eq: { counselor_id: counselor.id } });
       if (!entries || entries.length === 0) return;
-      const direct = entries.filter(e => e.category === 'direct' || e.service_type === 'direct').reduce((s, e) => s + (e.duration_minutes || 0), 0);
+      const direct = entries.filter(e => ['guidance', 'planning', 'responsive'].includes(e.domain)).reduce((s, e) => s + (e.duration_minutes || 0), 0);
       const total = entries.reduce((s, e) => s + (e.duration_minutes || 0), 0);
       if (total > 0) setCompliancePct(Math.round((direct / total) * 100));
     })();
@@ -166,7 +173,7 @@ export default function SettingsPage() {
       const tier2 = students.filter(s => s.tier === 2).length;
       const tier3 = students.filter(s => s.tier === 3).length;
 
-      const direct = entries.filter(e => e.category === 'direct' || e.service_type === 'direct').reduce((s, e) => s + (e.duration_minutes || 0), 0);
+      const direct = entries.filter(e => ['guidance', 'planning', 'responsive'].includes(e.domain)).reduce((s, e) => s + (e.duration_minutes || 0), 0);
       const total = entries.reduce((s, e) => s + (e.duration_minutes || 0), 0);
       const sb179 = total > 0 ? Math.round((direct / total) * 100) : 0;
 
@@ -411,7 +418,7 @@ export default function SettingsPage() {
   const handleSaveProfile = async () => {
     setSaving(true);
     setSaveMsg('');
-    const { error } = await db.update('counselors', counselor.id, {
+    const { error } = await db.update('counselor', counselor.id, {
       name,
       campus,
       district,
@@ -627,7 +634,7 @@ export default function SettingsPage() {
                   <div>
                     <span style={{ fontWeight: 600, color: '#1a2332', fontSize: 14 }}>{b.block_name}</span>
                     <span style={{ marginLeft: 12, fontSize: 13, color: '#6b7280' }}>
-                      {b.day_of_week} {b.start_time?.slice(0, 5)} - {b.end_time?.slice(0, 5)}
+                      {DAY_LABEL[b.day_of_week] || b.day_of_week} {b.start_time?.slice(0, 5)} - {b.end_time?.slice(0, 5)}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -649,8 +656,8 @@ export default function SettingsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginBottom: 10 }}>
                 <div>
                   <label className="form-label">Day</label>
-                  <select className="form-input" value={blockDay} onChange={(e) => setBlockDay(e.target.value)}>
-                    {DAYS_OF_WEEK.map((d) => <option key={d} value={d}>{d}</option>)}
+                  <select className="form-input" value={blockDay} onChange={(e) => setBlockDay(parseInt(e.target.value))}>
+                    {DAYS_OF_WEEK.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
                   </select>
                 </div>
                 <div>

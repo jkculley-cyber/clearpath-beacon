@@ -634,9 +634,9 @@ export default function DashboardPage() {
     const openReferrals = (referralsRes.data || []).map(r => {
       const createdDate = r.created_at ? new Date(r.created_at) : now;
       const daysOpen = Math.floor((now - createdDate) / 86400000);
-      // Resolve student name
-      const st = studentMap[r.student_id];
-      return { ...r, daysOpen, studentName: st ? sName(st) : 'Unknown' };
+      // Resolve student name — referrals store student_name (text), not student_id (FK)
+      const st = r.student_id ? studentMap[r.student_id] : null;
+      return { ...r, daysOpen, studentName: st ? sName(st) : (r.student_name || 'Unknown') };
     }).sort((a, b) => {
       const urgOrder = { Urgent: 0, Soon: 1, Routine: 2 };
       return (urgOrder[a.urgency] ?? 2) - (urgOrder[b.urgency] ?? 2);
@@ -644,7 +644,8 @@ export default function DashboardPage() {
 
     // 4. Students needing progress review (last progress_rating > 30 days ago or never)
     const thirtyDaysAgo = format(subDays(now, 30), 'yyyy-MM-dd');
-    const { data: progressRows } = await db.select('progress_ratings', { eq: { counselor_id: counselor.id } });
+    // progress_ratings has no counselor_id — get all and filter by session ownership
+    const { data: progressRows } = await db.select('progress_ratings', {});
     const lastProgressByStudent = {};
     for (const p of (progressRows || [])) {
       if (!p.student_id) continue;

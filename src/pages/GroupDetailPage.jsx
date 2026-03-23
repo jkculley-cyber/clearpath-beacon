@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
-import { supabase } from '../lib/supabase';
+// supabase import removed — all data flows through db adapter
 import { SESSION_STATUSES, ASCA_DOMAINS, PROGRESS_LEVELS, PROGRESS_COLORS } from '../lib/constants';
 import { autoLogTime } from '../lib/autoLogTime';
 import { generateGroupProgressPDF } from '../lib/pdfExports';
@@ -74,9 +74,7 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
       .filter(([, v]) => v)
       .map(([idx]) => parseInt(idx, 10));
 
-    const { data: sess, error: sessErr } = await supabase
-      .from('sessions')
-      .insert({
+    const { data: sess } = await db.insert('sessions', {
         counselor_id: counselorId,
         group_id: group.id,
         session_date: date,
@@ -84,9 +82,7 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
         objectives_covered: coveredArr.length ? coveredArr : null,
         notes,
         status,
-      })
-      .select()
-      .single();
+      });
 
     if (sess) {
       // Save attendance to `attendance` table
@@ -203,12 +199,12 @@ function AddMemberModal({ open, onClose, groupId, existingIds }) {
   useEffect(() => {
     if (!open || query.length < 2) { setResults([]); return; }
     const t = setTimeout(async () => {
-      const { data } = await supabase
-        .from('students')
-        .select('id, name, grade')
-        .ilike('name', `%${query}%`)
-        .limit(10);
-      setResults((data || []).filter((s) => !existingIds.includes(s.id)));
+      const { data } = await db.select('students', {});
+      const q = query.toLowerCase();
+      const filtered = (data || [])
+        .filter((s) => s.name?.toLowerCase().includes(q) && !existingIds.includes(s.id))
+        .slice(0, 10);
+      setResults(filtered);
     }, 300);
     return () => clearTimeout(t);
   }, [open, query, existingIds]);
@@ -489,44 +485,47 @@ export default function GroupDetailPage() {
     setLoading(true);
 
     // 1. Load group
-    const { data: grpData } = await supabase
-      .from('groups')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const { data: grpData } = await db.select('groups', { eq: { id } });
+    const grp = grpData?.[0] || null;
+    setGroup(grp);
 
-    setGroup(grpData);
-
-    if (!grpData) {
+    if (!grp) {
       setLoading(false);
       return;
     }
 
-    // 2. Load members, sessions in parallel
-    const [memRes, sessRes] = await Promise.all([
-      supabase
-        .from('group_members')
-        .select('*, students(id, name, grade)')
-        .eq('group_id', id),
-      supabase
-        .from('sessions')
-        .select('*, attendance(student_id, status)')
-        .eq('group_id', id)
-        .order('session_date', { ascending: false }),
+    // 2. Load members + students, sessions + attendance in parallel
+    const [memRes, sessRes, studRes, attRes] = await Promise.all([
+      db.select('group_members', { eq: { group_id: id } }),
+      db.select('sessions', { eq: { group_id: id }, order: { column: 'session_date', ascending: false } }),
+      db.select('students', {}),
+      db.select('attendance', {}),
     ]);
 
+    const allStudents = studRes.data || [];
+    const allAtt = attRes.data || [];
     const sessData = sessRes.data || [];
-    setMembers(memRes.data || []);
-    setSessions(sessData);
+
+    // Attach student data to members
+    const membersWithStudents = (memRes.data || []).map(m => ({
+      ...m,
+      students: allStudents.find(s => s.id === m.student_id) || null,
+    }));
+
+    // Attach attendance to sessions
+    const sessionsWithAtt = sessData.map(s => ({
+      ...s,
+      attendance: allAtt.filter(a => a.session_id === s.id),
+    }));
+
+    setMembers(membersWithStudents);
+    setSessions(sessionsWithAtt);
 
     // 3. Load progress_ratings for all sessions in this group
     if (sessData.length > 0) {
-      const sessionIds = sessData.map((s) => s.id);
-      const { data: progData } = await supabase
-        .from('progress_ratings')
-        .select('*')
-        .in('session_id', sessionIds);
-      setProgressData(progData || []);
+      const { data: allProg } = await db.select('progress_ratings', {});
+      const sessionIds = new Set(sessData.map(s => s.id));
+      setProgressData((allProg || []).filter(p => sessionIds.has(p.session_id)));
     } else {
       setProgressData([]);
     }
