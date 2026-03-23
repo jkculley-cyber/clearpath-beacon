@@ -288,6 +288,152 @@ export default function ReportsPage() {
     loadReportData();
   }, [loadReportData]);
 
+  /* ─── SCUTA-Formatted CSV Export ─── */
+  const exportScutaCsv = async () => {
+    if (!counselor?.id) return;
+    const { from, to } = dateRange;
+
+    // Fetch all data needed for SCUTA format
+    const [studRes, sessRes, timeRes, refRes, grpRes, gmRes] = await Promise.all([
+      db.select('students', { eq: { counselor_id: counselor.id } }),
+      db.select('sessions', { eq: { counselor_id: counselor.id }, gte: { session_date: from }, lte: { session_date: to } }),
+      db.select('time_entries', { eq: { counselor_id: counselor.id }, gte: { entry_date: from }, lte: { entry_date: to } }),
+      db.select('referrals', { eq: { counselor_id: counselor.id } }),
+      db.select('groups', { eq: { counselor_id: counselor.id } }),
+      db.select('group_members', {}),
+    ]);
+
+    const students = studRes.data || [];
+    const sessions = sessRes.data || [];
+    const timeEntries = timeRes.data || [];
+    const referrals = refRes.data || [];
+    const groups = grpRes.data || [];
+    const groupMembers = gmRes.data || [];
+    const groupIds = new Set(groups.map(g => g.id));
+    const counselorName = counselor.name || counselor.full_name || 'Counselor';
+    const campusName = counselor.campus || counselor.school_name || '';
+    const districtName = counselor.district || '';
+
+    // ── Sheet 1: Student Services Log (SCUTA primary format) ──
+    const serviceRows = sessions.map(s => {
+      const student = students.find(st => st.id === s.student_id);
+      const group = s.group_id ? groups.find(g => g.id === s.group_id) : null;
+      const sessionType = s.group_id ? 'Group' : 'Individual';
+      // Map domain to SCUTA service type
+      const domain = s.domain || 'responsive';
+      let scutaService = 'Responsive Services';
+      if (domain === 'guidance') scutaService = 'Guidance Curriculum';
+      else if (domain === 'planning') scutaService = 'Individual Student Planning';
+      else if (domain === 'system') scutaService = 'System Support';
+      else if (domain === 'non_counseling') scutaService = 'Non-Counseling Activity';
+
+      return {
+        'Date': s.session_date || '',
+        'Counselor Name': counselorName,
+        'Campus': campusName,
+        'District': districtName,
+        'Student Last Name': student?.name?.split(' ').slice(-1)[0] || '',
+        'Student First Name': student?.name?.split(' ')[0] || '',
+        'Grade Level': student?.grade || '',
+        'Service Type': sessionType,
+        'ASCA Domain': scutaService,
+        'Group Name': group?.name || '',
+        'Duration (Minutes)': s.duration_minutes || '',
+        'Tier Level': student?.tier || 1,
+        'Notes': (s.notes || '').replace(/[\n\r,]/g, ' ').slice(0, 200),
+        'Status': s.status || '',
+      };
+    });
+
+    // ── Sheet 2: Time Distribution Summary ──
+    const domainTotals = {};
+    timeEntries.forEach(e => {
+      domainTotals[e.domain] = (domainTotals[e.domain] || 0) + (e.duration_minutes || 0);
+    });
+    const totalMinutes = Object.values(domainTotals).reduce((s, v) => s + v, 0) || 1;
+    const timeSummary = Object.entries(TIME_DOMAINS).map(([key, label]) => ({
+      'ASCA Domain': label,
+      'Total Minutes': domainTotals[key] || 0,
+      'Total Hours': ((domainTotals[key] || 0) / 60).toFixed(1),
+      'Percentage': ((domainTotals[key] || 0) / totalMinutes * 100).toFixed(1) + '%',
+      'Category': COUNSELING_DOMAINS.includes(key) ? 'Direct Services' : 'Indirect/Non-Counseling',
+    }));
+
+    const directMin = timeEntries
+      .filter(e => COUNSELING_DOMAINS.includes(e.domain))
+      .reduce((s, e) => s + (e.duration_minutes || 0), 0);
+    timeSummary.push({
+      'ASCA Domain': 'SB 179 COMPLIANCE',
+      'Total Minutes': directMin,
+      'Total Hours': (directMin / 60).toFixed(1),
+      'Percentage': (directMin / totalMinutes * 100).toFixed(1) + '%',
+      'Category': `${(directMin / totalMinutes * 100).toFixed(0)}% Direct (Target: 80%)`,
+    });
+
+    // ── Sheet 3: Caseload Summary ──
+    const caseloadRows = students.map(s => {
+      const studentSessions = sessions.filter(ss => ss.student_id === s.id);
+      const studentReferrals = referrals.filter(r => r.student_id === s.id || r.student_name === s.name);
+      const studentGroups = groupMembers.filter(gm => gm.student_id === s.id && groupIds.has(gm.group_id));
+      return {
+        'Student Last Name': s.name?.split(' ').slice(-1)[0] || '',
+        'Student First Name': s.name?.split(' ')[0] || '',
+        'Grade': s.grade || '',
+        'Tier': s.tier || 1,
+        'Status': s.status || 'active',
+        'Referral Reason': s.referral_reason || '',
+        'Sessions This Period': studentSessions.length,
+        'Groups Enrolled': studentGroups.length,
+        'Open Referrals': studentReferrals.filter(r => r.status === 'open' || r.status === 'in_progress').length,
+        'Counselor': counselorName,
+        'Campus': campusName,
+      };
+    });
+
+    // ── Sheet 4: Referral Log ──
+    const referralRows = referrals
+      .filter(r => r.created_at >= from && r.created_at <= to + 'T23:59:59')
+      .map(r => ({
+        'Date Received': r.created_at ? r.created_at.slice(0, 10) : '',
+        'Student Name': r.student_name || '',
+        'Referred By': r.referred_by || '',
+        'Concern Type': r.concern_type || '',
+        'Urgency': r.urgency || '',
+        'Status': r.status || '',
+        'Notes': (r.notes || '').replace(/[\n\r,]/g, ' ').slice(0, 200),
+        'Counselor': counselorName,
+        'Campus': campusName,
+      }));
+
+    // Build multi-sheet CSV (separated by headers)
+    const toCsvSection = (title, rows) => {
+      if (!rows.length) return `\n--- ${title} ---\nNo data for selected period.\n`;
+      const headers = Object.keys(rows[0]);
+      const csvRows = rows.map(r => headers.map(h => {
+        const val = String(r[h] ?? '');
+        return val.includes(',') || val.includes('"') ? `"${val.replace(/"/g, '""')}"` : val;
+      }).join(','));
+      return `\n--- ${title} ---\n${headers.join(',')}\n${csvRows.join('\n')}\n`;
+    };
+
+    let csv = `SCUTA-Compatible Export — Beacon Counselor Command Center\n`;
+    csv += `Counselor: ${counselorName} | Campus: ${campusName} | District: ${districtName}\n`;
+    csv += `Period: ${from} to ${to} | Generated: ${new Date().toLocaleDateString()}\n`;
+    csv += toCsvSection('STUDENT SERVICES LOG', serviceRows);
+    csv += toCsvSection('TIME DISTRIBUTION SUMMARY', timeSummary);
+    csv += toCsvSection('CASELOAD SUMMARY', caseloadRows);
+    csv += toCsvSection('REFERRAL LOG', referralRows);
+
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `beacon-scuta-export-${from}-to-${to}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   /* ─── PDF Export ─── */
   const exportPdf = () => {
     const doc = new jsPDF();
@@ -409,14 +555,25 @@ export default function ReportsPage() {
       {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={styles.heading}>Reports &amp; Analytics</h1>
-        <button onClick={exportPdf} style={styles.exportBtn}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Export Report PDF
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={exportScutaCsv} style={{ ...styles.exportBtn, background: '#0f766e' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+            SCUTA Export
+          </button>
+          <button onClick={exportPdf} style={styles.exportBtn}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Export PDF
+          </button>
+        </div>
       </div>
 
       {/* ─── Date Range Selector ─── */}
