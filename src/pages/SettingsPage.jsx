@@ -617,7 +617,7 @@ export default function SettingsPage() {
         <div className="card" style={{ marginBottom: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h2 style={{ ...sectionTitle, margin: 0 }}>Schedule Blocks</h2>
-            <button className="btn btn-outline" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => { setEditBlock(null); setBlockName(''); setBlockDay('Monday'); setBlockStart(''); setBlockEnd(''); setShowBlockForm(true); }}>
+            <button className="btn btn-outline" style={{ fontSize: 12, padding: '4px 12px' }} onClick={() => { setEditBlock(null); setBlockName(''); setBlockDay(1); setBlockStart(''); setBlockEnd(''); setShowBlockForm(true); }}>
               + Add Block
             </button>
           </div>

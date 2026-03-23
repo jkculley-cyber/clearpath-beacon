@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
+import { autoLogTime } from '../lib/autoLogTime';
 import { TIME_DOMAINS } from '../lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { startOfWeek, subWeeks, format, subDays } from 'date-fns';
@@ -178,7 +179,7 @@ function QuickSessionModal({ open, onClose, counselorId }) {
     const mins = parseInt(duration, 10) || 30;
 
     // Insert session
-    await db.insert('sessions', {
+    const { data: sess, error: sessError } = await db.insert('sessions', {
       counselor_id: counselorId,
       student_id: studentId,
       session_date: today,
@@ -188,14 +189,20 @@ function QuickSessionModal({ open, onClose, counselorId }) {
       session_type: 'individual',
     });
 
-    // Auto-log time entry for responsive domain
-    await db.insert('time_entries', {
-      counselor_id: counselorId,
-      entry_date: today,
-      domain: 'responsive',
-      activity_description: `Individual session \u2014 ${selectedLabel}`,
-      duration_minutes: mins,
-    });
+    if (sessError) { setSaving(false); return; }
+
+    // Auto-log time (deduplicates via source_id)
+    if (sess?.id) {
+      try {
+        await autoLogTime({
+          counselorId,
+          sessionId: sess.id,
+          date: today,
+          durationMinutes: mins,
+          description: `Individual session \u2014 ${selectedLabel}`,
+        });
+      } catch { /* non-blocking */ }
+    }
 
     setSaving(false);
     setStudentId('');

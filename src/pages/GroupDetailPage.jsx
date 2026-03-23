@@ -109,10 +109,6 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
       }
     }
 
-    if (sessErr) {
-      console.error('Session save error:', sessErr);
-    }
-
     setSaving(false);
     onClose(true);
   };
