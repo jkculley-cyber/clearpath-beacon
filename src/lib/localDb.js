@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'beacon_local';
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 
 const STORES = [
   'counselor',         // single record — counselor profile
@@ -24,6 +24,8 @@ const STORES = [
   'campus_schedule_blocks',
   'communication_templates',
   'counselor_notes',
+  'student_goals',     // per-student counseling goals
+  'needs_assessments', // per-student needs assessments
   'settings',          // key-value config
 ];
 
@@ -129,6 +131,23 @@ export function openDB() {
       if (!db.objectStoreNames.contains('counselor_notes')) {
         const cn = db.createObjectStore('counselor_notes', { keyPath: 'id' });
         cn.createIndex('student_id', 'student_id', { unique: false });
+      }
+
+      // student_goals
+      if (!db.objectStoreNames.contains('student_goals')) {
+        const sg = db.createObjectStore('student_goals', { keyPath: 'id' });
+        sg.createIndex('counselor_id', 'counselor_id', { unique: false });
+        sg.createIndex('student_id', 'student_id', { unique: false });
+        sg.createIndex('status', 'status', { unique: false });
+        sg.createIndex('asca_domain', 'asca_domain', { unique: false });
+      }
+
+      // needs_assessments
+      if (!db.objectStoreNames.contains('needs_assessments')) {
+        const na = db.createObjectStore('needs_assessments', { keyPath: 'id' });
+        na.createIndex('counselor_id', 'counselor_id', { unique: false });
+        na.createIndex('student_id', 'student_id', { unique: false });
+        na.createIndex('status', 'status', { unique: false });
       }
 
       // settings (key-value)

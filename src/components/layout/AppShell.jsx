@@ -13,6 +13,9 @@ const NAV_ITEMS = [
   { to: '/time-tracker',  label: 'Time Tracker',    icon: TimeTrackerIcon },
   { to: '/lessons',       label: 'Lessons',         icon: LessonsIcon },
   { to: '/communications',label: 'Communications',  icon: CommsIcon },
+  { to: '/sessions',      label: 'Sessions',        icon: SessionsIcon },
+  { to: '/goals',         label: 'Goals',           icon: GoalsIcon },
+  { to: '/needs-assessment', label: 'Assessments',  icon: AssessmentIcon },
   { to: '/reports',       label: 'Reports',          icon: ReportsIcon },
   { to: '/settings',      label: 'Settings',        icon: SettingsIcon },
 ];
@@ -628,6 +631,41 @@ function ReportsIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 20V10M12 20V4M6 20v-6" />
+    </svg>
+  );
+}
+
+function SessionsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+      <line x1="8" y1="14" x2="8" y2="14.01" />
+      <line x1="12" y1="14" x2="12" y2="14.01" />
+      <line x1="16" y1="14" x2="16" y2="14.01" />
+      <line x1="8" y1="18" x2="8" y2="18.01" />
+      <line x1="12" y1="18" x2="12" y2="18.01" />
+    </svg>
+  );
+}
+
+function GoalsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </svg>
+  );
+}
+
+function AssessmentIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 11l3 3L22 4" />
+      <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
     </svg>
   );
 }

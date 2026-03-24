@@ -15,6 +15,9 @@ import LessonsPage from './pages/LessonsPage';
 import CommunicationsPage from './pages/CommunicationsPage';
 import SettingsPage from './pages/SettingsPage';
 import ReportsPage from './pages/ReportsPage';
+import SessionsPage from './pages/SessionsPage';
+import GoalsPage from './pages/GoalsPage';
+import NeedsAssessmentPage from './pages/NeedsAssessmentPage';
 import LoginPage from './pages/LoginPage';
 import ReferralFormPage from './pages/ReferralFormPage';
 import LocalSetupPage from './pages/LocalSetupPage';
@@ -72,6 +75,9 @@ export default function App() {
         <Route path="time-tracker" element={<TimeTrackerPage />} />
         <Route path="lessons" element={<LessonsPage />} />
         <Route path="communications" element={<CommunicationsPage />} />
+        <Route path="sessions" element={<SessionsPage />} />
+        <Route path="goals" element={<GoalsPage />} />
+        <Route path="needs-assessment" element={<NeedsAssessmentPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
