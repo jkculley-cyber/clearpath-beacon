@@ -123,13 +123,20 @@ export default function AppShell() {
       {showTrialBanner && (
         <div className="trial-banner">
           {trialDaysLeft === 0
-            ? 'Your trial ends today — subscribe to keep your data.'
-            : `Trial ends in ${trialDaysLeft} day${trialDaysLeft > 1 ? 's' : ''} — subscribe to keep your data.`}
+            ? 'Your trial ends today.'
+            : `Trial ends in ${trialDaysLeft} day${trialDaysLeft > 1 ? 's' : ''}.`}
+          {' '}
+          <a href="https://clearpathedgroup.com/store.html#card-beacon" target="_blank" rel="noopener noreferrer" style={{ color: '#fff', fontWeight: 700, textDecoration: 'underline' }}>
+            Subscribe — $10/mo
+          </a>
         </div>
       )}
       {isSoftGated && (
-        <div className="gate-banner">
-          Your trial has expired. Subscribe to restore full access.
+        <div className="gate-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span>Your trial has expired. Your data is safe — subscribe to restore full access.</span>
+          <a href="https://clearpathedgroup.com/store.html#card-beacon" target="_blank" rel="noopener noreferrer" style={{ background: '#fff', color: '#b91c1c', padding: '6px 16px', borderRadius: 6, fontWeight: 700, fontSize: '0.82rem', textDecoration: 'none' }}>
+            Subscribe Now — $10/mo or $100/yr
+          </a>
         </div>
       )}
       {showBackupBanner && (
