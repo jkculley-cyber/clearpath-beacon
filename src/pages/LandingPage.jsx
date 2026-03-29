@@ -33,8 +33,11 @@ export default function LandingPage() {
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 32 }}>
           <a href="/setup" style={ctaPrimary}>Start Free 14-Day Trial &rarr;</a>
-          <a href="/setup" style={ctaSecondary}>Already have an account? Sign in</a>
+          <a href="/" style={ctaSecondary}>Already have an account? Sign in</a>
         </div>
+        <p style={{ fontSize: 13, color: '#6b7280', marginTop: 16, textAlign: 'center' }}>
+          No credit card needed &middot; $999/year after trial &middot; All data stays on your device
+        </p>
       </div>
 
       {/* Feature grid */}

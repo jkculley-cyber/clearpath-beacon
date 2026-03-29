@@ -54,7 +54,9 @@ export default function AppShell() {
     return Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
   }, [counselor]);
   const backupUrgency = backupAge >= 30 || backupAge >= 999 ? 'critical' : backupAge >= 14 ? 'warning' : backupAge >= 7 ? 'nudge' : null;
-  const showBackupBanner = backupUrgency && !backupDismissed;
+  // Suppress backup banner for first 48 hours after signup — don't scare new users
+  const isNewUser = counselor?.trial_started_at && (Date.now() - new Date(counselor.trial_started_at).getTime()) < 48 * 60 * 60 * 1000;
+  const showBackupBanner = backupUrgency && !backupDismissed && !isNewUser;
 
   function dismissBackupUntilTomorrow() {
     const tomorrow = new Date();
