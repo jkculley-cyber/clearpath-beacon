@@ -36,7 +36,7 @@ export default function LandingPage() {
           <a href="/" style={ctaSecondary}>Already have an account? Sign in</a>
         </div>
         <p style={{ fontSize: 13, color: '#6b7280', marginTop: 16, textAlign: 'center' }}>
-          No credit card needed &middot; $999/year after trial &middot; All data stays on your device
+          No credit card needed &middot; $100/school year after trial ($10/month) &middot; All data stays on your device
         </p>
       </div>
 
