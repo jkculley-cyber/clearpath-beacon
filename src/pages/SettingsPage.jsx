@@ -299,7 +299,7 @@ export default function SettingsPage() {
       const dateStr = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
       const invoiceNum = `BCN-${today.getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
       const isAnnual = receiptType === 'annual';
-      const amount = isAnnual ? '$100.00' : '$10.00';
+      const amount = isAnnual ? '$79.00' : '$8.00';
       const lineItem = isAnnual
         ? 'Beacon Counselor Command Center — Annual License'
         : 'Beacon Counselor Command Center — Monthly License';
@@ -1292,7 +1292,7 @@ export default function SettingsPage() {
     let y = 0;
 
     const teal = [15, 118, 110];
-    const amount = plan === 'annual' ? '$100.00' : '$10.00';
+    const amount = plan === 'annual' ? '$79.00' : '$8.00';
     const lineItem = plan === 'annual'
       ? 'Beacon Elementary Counselor Platform \u2014 Annual License'
       : 'Beacon Elementary Counselor Platform \u2014 Monthly License';
