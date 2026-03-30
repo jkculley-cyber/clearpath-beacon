@@ -132,9 +132,9 @@ export default function AppShell() {
         </div>
       )}
       {isSoftGated && (
-        <div className="gate-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span>Your trial has expired. Your data is safe — subscribe to restore full access.</span>
-          <a href="https://clearpathedgroup.com/store.html#card-beacon" target="_blank" rel="noopener noreferrer" style={{ background: '#fff', color: '#b91c1c', padding: '6px 16px', borderRadius: 6, fontWeight: 700, fontSize: '0.82rem', textDecoration: 'none' }}>
+        <div className="gate-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap', padding: '14px 20px' }}>
+          <span style={{ fontSize: '0.95rem' }}>Your trial has expired. Your data is safe — subscribe to restore full access.</span>
+          <a href="https://clearpathedgroup.com/store.html#card-beacon" target="_blank" rel="noopener noreferrer" style={{ background: '#fff', color: '#b91c1c', padding: '10px 24px', borderRadius: 8, fontWeight: 700, fontSize: '0.95rem', textDecoration: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
             Subscribe Now — $10/mo or $100/yr
           </a>
         </div>

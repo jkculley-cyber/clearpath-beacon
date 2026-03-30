@@ -299,7 +299,7 @@ export default function SettingsPage() {
       const dateStr = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
       const invoiceNum = `BCN-${today.getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
       const isAnnual = receiptType === 'annual';
-      const amount = isAnnual ? '$79.00' : '$8.00';
+      const amount = isAnnual ? '$100.00' : '$10.00';
       const lineItem = isAnnual
         ? 'Beacon Counselor Command Center — Annual License'
         : 'Beacon Counselor Command Center — Monthly License';
@@ -1220,7 +1220,7 @@ export default function SettingsPage() {
                 disabled={receiptGenerating}
                 onClick={handleGenerateReceipt}
               >
-                {receiptGenerating ? 'Generating...' : 'Generate Annual Receipt ($79)'}
+                {receiptGenerating ? 'Generating...' : 'Generate Annual Receipt ($100)'}
               </button>
             </>
           ) : (
@@ -1263,10 +1263,10 @@ export default function SettingsPage() {
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={() => generateBeaconReceipt('annual')}>
-              Annual Receipt ($999)
+              Annual Receipt ($100)
             </button>
             <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => generateBeaconReceipt('monthly')}>
-              Monthly Receipt ($99)
+              Monthly Receipt ($10)
             </button>
           </div>
         </div>
@@ -1292,7 +1292,7 @@ export default function SettingsPage() {
     let y = 0;
 
     const teal = [15, 118, 110];
-    const amount = plan === 'annual' ? '$999.00' : '$99.00';
+    const amount = plan === 'annual' ? '$100.00' : '$10.00';
     const lineItem = plan === 'annual'
       ? 'Beacon Elementary Counselor Platform \u2014 Annual License'
       : 'Beacon Elementary Counselor Platform \u2014 Monthly License';

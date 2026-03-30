@@ -50,8 +50,8 @@ Access to Beacon requires a valid license key. You are responsible for keeping y
 
 ### Pricing
 
-- **Monthly:** $8/month
-- **Annual:** $79/year
+- **Monthly:** $10/month
+- **Annual:** $100/year
 
 District pricing is available upon request.
 
