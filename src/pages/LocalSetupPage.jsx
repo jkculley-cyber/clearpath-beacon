@@ -7,6 +7,7 @@ export default function LocalSetupPage() {
   const { setupLocalProfile, saveLicenseKey } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
   const [licenseKey, setLicenseKey] = useState('');
@@ -51,6 +52,7 @@ export default function LocalSetupPage() {
           source: isFlagged ? 'FLAGGED_DISTRICT_beacon_trial' : 'beacon_trial_started',
           product: 'Beacon',
           name: name.trim(),
+          email: email.trim().toLowerCase(),
           school_name: campus.trim(),
           district: district.trim(),
           has_license: !!licenseKey.trim(),
@@ -59,6 +61,25 @@ export default function LocalSetupPage() {
           _subject: isFlagged
             ? `ACTION REQUIRED: Spring ISD user signed up for Beacon — ${name.trim()}`
             : `New Beacon trial: ${name.trim()} — ${campus.trim() || district.trim()}`,
+        }),
+      }).catch(() => {})
+    } catch { /* non-blocking */ }
+
+    // Also save lead to ops Supabase for Waypoint Admin visibility
+    try {
+      const OPS_URL = 'https://xbpuqaqpcbixxodblaes.supabase.co';
+      const OPS_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhicHVxYXFwY2JpeHhvZGJsYWVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIzNjk4MDQsImV4cCI6MjA4Nzk0NTgwNH0.9Rhmz-FLUXnEQXpRCkg3G2ppzPxs2DinaYDmdD_wvPA';
+      fetch(`${OPS_URL}/rest/v1/demo_leads`, {
+        method: 'POST',
+        headers: { 'apikey': OPS_KEY, 'Authorization': `Bearer ${OPS_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          district_name: district.trim() || campus.trim() || 'Unknown',
+          role: 'counselor',
+          referrer: document.referrer || null,
+          utm_source: 'beacon',
+          utm_campaign: licenseKey.trim() ? 'licensed' : 'trial',
         }),
       }).catch(() => {})
     } catch { /* non-blocking */ }
@@ -94,6 +115,16 @@ export default function LocalSetupPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Sarah Johnson"
+          />
+
+          <label style={labelStyle}>Work Email *</label>
+          <input
+            style={inputStyle}
+            required
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="e.g. sjohnson@district.edu"
           />
 
           <label style={labelStyle}>Campus</label>
