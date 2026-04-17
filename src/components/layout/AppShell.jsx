@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { to: '/goals',         label: 'Goals',           icon: GoalsIcon },
   { to: '/needs-assessment', label: 'Assessments',  icon: AssessmentIcon },
   { to: '/reports',       label: 'Reports',          icon: ReportsIcon },
+  { to: '/templates',     label: 'Templates',       icon: TemplatesIcon },
   { to: '/settings',      label: 'Settings',        icon: SettingsIcon },
 ];
 
@@ -127,7 +128,7 @@ export default function AppShell() {
             : `Trial ends in ${trialDaysLeft} day${trialDaysLeft > 1 ? 's' : ''}.`}
           {' '}
           <a href="https://clearpathedgroup.com/store.html#card-beacon" target="_blank" rel="noopener noreferrer" style={{ color: '#fff', fontWeight: 700, textDecoration: 'underline' }}>
-            Subscribe — $10/mo
+            Subscribe — $8/mo
           </a>
         </div>
       )}
@@ -135,7 +136,7 @@ export default function AppShell() {
         <div className="gate-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap', padding: '14px 20px' }}>
           <span style={{ fontSize: '0.95rem' }}>Your trial has expired. Your data is safe — subscribe to restore full access.</span>
           <a href="https://clearpathedgroup.com/store.html#card-beacon" target="_blank" rel="noopener noreferrer" style={{ background: '#fff', color: '#b91c1c', padding: '10px 24px', borderRadius: 8, fontWeight: 700, fontSize: '0.95rem', textDecoration: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
-            Subscribe Now — $10/mo or $100/yr
+            Subscribe Now — $8/mo or $79/yr
           </a>
         </div>
       )}
@@ -675,6 +676,18 @@ function AssessmentIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 11l3 3L22 4" />
       <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+    </svg>
+  );
+}
+
+function TemplatesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <path d="M14 2v6h6" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <line x1="10" y1="9" x2="8" y2="9" />
     </svg>
   );
 }

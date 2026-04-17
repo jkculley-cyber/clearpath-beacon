@@ -13,6 +13,7 @@ import ReferralsPage from './pages/ReferralsPage';
 import TimeTrackerPage from './pages/TimeTrackerPage';
 import LessonsPage from './pages/LessonsPage';
 import CommunicationsPage from './pages/CommunicationsPage';
+import TemplatesPage from './pages/TemplatesPage';
 import SettingsPage from './pages/SettingsPage';
 import ReportsPage from './pages/ReportsPage';
 import SessionsPage from './pages/SessionsPage';
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="goals" element={<GoalsPage />} />
         <Route path="needs-assessment" element={<NeedsAssessmentPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="templates" element={<TemplatesPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 
