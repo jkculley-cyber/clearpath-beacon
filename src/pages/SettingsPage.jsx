@@ -1220,7 +1220,7 @@ export default function SettingsPage() {
                 disabled={receiptGenerating}
                 onClick={handleGenerateReceipt}
               >
-                {receiptGenerating ? 'Generating...' : 'Generate Annual Receipt ($100)'}
+                {receiptGenerating ? 'Generating...' : 'Generate Annual Receipt ($79)'}
               </button>
             </>
           ) : (
@@ -1263,10 +1263,10 @@ export default function SettingsPage() {
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" style={{ fontSize: 13 }} onClick={() => generateBeaconReceipt('annual')}>
-              Annual Receipt ($100)
+              Annual Receipt ($79)
             </button>
             <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => generateBeaconReceipt('monthly')}>
-              Monthly Receipt ($10)
+              Monthly Receipt ($8)
             </button>
           </div>
         </div>
