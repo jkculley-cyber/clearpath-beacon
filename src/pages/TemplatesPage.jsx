@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
+import { TIME_DOMAINS } from '../lib/constants';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+const COUNSELING_DOMAINS = ['guidance', 'planning', 'responsive'];
 
 /* ─── Helpers ─── */
 const TEAL = [42, 157, 143];
@@ -78,10 +82,11 @@ function drawInfo(doc, label, value, x, y) {
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...NAVY);
-  doc.text(`${label}:`, x, y);
+  const labelText = `${label}: `;
+  doc.text(labelText, x, y);
+  const labelW = doc.getTextWidth(labelText);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...BLACK);
-  const labelW = doc.getTextWidth(`${label}: `);
   doc.text(value || '', x + labelW, y);
   return y + 7;
 }
@@ -199,7 +204,7 @@ const SECTIONS = [
     title: 'Compliance / Documentation',
     color: '#F59E0B',
     templates: [
-      { id: 'sb179_time_log', name: 'SB 179 Time Log Summary', desc: 'Weekly/monthly service hour summary', needsStudent: false },
+      { id: 'sb179_time_log', name: 'SB 179 Time Log Summary', desc: 'Auto-generated from your time entries (YTD, with 80/20 compliance)', needsStudent: false },
       { id: 'caseload_summary', name: 'Caseload Summary Report', desc: 'All students by tier', needsStudent: false },
       { id: 'suicide_screening', name: 'Suicide Risk Screening Documentation', desc: 'CRITICAL safety documentation', needsStudent: true, critical: true },
       { id: 'mandated_report', name: 'Mandated Report Documentation', desc: 'CPS/DFPS report record', needsStudent: true, critical: true },
@@ -609,58 +614,97 @@ function generateTeacherConsultation(counselor, student) {
   doc.save(`Teacher-Consultation-${student?.name?.replace(/\s+/g, '-') || 'Student'}-${shortDate()}.pdf`);
 }
 
-function generateSB179TimeLog(counselor) {
+async function generateSB179TimeLog(counselor) {
+  const now = new Date();
+  const syStart = counselor?.school_year_start
+    || (now.getMonth() >= 7 ? `${now.getFullYear()}-08-01` : `${now.getFullYear() - 1}-08-01`);
+  const syEnd = counselor?.school_year_end
+    || (now.getMonth() >= 7 ? `${now.getFullYear() + 1}-07-31` : `${now.getFullYear()}-07-31`);
+
+  const { data: entries } = await db.select('time_entries', {
+    eq: { counselor_id: counselor.id },
+    gte: { entry_date: syStart },
+    lte: { entry_date: syEnd },
+    order: { column: 'entry_date', ascending: true },
+  });
+  const rows = entries || [];
+
+  const byDomain = {};
+  Object.keys(TIME_DOMAINS).forEach(k => { byDomain[k] = 0; });
+  rows.forEach(e => { byDomain[e.domain] = (byDomain[e.domain] || 0) + (e.duration_minutes || 0); });
+  const totalMin = Object.values(byDomain).reduce((a, b) => a + b, 0);
+  const directMin = COUNSELING_DOMAINS.reduce((s, d) => s + (byDomain[d] || 0), 0);
+  const indirectMin = totalMin - directMin;
+  const pct = totalMin > 0 ? (directMin / totalMin) * 100 : 0;
+  const compliant = pct >= 80;
+
+  const firstDate = rows[0]?.entry_date || syStart;
+  const lastDate = rows[rows.length - 1]?.entry_date || shortDate();
+  const periodLabel = `${firstDate} through ${lastDate}`;
+
   const doc = new jsPDF({ format: 'letter' });
-  drawHeader(doc, 'SB 179 Time Log Summary', 'Weekly / Monthly Service Hour Summary');
+  drawHeader(doc, 'SB 179 Time Log Summary', 'School Year Service Hour Report');
 
   let y = 62;
   y = drawInfo(doc, 'Counselor', counselor?.name || '', MARGIN, y);
-  y = drawInfo(doc, 'Campus', counselor?.campus || '', MARGIN, y);
+  y = drawInfo(doc, 'Campus', counselor?.school_name || counselor?.campus || '', MARGIN, y);
+  y = drawInfo(doc, 'Reporting Period', periodLabel, MARGIN, y);
   y = drawInfo(doc, 'Date Generated', today(), MARGIN, y);
-  y += 5;
+  y += 4;
 
-  y = drawSection(doc, 'Reporting Period', y);
-  y = drawField(doc, 'Week of / Month of:', MARGIN, y, CONTENT_W);
+  y = drawSection(doc, 'Direct Counseling Services (SB 179)', y);
+  COUNSELING_DOMAINS.forEach(k => {
+    const hrs = ((byDomain[k] || 0) / 60).toFixed(1);
+    y = drawInfo(doc, TIME_DOMAINS[k], `${hrs} hrs`, MARGIN + 4, y);
+  });
+  y = drawInfo(doc, 'Total Direct', `${(directMin / 60).toFixed(1)} hrs`, MARGIN + 4, y);
   y += 3;
 
-  y = drawSection(doc, 'Direct Service Hours', y);
-  const directItems = ['Individual Counseling', 'Small Group Counseling', 'Classroom Guidance', 'Crisis Response'];
-  directItems.forEach(item => {
-    y = drawField(doc, `${item}:`, MARGIN + 4, y, 50);
+  y = drawSection(doc, 'Indirect / Non-Counseling', y);
+  ['system', 'non_counseling'].forEach(k => {
+    const hrs = ((byDomain[k] || 0) / 60).toFixed(1);
+    y = drawInfo(doc, TIME_DOMAINS[k], `${hrs} hrs`, MARGIN + 4, y);
   });
-  y += 2;
+  y = drawInfo(doc, 'Total Indirect', `${(indirectMin / 60).toFixed(1)} hrs`, MARGIN + 4, y);
+  y += 4;
 
-  y = drawSection(doc, 'Indirect Service Hours', y);
-  const indirectItems = ['Consultation', 'Coordination', 'Referrals', 'Documentation', 'Planning'];
-  indirectItems.forEach(item => {
-    y = drawField(doc, `${item}:`, MARGIN + 4, y, 50);
-  });
-  y += 2;
-
-  y = checkPage(doc, y, 55);
-  y = drawSection(doc, 'Totals', y);
-  y = drawField(doc, 'Total Hours:', MARGIN, y, 50);
-  y = drawField(doc, 'Direct Service Percentage:', MARGIN, y, 50);
-  y += 3;
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...NAVY);
-  doc.text('80/20 Compliance Status:', MARGIN, y);
-  y += 5;
-  y = drawCheckboxes(doc, ['In Compliance (80%+ direct)', 'Below Threshold'], MARGIN, y, 2);
+  y = checkPage(doc, y, 40);
+  y = drawSection(doc, '80/20 Compliance', y);
+  y = drawInfo(doc, 'Total Hours Logged', `${(totalMin / 60).toFixed(1)} hrs`, MARGIN, y);
+  y = drawInfo(doc, 'Direct Service Percentage', `${pct.toFixed(1)}%`, MARGIN, y);
+  y = drawInfo(doc, 'Compliance Status', compliant ? 'In Compliance (80%+ direct)' : 'Below Threshold', MARGIN, y);
   y += 3;
 
   doc.setFontSize(8);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(...GRAY);
   const note = doc.splitTextToSize(
-    'Per SB 179, school counselors shall spend at least 80% of work time on direct counseling services.',
+    'Per SB 179 (TEC §33.006), school counselors shall spend at least 80% of work time on direct counseling services. Hours shown are auto-computed from time entries logged in Beacon during the reporting period.',
     CONTENT_W
   );
   doc.text(note, MARGIN, y);
-  y += note.length * 4 + 10;
+  y += note.length * 4 + 6;
 
+  if (rows.length > 0) {
+    y = checkPage(doc, y, 20);
+    autoTable(doc, {
+      startY: y,
+      head: [['Date', 'Domain', 'Activity', 'Min']],
+      body: rows.map(e => [
+        e.entry_date,
+        TIME_DOMAINS[e.domain] || e.domain,
+        (e.activity_description || '').slice(0, 60),
+        e.duration_minutes,
+      ]),
+      headStyles: { fillColor: TEAL, fontSize: 9 },
+      styles: { fontSize: 8, cellPadding: 1.5 },
+      margin: { left: MARGIN, right: MARGIN },
+      columnStyles: { 0: { cellWidth: 22 }, 3: { cellWidth: 14, halign: 'right' } },
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  }
+
+  y = checkPage(doc, y, 30);
   y = drawDualSignature(doc, 'Counselor Signature', 'Principal Review Signature', y);
 
   drawFooter(doc);
@@ -1190,7 +1234,7 @@ export default function TemplatesPage() {
           student = students.find(s => s.id === sid) || null;
         }
       }
-      generator(counselor, student);
+      await generator(counselor, student);
     } catch (err) {
       console.error('PDF generation error:', err);
     } finally {
