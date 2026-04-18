@@ -170,6 +170,264 @@ function generateAnnualPDF(entries, counselorName, yearLabel, filename) {
   doc.save(filename);
 }
 
+/* ---- SB 179 Compliance Report ---- */
+function generateSB179PDF(entries, counselor, periodLabel, from, to, filename) {
+  const doc = new jsPDF();
+  const counselorName = counselor?.name || counselor?.full_name || 'Counselor';
+  const campus = counselor?.school_name || counselor?.campus || '';
+
+  // Header
+  doc.setFontSize(20);
+  doc.setTextColor(...TEAL);
+  doc.text('SB 179 Compliance Report', 14, 22);
+  doc.setFontSize(11);
+  doc.setTextColor(60, 60, 60);
+  doc.text('School Counselor Service Hour Summary', 14, 29);
+
+  doc.setFontSize(10);
+  doc.setTextColor(60, 60, 60);
+  let y = 42;
+  const drawRow = (label, value) => {
+    doc.setFont('helvetica', 'bold');
+    const labelText = `${label}: `;
+    doc.text(labelText, 14, y);
+    const w = doc.getTextWidth(labelText);
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(value || ''), 14 + w, y);
+    y += 6;
+  };
+  drawRow('Counselor', counselorName);
+  if (campus) drawRow('Campus', campus);
+  drawRow('Reporting Period', periodLabel);
+  drawRow('Dates Covered', `${from} through ${to}`);
+  drawRow('Date Generated', new Date().toLocaleDateString());
+  y += 2;
+
+  // Domain totals
+  const byDomain = {};
+  Object.keys(TIME_DOMAINS).forEach(k => { byDomain[k] = 0; });
+  entries.forEach(e => { byDomain[e.domain] = (byDomain[e.domain] || 0) + (e.duration_minutes || 0); });
+  const totalMin = Object.values(byDomain).reduce((a, b) => a + b, 0);
+  const directMin = COUNSELING_DOMAINS.reduce((s, d) => s + (byDomain[d] || 0), 0);
+  const indirectMin = totalMin - directMin;
+  const pct = totalMin > 0 ? (directMin / totalMin) * 100 : 0;
+  const compliant = pct >= 80;
+
+  // Direct services table
+  doc.setFontSize(12);
+  doc.setTextColor(...TEAL);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Direct Counseling Services (SB 179)', 14, y);
+  y += 2;
+  autoTable(doc, {
+    startY: y,
+    head: [['Domain', 'Hours', 'Minutes']],
+    body: [
+      ...COUNSELING_DOMAINS.map(k => [TIME_DOMAINS[k], ((byDomain[k] || 0) / 60).toFixed(1), byDomain[k] || 0]),
+      [{ content: 'Total Direct', styles: { fontStyle: 'bold' } }, { content: (directMin / 60).toFixed(1), styles: { fontStyle: 'bold' } }, { content: directMin, styles: { fontStyle: 'bold' } }],
+    ],
+    headStyles: { fillColor: TEAL, fontSize: 10 },
+    margin: { left: 14, right: 14 },
+    styles: { fontSize: 10 },
+    columnStyles: { 1: { halign: 'right', cellWidth: 30 }, 2: { halign: 'right', cellWidth: 30 } },
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  // Indirect services table
+  doc.setFontSize(12);
+  doc.setTextColor(...TEAL);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Indirect / Non-Counseling', 14, y);
+  y += 2;
+  autoTable(doc, {
+    startY: y,
+    head: [['Domain', 'Hours', 'Minutes']],
+    body: [
+      ...['system', 'non_counseling'].map(k => [TIME_DOMAINS[k], ((byDomain[k] || 0) / 60).toFixed(1), byDomain[k] || 0]),
+      [{ content: 'Total Indirect', styles: { fontStyle: 'bold' } }, { content: (indirectMin / 60).toFixed(1), styles: { fontStyle: 'bold' } }, { content: indirectMin, styles: { fontStyle: 'bold' } }],
+    ],
+    headStyles: { fillColor: [107, 114, 128], fontSize: 10 },
+    margin: { left: 14, right: 14 },
+    styles: { fontSize: 10 },
+    columnStyles: { 1: { halign: 'right', cellWidth: 30 }, 2: { halign: 'right', cellWidth: 30 } },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  // Compliance summary box
+  if (y > 230) { doc.addPage(); y = 20; }
+  const boxColor = compliant ? [22, 163, 74] : [239, 68, 68];
+  doc.setFillColor(...(compliant ? [240, 253, 244] : [254, 242, 242]));
+  doc.setDrawColor(...boxColor);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(14, y, 182, 32, 3, 3, 'FD');
+  doc.setTextColor(...boxColor);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('80/20 Compliance Status', 20, y + 8);
+  doc.setFontSize(11);
+  doc.setTextColor(30, 30, 30);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Total Hours Logged: ${(totalMin / 60).toFixed(1)} hrs`, 20, y + 16);
+  doc.text(`Direct Service Percentage: ${pct.toFixed(1)}%`, 20, y + 22);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...boxColor);
+  doc.text(compliant ? 'IN COMPLIANCE (80%+ direct)' : 'BELOW THRESHOLD', 20, y + 28);
+  y += 40;
+
+  // TEC cite
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(120, 120, 120);
+  const note = doc.splitTextToSize(
+    'Per SB 179 (TEC §33.006), school counselors shall spend at least 80% of work time on direct counseling services. Hours shown are auto-computed from time entries logged in Beacon during the reporting period.',
+    182
+  );
+  doc.text(note, 14, y);
+  y += note.length * 4 + 6;
+
+  // Signature block
+  if (y > 250) { doc.addPage(); y = 20; }
+  doc.setDrawColor(120, 120, 120);
+  doc.setLineWidth(0.3);
+  doc.line(14, y + 10, 90, y + 10);
+  doc.line(110, y + 10, 186, y + 10);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 120, 120);
+  doc.text('Counselor Signature / Date', 14, y + 15);
+  doc.text('Principal Review Signature / Date', 110, y + 15);
+  y += 22;
+
+  // Detailed entries
+  if (entries.length > 0) {
+    if (y > 240) { doc.addPage(); y = 20; }
+    doc.setFontSize(12);
+    doc.setTextColor(...TEAL);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Detailed Entries', 14, y);
+    y += 2;
+    autoTable(doc, {
+      startY: y,
+      head: [['Date', 'Domain', 'Activity', 'Min']],
+      body: entries.map(e => [
+        e.entry_date,
+        TIME_DOMAINS[e.domain] || e.domain,
+        (e.activity_description || '').slice(0, 70),
+        e.duration_minutes,
+      ]),
+      headStyles: { fillColor: TEAL, fontSize: 9 },
+      margin: { left: 14, right: 14 },
+      styles: { fontSize: 8 },
+      columnStyles: { 0: { cellWidth: 25 }, 3: { cellWidth: 18, halign: 'right' } },
+    });
+  }
+
+  pdfFooter(doc);
+  doc.save(filename);
+}
+
+/* ---- SB 179 Report Modal ---- */
+function SB179Modal({ open, onClose, onGenerate, counselor }) {
+  const [preset, setPreset] = useState('ytd');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
+  if (!open) return null;
+
+  const now = new Date();
+  const syStart = counselor?.school_year_start
+    || (now.getMonth() >= 7 ? `${now.getFullYear()}-08-01` : `${now.getFullYear() - 1}-08-01`);
+  const syEnd = counselor?.school_year_end
+    || (now.getMonth() >= 7 ? `${now.getFullYear() + 1}-07-31` : `${now.getFullYear()}-07-31`);
+
+  const resolvePeriod = () => {
+    const today = format(now, 'yyyy-MM-dd');
+    if (preset === 'month') {
+      return {
+        from: format(startOfMonth(now), 'yyyy-MM-dd'),
+        to: format(endOfMonth(now), 'yyyy-MM-dd'),
+        label: now.toLocaleDateString('en-US', { year: 'numeric', month: 'long' }),
+      };
+    }
+    if (preset === 'semester') {
+      // Fall: syStart → Dec 31; Spring: Jan 1 → syEnd
+      const inFall = now.getMonth() >= 7 || now.getMonth() === 11;
+      if (now.getMonth() >= 7) {
+        return { from: syStart, to: `${now.getFullYear()}-12-31`, label: `Fall Semester ${now.getFullYear()}` };
+      }
+      return { from: `${now.getFullYear()}-01-01`, to: syEnd, label: `Spring Semester ${now.getFullYear()}` };
+    }
+    if (preset === 'ytd') {
+      return { from: syStart, to: today, label: `School Year ${syStart.slice(0, 4)}–${syEnd.slice(0, 4)} (YTD)` };
+    }
+    if (preset === 'custom') {
+      return { from: customFrom, to: customTo, label: `${customFrom} through ${customTo}` };
+    }
+    return null;
+  };
+
+  const period = resolvePeriod();
+  const canGenerate = preset !== 'custom' || (customFrom && customTo && customFrom <= customTo);
+
+  const presetBtn = (id, label) => ({
+    padding: '10px 14px',
+    borderRadius: 8,
+    border: `1.5px solid ${preset === id ? '#2A9D8F' : '#d1d5db'}`,
+    background: preset === id ? '#ecfdf5' : '#fff',
+    color: preset === id ? '#0f766e' : '#374151',
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer',
+    textAlign: 'left',
+  });
+
+  return (
+    <div style={overlay} onClick={() => onClose()}>
+      <div style={modal} onClick={(e) => e.stopPropagation()}>
+        <h3 style={modalTitle}>SB 179 Compliance Report</h3>
+        <p style={{ fontSize: 13, color: '#6b7280', marginTop: -8, marginBottom: 16 }}>
+          Auto-generated from your time entries. Choose a reporting period.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+          <button type="button" style={presetBtn('month', 'This Month')} onClick={() => setPreset('month')}>This Month</button>
+          <button type="button" style={presetBtn('semester', 'Current Semester')} onClick={() => setPreset('semester')}>Current Semester</button>
+          <button type="button" style={presetBtn('ytd', 'Year-to-Date')} onClick={() => setPreset('ytd')}>Year-to-Date</button>
+          <button type="button" style={presetBtn('custom', 'Custom Range')} onClick={() => setPreset('custom')}>Custom Range</button>
+        </div>
+        {preset === 'custom' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+            <div>
+              <label className="form-label">From</label>
+              <input className="form-input" type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+            </div>
+            <div>
+              <label className="form-label">To</label>
+              <input className="form-input" type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+            </div>
+          </div>
+        )}
+        {period && canGenerate && (
+          <div style={{ fontSize: 12, color: '#6b7280', background: '#f9fafb', padding: '8px 12px', borderRadius: 6, marginBottom: 14 }}>
+            Will cover <strong style={{ color: '#1a2332' }}>{period.from}</strong> through <strong style={{ color: '#1a2332' }}>{period.to}</strong>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button type="button" className="btn btn-outline" onClick={() => onClose()} style={{ flex: 1 }}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!canGenerate}
+            onClick={() => { onGenerate(period); onClose(); }}
+            style={{ flex: 1 }}
+          >
+            Generate Report
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---- Date Range Modal ---- */
 function DateRangeModal({ open, onClose, onExport }) {
   const [from, setFrom] = useState('');
@@ -328,6 +586,7 @@ export default function TimeTrackerPage() {
   const [showModal, setShowModal] = useState(false);
   const [editEntry, setEditEntry] = useState(null);
   const [showDateRange, setShowDateRange] = useState(false);
+  const [showSB179, setShowSB179] = useState(false);
 
   const loadAll = useCallback(async () => {
     if (!counselor?.id) return;
@@ -439,6 +698,11 @@ export default function TimeTrackerPage() {
     generateRangePDF(entries, counselor.name || counselor.full_name || 'Counselor', rangeLabel, `time-report-${from}-to-${to}.pdf`);
   };
 
+  const handleSB179Generate = async (period) => {
+    const entries = await fetchEntriesRange(counselor.id, period.from, period.to);
+    generateSB179PDF(entries, counselor, period.label, period.from, period.to, `SB179-Compliance-${period.from}-to-${period.to}.pdf`);
+  };
+
   const dayTotal = dayEntries.reduce((s, e) => s + (e.duration_minutes || 0), 0);
 
   return (
@@ -532,6 +796,7 @@ export default function TimeTrackerPage() {
 
           {/* Export buttons */}
           <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" style={{ fontSize: 13, padding: '8px 16px' }} onClick={() => setShowSB179(true)}>SB 179 Compliance Report</button>
             <button className="btn btn-outline" style={{ fontSize: 13, padding: '8px 16px' }} onClick={handleExportMonthlyPDF}>Export Monthly PDF</button>
             <button className="btn btn-outline" style={{ fontSize: 13, padding: '8px 16px' }} onClick={handleExportAnnualPDF}>Export Annual PDF</button>
             <button className="btn btn-outline" style={{ fontSize: 13, padding: '8px 16px' }} onClick={handleExportCSV}>Export CSV</button>
@@ -562,6 +827,13 @@ export default function TimeTrackerPage() {
         open={showDateRange}
         onClose={() => setShowDateRange(false)}
         onExport={handleCustomRangeExport}
+      />
+
+      <SB179Modal
+        open={showSB179}
+        onClose={() => setShowSB179(false)}
+        onGenerate={handleSB179Generate}
+        counselor={counselor}
       />
     </div>
   );
