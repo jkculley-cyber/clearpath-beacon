@@ -639,42 +639,48 @@ export const VISUAL_RESOURCES = [
       doc.setFont('helvetica', 'normal');
       doc.text('FOR COUNSELOR USE ONLY \u2014 CONFIDENTIAL', pw / 2, 24, { align: 'center' });
 
-      let y = 40;
+      let y = 38;
+      const m = 16;
+      const boxW = pw - m * 2;
 
-      function drawStep(stepNum, title, bgColor, textLines) {
-        const boxH = 8 + textLines.length * 6 + 4;
+      function drawStep(stepNum, title, bgColor, bullets) {
+        const lineH = 4.5;
+        const titleH = 7;
+        const padTop = 4;
+        const padBot = 3;
+        const boxH = padTop + titleH + bullets.length * lineH + padBot;
 
         doc.setFillColor(...bgColor);
-        doc.roundedRect(20, y, pw - 40, boxH, 4, 4, 'F');
+        doc.roundedRect(m, y, boxW, boxH, 3, 3, 'F');
 
         // Step number circle
         doc.setFillColor(255, 255, 255);
-        doc.circle(34, y + boxH / 2, 7, 'F');
-        doc.setFontSize(14);
+        doc.circle(m + 11, y + padTop + titleH / 2, 5, 'F');
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...bgColor);
-        doc.text(String(stepNum), 34, y + boxH / 2 + 2, { align: 'center' });
+        doc.text(String(stepNum), m + 11, y + padTop + titleH / 2 + 1.5, { align: 'center' });
 
         // Title
-        doc.setFontSize(13);
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
-        doc.text(title, 48, y + 10);
+        doc.text(title, m + 21, y + padTop + 5);
 
-        // Detail lines
-        doc.setFontSize(10);
+        // Bullet lines
+        doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        textLines.forEach((line, i) => {
-          doc.text(line, 48, y + 18 + i * 6);
+        bullets.forEach((line, i) => {
+          doc.text('\u2022 ' + line, m + 21, y + padTop + titleH + 2 + i * lineH);
         });
 
-        y += boxH + 5;
+        y += boxH + 3;
 
-        // Arrow
+        // Arrow between steps
         if (stepNum < 7) {
-          doc.setFillColor(120, 120, 120);
-          doc.triangle(pw / 2 - 3, y - 4, pw / 2 + 3, y - 4, pw / 2, y, 'F');
-          y += 2;
+          doc.setFillColor(160, 160, 160);
+          doc.triangle(pw / 2 - 2, y - 2, pw / 2 + 2, y - 2, pw / 2, y + 1, 'F');
+          y += 3;
         }
       }
 
@@ -690,36 +696,33 @@ export const VISUAL_RESOURCES = [
         'Trust your training \u2014 when in doubt, treat as imminent.',
       ]);
 
-      drawStep(3, 'IF IMMINENT DANGER', [239, 68, 68], [
-        'DO NOT leave the student alone.',
-        'Call 911 if there is immediate risk to life.',
+      drawStep(3, 'IF IMMINENT DANGER', [220, 38, 38], [
+        'DO NOT leave the student alone. Call 911 if immediate risk to life.',
         'Contact the principal immediately.',
-        'Call 988 (Suicide & Crisis Lifeline) for guidance if needed.',
+        'Call 988 (Suicide & Crisis Lifeline) for guidance.',
       ]);
 
-      drawStep(4, 'IF NOT IMMINENT', [234, 179, 8], [
+      drawStep(4, 'IF NOT IMMINENT', [202, 138, 4], [
         'Document the disclosure in writing (facts, not interpretations).',
-        'Complete a screening form.',
-        'Notify the principal / administrator.',
+        'Complete a screening form. Notify the principal.',
       ]);
 
-      drawStep(5, 'NOTIFY PARENT / GUARDIAN', [249, 115, 22], [
-        'Contact parent/guardian the same day (unless parent is the concern).',
+      drawStep(5, 'NOTIFY PARENT / GUARDIAN', [234, 88, 12], [
+        'Contact parent/guardian same day (unless parent is the concern).',
         'If abuse/neglect suspected: call CPS BEFORE notifying parent.',
         'Document the notification and parent response.',
       ]);
 
-      drawStep(6, 'CREATE A SAFETY PLAN', [34, 197, 94], [
-        'Complete the student safety plan with the student.',
+      drawStep(6, 'CREATE A SAFETY PLAN', [22, 163, 74], [
+        'Complete the safety plan with the student.',
         'Identify trusted adults, coping strategies, and safe places.',
         'Give a copy to the student and keep one in their file.',
       ]);
 
-      drawStep(7, 'FOLLOW UP', [20, 184, 166], [
+      drawStep(7, 'FOLLOW UP', [15, 148, 136], [
         'Check in with the student within 24 hours.',
         'Schedule ongoing follow-up (daily for first week, then as needed).',
-        'Connect to outside resources / community mental health if needed.',
-        'Debrief with your own support person \u2014 take care of yourself.',
+        'Connect to outside resources if needed. Take care of yourself.',
       ]);
 
       // Footer
