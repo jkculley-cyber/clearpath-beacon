@@ -14,6 +14,7 @@ import TimeTrackerPage from './pages/TimeTrackerPage';
 import LessonsPage from './pages/LessonsPage';
 import CommunicationsPage from './pages/CommunicationsPage';
 import TemplatesPage from './pages/TemplatesPage';
+import ResourcesPage from './pages/ResourcesPage';
 import SettingsPage from './pages/SettingsPage';
 import ReportsPage from './pages/ReportsPage';
 import SessionsPage from './pages/SessionsPage';
@@ -81,6 +82,7 @@ export default function App() {
         <Route path="needs-assessment" element={<NeedsAssessmentPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="templates" element={<TemplatesPage />} />
+        <Route path="resources" element={<ResourcesPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 
