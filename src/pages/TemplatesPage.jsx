@@ -257,6 +257,7 @@ function generateReferralAck(counselor, student) {
   y = drawField(doc, 'Estimated Start Date:', MARGIN, y, 80);
   y += 5;
 
+  y = checkPage(doc, y, 50);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...BLACK);
@@ -312,6 +313,7 @@ function generateGroupPermission(counselor, student) {
   doc.text(confNote, MARGIN, y);
   y += confNote.length * 4.5 + 8;
 
+  y = checkPage(doc, y, 65);
   y = drawSection(doc, 'Parent/Guardian Consent', y);
   y = drawCheckboxes(doc, [
     'I GIVE permission for my child to participate in this group.',
@@ -359,6 +361,7 @@ function generateParentConference(counselor, student) {
   y = drawLines(doc, y, 5, MARGIN, CONTENT_W);
 
   y = drawField(doc, 'Follow-Up Date:', MARGIN, y, 60);
+  y = checkPage(doc, y, 30);
   y += 8;
   y = drawDualSignature(doc, 'Counselor Signature', 'Parent/Guardian Signature', y);
 
@@ -919,7 +922,7 @@ function generateStudentGoalSheet(counselor, student) {
     doc.text(`${i}.`, MARGIN + 4, y);
     doc.setDrawColor(200, 200, 200);
     doc.line(MARGIN + 12, y + 1, MARGIN + CONTENT_W, y + 1);
-    y += 9;
+    y += 7;
   }
   y += 5;
 
@@ -932,7 +935,7 @@ function generateStudentGoalSheet(counselor, student) {
   for (let i = 0; i < 3; i++) {
     doc.setDrawColor(200, 200, 200);
     doc.line(MARGIN + 4, y + 1, MARGIN + CONTENT_W, y + 1);
-    y += 9;
+    y += 7;
   }
   y += 5;
 
@@ -966,6 +969,7 @@ function generateStudentGoalSheet(counselor, student) {
   y += 5;
 
   // Self-rating scale
+  y = checkPage(doc, y, 50);
   doc.setFillColor(255, 250, 235);
   doc.roundedRect(MARGIN, y, CONTENT_W, 22, 3, 3, 'F');
   doc.setFontSize(11);
@@ -1122,7 +1126,7 @@ function generateFeelingsCheckin(counselor, student) {
   doc.setTextColor(...GRAY);
   doc.text('Counselor Notes (for counselor use only):', MARGIN, y);
   y += 4;
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 3; i++) {
     doc.setDrawColor(220, 220, 220);
     doc.setLineWidth(0.15);
     doc.line(MARGIN, y, MARGIN + CONTENT_W, y);

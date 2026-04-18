@@ -161,12 +161,6 @@ export const VISUAL_RESOURCES = [
         });
       }
 
-      // Instruction text
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'italic');
-      doc.setTextColor(100, 100, 100);
-      doc.text('Pick one and try it! If it doesn\'t work, try another one.', pw / 2, offsetY + gridH + 15, { align: 'center' });
-
       // Footer
       doc.setFontSize(9);
       doc.setTextColor(150, 150, 150);
@@ -526,7 +520,7 @@ export const VISUAL_RESOURCES = [
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
         doc.text(title, 28, yPos + 9);
-        yPos += 16;
+        yPos += 14;
 
         // Lines
         doc.setFontSize(11);
@@ -534,13 +528,13 @@ export const VISUAL_RESOURCES = [
         doc.setTextColor(80, 80, 80);
         for (let i = 0; i < items.length; i++) {
           doc.text(items[i], 28, yPos);
-          yPos += 4;
+          yPos += 2;
           doc.setDrawColor(200, 200, 200);
           doc.setLineWidth(0.3);
           doc.line(28, yPos, pw - 28, yPos);
-          yPos += 8;
+          yPos += 5;
         }
-        yPos += 4;
+        yPos += 3;
       }
 
       // Section 1: People I Can Talk To
