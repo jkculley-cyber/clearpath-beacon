@@ -57,7 +57,7 @@ license. No card on file, no surprise charges.
 
 ─── Getting started ──────────────────────────────────────────
 
-1. Open Beacon:  https://clearpath-beacon.pages.dev
+1. Open Beacon:  https://beacon.clearpathedgroup.com/setup?key={{license_key}}
 
 2. Enter your info on the Local Mode Setup screen (your name,
    campus, district).

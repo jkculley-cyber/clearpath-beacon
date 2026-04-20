@@ -9,7 +9,8 @@
 - **Stack:** React 19 + Vite 7 + Supabase + Cloudflare Pages
 - **Repo:** `jkculley-cyber/clearpath-beacon` (branch: main)
 - **Supabase ref:** `cghhabcbgyoqwqjzunfo`
-- **Live URL:** clearpath-beacon.pages.dev
+- **Live URL:** beacon.clearpathedgroup.com (custom domain — preferred for all customer-facing links; school firewalls frequently block *.pages.dev)
+- **Cloudflare Pages alias:** clearpath-beacon.pages.dev (internal / dev only)
 
 ## Current State
 - **Migrations applied:** 001 (foundation), 002 (schema additions)

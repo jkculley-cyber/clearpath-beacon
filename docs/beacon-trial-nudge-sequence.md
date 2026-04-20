@@ -24,7 +24,7 @@ If you checked "Load sample data" during setup, you already have 5 students, 2 g
 
 One thing to try today: log a session note on any student. That's where Beacon starts saving you time.
 
-Open Beacon → https://clearpath-beacon.pages.dev
+Open Beacon → https://beacon.clearpathedgroup.com
 
 — Kim
 
@@ -44,7 +44,7 @@ That's it. 15 seconds. But now you have a timestamped record that's searchable, 
 
 The counselors who love Beacon the most started with one student, one note. Everything else builds from there.
 
-→ https://clearpath-beacon.pages.dev
+→ https://beacon.clearpathedgroup.com
 
 — Kim
 
@@ -62,7 +62,7 @@ If the answer is "a spreadsheet" or "I'm not" — Beacon handles this automatica
 
 No end-of-month scramble. No guessing. If you're drifting toward too much indirect time, you'll know before your principal asks.
 
-Check your SB 179 dashboard → https://clearpath-beacon.pages.dev
+Check your SB 179 dashboard → https://beacon.clearpathedgroup.com
 
 — Kim
 
@@ -85,7 +85,7 @@ Everything cross-references. When you pull up a student, you see their individua
 
 Your trial has 7 days left. If you haven't tried Groups yet, give it a shot this week.
 
-→ https://clearpath-beacon.pages.dev
+→ https://beacon.clearpathedgroup.com
 
 — Kim
 
@@ -112,7 +112,7 @@ $999/year — less than $5 per school day.
 
 If your campus or district covers counseling tools, Beacon qualifies under student support services or guidance program materials. I can provide a justification letter for your business office.
 
-Activate your license → https://clearpath-beacon.pages.dev (Settings > License)
+Activate your license → https://beacon.clearpathedgroup.com (Settings > License)
 
 — Kim
 
@@ -132,7 +132,7 @@ If the timing isn't right, I understand. Your data stays on your device regardle
 
 If you have feedback — what worked, what was missing, what would make it worth $999/year — please reply. I'm building this for counselors like you and your input shapes what comes next.
 
-→ https://clearpath-beacon.pages.dev
+→ https://beacon.clearpathedgroup.com
 
 — Kim Culley
 Clear Path Education Group

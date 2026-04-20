@@ -57,7 +57,8 @@
 
 ## BEACON (Elementary Counselor Command Center)
 
-- **Live URL:** https://clearpath-beacon.pages.dev
+- **Live URL:** https://beacon.clearpathedgroup.com (custom domain — use this in all customer-facing links; school district firewalls frequently block *.pages.dev)
+- **Internal alias:** https://clearpath-beacon.pages.dev (dev / debugging only)
 - **Supabase Dashboard:** https://supabase.com/dashboard/project/cghhabcbgyoqwqjzunfo
 - **Default mode:** Local (on-device, no login needed)
 - **License required:** Enter key during setup or in Settings

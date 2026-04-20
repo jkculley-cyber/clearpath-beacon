@@ -80,8 +80,8 @@ support@clearpathedgroup.com
 ## Deployment Notes
 - **From:** Kim Culley at Clear Path <support@clearpathedgroup.com>
 - **Reply-to:** support@clearpathedgroup.com
-- **CTA link:** https://clearpath-beacon.pages.dev
+- **CTA link:** https://beacon.clearpathedgroup.com
 - **Website:** https://clearpathedgroup.com
 - **HTML template:** beacon-marketing-email.html (in this folder)
 - **Branding:** Teal/cyan gradient (#0a2e2a → #134e4a), accent #2A9D8F, CTA #2dd4bf
-- **Icon:** https://clearpath-beacon.pages.dev/icons/Beacon-AppIcon-512.png
+- **Icon:** https://beacon.clearpathedgroup.com/icons/Beacon-AppIcon-512.png
