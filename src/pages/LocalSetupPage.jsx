@@ -3,6 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { seedSampleData } from '../lib/seedSampleData';
 
+// Pre-fill the license field when the page is opened from clearpathedgroup.com/activate
+// with the key in the URL (e.g. /setup?key=BCN-XXXXXX-XXXX). Counselor doesn't retype.
+function readKeyFromUrl() {
+  try {
+    const k = new URLSearchParams(window.location.search).get('key');
+    return k ? k.trim().toUpperCase() : '';
+  } catch { return ''; }
+}
+
 export default function LocalSetupPage() {
   const { setupLocalProfile, saveLicenseKey } = useAuth();
   const navigate = useNavigate();
@@ -10,8 +19,9 @@ export default function LocalSetupPage() {
   const [email, setEmail] = useState('');
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
-  const [licenseKey, setLicenseKey] = useState('');
-  const [showLicenseField, setShowLicenseField] = useState(false);
+  const initialKey = readKeyFromUrl();
+  const [licenseKey, setLicenseKey] = useState(initialKey);
+  const [showLicenseField, setShowLicenseField] = useState(!!initialKey);
   const [licenseError, setLicenseError] = useState('');
   const [loadSample, setLoadSample] = useState(true);
   const [saving, setSaving] = useState(false);
