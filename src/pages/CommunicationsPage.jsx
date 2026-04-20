@@ -4,6 +4,10 @@ import { db } from '../lib/db';
 import { supabase } from '../lib/supabase';
 import { CONTACT_TYPES } from '../lib/constants';
 
+// Feature flag — flip to true once the `generate-parent-update` edge function
+// is deployed and the button should reappear for Cloud-mode users.
+const FEATURE_AI_GENERATE = false;
+
 export default function CommunicationsPage() {
   const { counselor, isLocalMode } = useAuth();
   const [comms, setComms] = useState([]);
@@ -219,7 +223,7 @@ export default function CommunicationsPage() {
                 <button type="submit" className="btn btn-primary" disabled={saving || !studentId} style={{ flex: 1 }}>
                   {saving ? 'Saving...' : 'Log Contact'}
                 </button>
-                {!isLocalMode && (
+                {FEATURE_AI_GENERATE && !isLocalMode && (
                   <button type="button" className="btn btn-outline" onClick={handleGenerate} disabled={generating || !studentId} style={{ flex: 1 }}>
                     {generating ? 'Generating...' : 'Generate AI Update'}
                   </button>
@@ -227,8 +231,8 @@ export default function CommunicationsPage() {
               </div>
             </form>
 
-            {/* AI Draft */}
-            {aiDraft && (
+            {/* AI Draft — only rendered while the feature flag is on */}
+            {FEATURE_AI_GENERATE && aiDraft && (
               <div style={{ marginTop: 16 }}>
                 <label className="form-label">AI-Generated Draft</label>
                 <textarea className="form-input" rows={5} value={aiDraft} onChange={(e) => setAiDraft(e.target.value)} style={{ marginBottom: 8 }} />
