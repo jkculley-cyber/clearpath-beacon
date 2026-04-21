@@ -336,6 +336,8 @@ function EditStudentModal({ open, onClose, student }) {
   const [tier, setTier] = useState(1);
   const [status, setStatus] = useState('active');
   const [referralSource, setReferralSource] = useState('');
+  const [permissionSlipOnFile, setPermissionSlipOnFile] = useState(false);
+  const [permissionSlipSignedDate, setPermissionSlipSignedDate] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -347,6 +349,8 @@ function EditStudentModal({ open, onClose, student }) {
       setTier(student.tier || 1);
       setStatus(student.status || 'active');
       setReferralSource(student.referral_source || '');
+      setPermissionSlipOnFile(!!student.permission_slip_on_file);
+      setPermissionSlipSignedDate(student.permission_slip_signed_date || '');
     }
   }, [student]);
 
@@ -364,6 +368,10 @@ function EditStudentModal({ open, onClose, student }) {
       tier: parseInt(tier, 10),
       status,
       referral_source: referralSource,
+      permission_slip_on_file: permissionSlipOnFile,
+      permission_slip_signed_date: permissionSlipOnFile
+        ? (permissionSlipSignedDate || new Date().toISOString().slice(0, 10))
+        : null,
     });
     setSaving(false);
     onClose(true);
@@ -412,6 +420,35 @@ function EditStudentModal({ open, onClose, student }) {
               <label className="form-label">Referral Source</label>
               <input className="form-input" value={referralSource} onChange={(e) => setReferralSource(e.target.value)} />
             </div>
+          </div>
+          <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, marginBottom: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={permissionSlipOnFile}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setPermissionSlipOnFile(checked);
+                  if (checked && !permissionSlipSignedDate) {
+                    setPermissionSlipSignedDate(new Date().toISOString().slice(0, 10));
+                  }
+                }}
+                style={{ width: 16, height: 16, cursor: 'pointer' }}
+              />
+              Signed permission slip for counseling services on file
+            </label>
+            {permissionSlipOnFile && (
+              <div style={{ marginTop: 8, paddingLeft: 24 }}>
+                <label className="form-label" style={{ fontSize: 12 }}>Date signed</label>
+                <input
+                  className="form-input"
+                  type="date"
+                  value={permissionSlipSignedDate}
+                  onChange={(e) => setPermissionSlipSignedDate(e.target.value)}
+                  style={{ maxWidth: 200 }}
+                />
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button type="button" className="btn btn-outline" onClick={() => onClose(false)} style={{ flex: 1 }}>Cancel</button>
@@ -618,6 +655,21 @@ export default function StudentDetailPage() {
     loadAll();
   };
 
+  const togglePermissionSlip = async () => {
+    if (!student) return;
+    const nowOnFile = !student.permission_slip_on_file;
+    const today = new Date().toISOString().slice(0, 10);
+    const { error: err } = await db.update('students', student.id, {
+      permission_slip_on_file: nowOnFile,
+      permission_slip_signed_date: nowOnFile ? (student.permission_slip_signed_date || today) : null,
+    });
+    if (err) {
+      alert(err.message || 'Could not update permission slip status.');
+      return;
+    }
+    loadAll();
+  };
+
   const tierColors = { 1: '#22c55e', 2: '#f59e0b', 3: '#ef4444' };
 
   /* Build progress chart data — group by date, pivot objective_index into columns */
@@ -730,6 +782,57 @@ export default function StudentDetailPage() {
               Edit
             </button>
           </div>
+        </div>
+        {/* Permission slip status row */}
+        <div
+          style={{
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: '1px solid #f1f5f9',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 10,
+          }}
+        >
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              cursor: 'pointer',
+              fontSize: 14,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={!!student.permission_slip_on_file}
+              onChange={togglePermissionSlip}
+              style={{ width: 16, height: 16, cursor: 'pointer' }}
+              aria-label="Signed permission slip for counseling services on file"
+            />
+            <span
+              style={{
+                fontWeight: 600,
+                color: student.permission_slip_on_file ? '#15803d' : '#b45309',
+              }}
+            >
+              {student.permission_slip_on_file
+                ? '✓ Signed permission slip on file'
+                : '⚠ No signed permission slip on file'}
+            </span>
+            {student.permission_slip_on_file && student.permission_slip_signed_date && (
+              <span style={{ fontSize: 13, color: '#6b7280' }}>
+                · signed {student.permission_slip_signed_date}
+              </span>
+            )}
+          </label>
+          {!student.permission_slip_on_file && (
+            <span style={{ fontSize: 12, color: '#b45309' }}>
+              Check the box once the signed consent form is received.
+            </span>
+          )}
         </div>
       </div>
 

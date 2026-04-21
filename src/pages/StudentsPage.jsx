@@ -76,6 +76,9 @@ function ImportModal({ open, onClose, counselorId, csvFile }) {
       lastName = parts.slice(1).join(' ');
     }
     const tierVal = parseInt(get('tier'), 10);
+    const slipRaw = get('permission_slip_on_file').toLowerCase().trim();
+    const slipOnFile = ['y', 'yes', 'true', '1', 'x'].includes(slipRaw);
+    const slipDate = get('permission_slip_signed_date') || '';
     return {
       counselor_id: counselorId,
       first_name: firstName,
@@ -86,6 +89,8 @@ function ImportModal({ open, onClose, counselorId, csvFile }) {
       tier: [1, 2, 3].includes(tierVal) ? tierVal : 1,
       referral_source: get('referral_source') || '',
       status: 'active',
+      permission_slip_on_file: slipOnFile,
+      permission_slip_signed_date: slipOnFile ? (slipDate || null) : null,
     };
   };
 
@@ -300,6 +305,7 @@ export default function StudentsPage() {
   const [filterGrade, setFilterGrade] = useState('');
   const [filterTier, setFilterTier] = useState('');
   const [filterStatus, setFilterStatus] = useState('active');
+  const [filterPermissionSlip, setFilterPermissionSlip] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [csvFile, setCsvFile] = useState(null);
   const [showImport, setShowImport] = useState(false);
@@ -334,13 +340,15 @@ export default function StudentsPage() {
 
   const handleExportCSV = () => {
     const today = new Date().toISOString().slice(0, 10);
-    const headers = ['Name', 'Grade', 'Teacher', 'Tier', 'Status', 'Sessions Count', 'Last Seen'];
+    const headers = ['Name', 'Grade', 'Teacher', 'Tier', 'Status', 'Permission Slip On File', 'Permission Slip Signed Date', 'Sessions Count', 'Last Seen'];
     const rows = filtered.map((s) => [
       studentName(s),
       s.grade || '',
       s.teacher || '',
       s.tier || '',
       s.status || '',
+      s.permission_slip_on_file ? 'Yes' : 'No',
+      s.permission_slip_signed_date || '',
       s.sessions?.length || 0,
       s.last_seen_date || '',
     ]);
@@ -348,6 +356,8 @@ export default function StudentsPage() {
   };
 
   const filtered = students.filter((s) => {
+    if (filterPermissionSlip === 'yes' && !s.permission_slip_on_file) return false;
+    if (filterPermissionSlip === 'no' && s.permission_slip_on_file) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return studentName(s).toLowerCase().includes(q) || (s.teacher || '').toLowerCase().includes(q);
@@ -392,7 +402,47 @@ export default function StudentsPage() {
           <option value="">All Statuses</option>
           {STUDENT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
+        <select className="form-input" value={filterPermissionSlip} onChange={(e) => setFilterPermissionSlip(e.target.value)} style={{ width: 170 }}>
+          <option value="">All permission slips</option>
+          <option value="yes">Slip on file</option>
+          <option value="no">Slip missing</option>
+        </select>
       </div>
+
+      {/* Permission slip summary */}
+      {!loading && students.length > 0 && (() => {
+        const onFile = students.filter((s) => s.permission_slip_on_file).length;
+        const missing = students.length - onFile;
+        const pct = students.length > 0 ? Math.round((onFile / students.length) * 100) : 0;
+        return (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setFilterPermissionSlip('')}
+              style={{ ...summaryChip, borderColor: filterPermissionSlip === '' ? '#0f766e' : '#e5e7eb' }}
+            >
+              <span style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', fontWeight: 600 }}>Students in roster</span>
+              <span style={{ fontSize: 22, fontWeight: 700, color: '#1a2332' }}>{students.length}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterPermissionSlip('yes')}
+              style={{ ...summaryChip, borderColor: filterPermissionSlip === 'yes' ? '#15803d' : '#dcfce7', background: '#f0fdf4' }}
+            >
+              <span style={{ fontSize: 11, color: '#15803d', textTransform: 'uppercase', fontWeight: 600 }}>✓ Slip on file</span>
+              <span style={{ fontSize: 22, fontWeight: 700, color: '#15803d' }}>{onFile} <span style={{ fontSize: 12, fontWeight: 500 }}>({pct}%)</span></span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterPermissionSlip('no')}
+              style={{ ...summaryChip, borderColor: filterPermissionSlip === 'no' ? '#b45309' : '#fef3c7', background: '#fffbeb' }}
+            >
+              <span style={{ fontSize: 11, color: '#b45309', textTransform: 'uppercase', fontWeight: 600 }}>⚠ Slip missing</span>
+              <span style={{ fontSize: 22, fontWeight: 700, color: '#b45309' }}>{missing}</span>
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Table */}
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -409,6 +459,7 @@ export default function StudentsPage() {
                 <th style={thStyle}>Teacher</th>
                 <th style={thStyle}>Tier</th>
                 <th style={thStyle}>Status</th>
+                <th style={thStyle}>Permission Slip</th>
                 <th style={thStyle}>Sessions</th>
                 <th style={thStyle}>Last Seen</th>
               </tr>
@@ -424,6 +475,15 @@ export default function StudentsPage() {
                   <td style={tdStyle}>{tierBadge(s.tier)}</td>
                   <td style={tdStyle}>
                     <span style={{ textTransform: 'capitalize', color: s.status === 'active' ? '#22c55e' : '#9ca3af' }}>{s.status}</span>
+                  </td>
+                  <td style={tdStyle}>
+                    {s.permission_slip_on_file ? (
+                      <span style={{ color: '#15803d', fontWeight: 600, fontSize: 13 }}>
+                        ✓ On file{s.permission_slip_signed_date ? ` · ${s.permission_slip_signed_date}` : ''}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#b45309', fontWeight: 600, fontSize: 13 }}>⚠ Missing</span>
+                    )}
                   </td>
                   <td style={tdStyle}>{s.sessions?.length || 0}</td>
                   <td style={tdStyle}>{s.last_seen_date || '--'}</td>
@@ -454,3 +514,4 @@ const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', di
 const modal = { background: '#fff', borderRadius: 12, padding: 28, width: 460, boxShadow: '0 20px 60px rgba(0,0,0,0.15)' };
 const thStyle = { padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' };
 const tdStyle = { padding: '10px 14px' };
+const summaryChip = { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, padding: '10px 16px', borderRadius: 10, border: '2px solid #e5e7eb', background: '#fff', cursor: 'pointer', minWidth: 140, textAlign: 'left' };
