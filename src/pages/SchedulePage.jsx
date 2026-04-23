@@ -233,6 +233,15 @@ function AddSessionModal({ open, onClose, counselorId }) {
 
   useEffect(() => {
     if (!open || !counselorId) return;
+    // Reset form fields so last session's values don't bleed into a fresh entry.
+    setSessionType('individual');
+    setStudentId('');
+    setGroupId('');
+    setSessionDate(format(new Date(), 'yyyy-MM-dd'));
+    setStartTime('09:00');
+    setDuration(30);
+    setNotes('');
+    setSaving(false);
     Promise.all([
       db.select('students', { eq: { counselor_id: counselorId, status: 'active' }, order: { column: 'first_name', ascending: true } }),
       db.select('groups', { eq: { counselor_id: counselorId, status: 'active' }, order: { column: 'name', ascending: true } }),

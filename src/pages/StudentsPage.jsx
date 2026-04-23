@@ -224,6 +224,21 @@ function AddStudentModal({ open, onClose, counselorId }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Reset form every time the modal opens so the previous student's values
+  // don't bleed into a fresh entry.
+  useEffect(() => {
+    if (open) {
+      setFirstName('');
+      setLastName('');
+      setGrade('');
+      setTeacher('');
+      setReferralSource('');
+      setTier(1);
+      setError('');
+      setSaving(false);
+    }
+  }, [open]);
+
   if (!open) return null;
 
   const handleSubmit = async (e) => {

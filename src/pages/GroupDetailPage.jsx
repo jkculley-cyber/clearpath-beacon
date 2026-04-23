@@ -210,6 +210,16 @@ function AddMemberModal({ open, onClose, groupId, existingIds }) {
   const [results, setResults] = useState([]);
   const [adding, setAdding] = useState(null);
 
+  // Reset search field every time the modal opens so the previous search
+  // doesn't persist when a user adds members to a different group.
+  useEffect(() => {
+    if (open) {
+      setQuery('');
+      setResults([]);
+      setAdding(null);
+    }
+  }, [open]);
+
   useEffect(() => {
     if (!open || query.length < 2) { setResults([]); return; }
     const t = setTimeout(async () => {

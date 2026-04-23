@@ -15,6 +15,9 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
 
   useEffect(() => {
     if (open) {
+      setMode('individual');
+      setSelectedGroup('');
+      setSaving(false);
       setError('');
       setMatchedStudent(null);
       db.select('groups', { eq: { counselor_id: counselorId, status: 'active' } }).then(({ data }) => setGroups(data || []));
@@ -315,6 +318,19 @@ function AddReferralModal({ open, onClose, counselorId }) {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      setStudentName('');
+      setGrade('');
+      setTeacherName('');
+      setConcernType('');
+      setUrgency('Routine');
+      setNotes('');
+      setSaving(false);
+      setError('');
+    }
+  }, [open]);
 
   if (!open) return null;
 

@@ -20,6 +20,22 @@ function NewGroupModal({ open, onClose, counselorId, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (open) {
+      setName('');
+      setGradeBand('');
+      setFocusArea('');
+      setRotationType('weekly_abc');
+      setStartDate('');
+      setEndDate('');
+      setObj1(''); setObj1Domain('Social-Emotional');
+      setObj2(''); setObj2Domain('Academic');
+      setObj3(''); setObj3Domain('Career');
+      setSaving(false);
+      setError('');
+    }
+  }, [open]);
+
   if (!open) return null;
 
   const handleSubmit = async (e) => {

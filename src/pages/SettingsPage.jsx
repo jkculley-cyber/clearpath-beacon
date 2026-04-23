@@ -1104,14 +1104,15 @@ export default function SettingsPage() {
                 <div style={{ marginBottom: 12, padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 6 }}>Sample Data Loaded</div>
                   <p style={{ fontSize: 12, color: '#92400e', marginBottom: 8, lineHeight: 1.5 }}>
-                    You have demo data from setup. Clear it to start fresh with your own students and sessions.
+                    Clear the five demo students (Marcus, Emma, Aiden, Sofia, Jayden) and their groups, sessions, time entries, and referrals. <strong>Students you added yourself are not touched.</strong>
                   </p>
                   <button
                     className="btn btn-outline"
                     style={{ fontSize: 12, color: '#92400e', borderColor: '#f59e0b' }}
                     onClick={async () => {
-                      if (!confirm('Clear all sample students, groups, sessions, time entries, and referrals? Your profile, lessons, and templates will be kept.')) return;
-                      await clearSampleData(counselor.id);
+                      if (!confirm('Remove only the demo/sample roster (Marcus, Emma, Aiden, Sofia, Jayden) and their sessions? Students you added yourself will NOT be removed.')) return;
+                      const count = await clearSampleData(counselor.id);
+                      alert(`${count} sample record${count === 1 ? '' : 's'} removed. Your own students, groups, and sessions were kept.`);
                       window.location.reload();
                     }}
                   >
