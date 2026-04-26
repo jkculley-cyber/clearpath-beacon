@@ -690,6 +690,23 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
   // so school content filters can't strip the QR.
   const printQrRef = useRef(null);
 
+  // Computed BEFORE any early return so the hook order stays stable across renders.
+  // (Optional chaining handles the null-counselor case.)
+  const emailIsPlaceholder = !counselor?.email || counselor?.email === 'local@beacon.local';
+  const counselorName = counselor?.name || 'your counselor';
+  const counselorEmail = counselor?.email && !emailIsPlaceholder ? counselor.email : '';
+
+  // Mailto-relay URL for local mode; direct-submit URL for cloud mode
+  const referralUrl = !counselor
+    ? ''
+    : (localMode
+        ? (counselorEmail
+            ? `${window.location.origin}/referral-form?to=${encodeURIComponent(counselorEmail)}&n=${encodeURIComponent(counselorName)}`
+            : '')
+        : `${window.location.origin}/referral-form?c=${counselor.id}`);
+
+  const canShare = !!counselor && (!localMode || !!counselorEmail);
+
   useEffect(() => {
     if (open && counselor) {
       // Initialize email editor with current counselor email (or blank if it's the placeholder)
@@ -700,26 +717,12 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
     }
   }, [open, counselor]);
 
-  if (!open || !counselor) return null;
-
-  const emailIsPlaceholder = !counselor.email || counselor.email === 'local@beacon.local';
-  const counselorName = counselor.name || 'your counselor';
-  const counselorEmail = counselor.email && !emailIsPlaceholder ? counselor.email : '';
-
-  // Mailto-relay URL for local mode; direct-submit URL for cloud mode
-  const referralUrl = localMode
-    ? (counselorEmail
-        ? `${window.location.origin}/referral-form?to=${encodeURIComponent(counselorEmail)}&n=${encodeURIComponent(counselorName)}`
-        : '')
-    : `${window.location.origin}/referral-form?c=${counselor.id}`;
-
-  const canShare = !localMode || !!counselorEmail;
-
   // Auto-fetch shortened URL when referralUrl is ready. TinyURL is a public free
   // service; the only data sent is the URL itself (counselor email + name —
   // counselor's own work info, not student PII). Falls back silently to long URL.
+  // MUST stay above the early-return below to keep hook order stable.
   useEffect(() => {
-    if (!referralUrl || !canShare) return;
+    if (!open || !referralUrl || !canShare) return;
     let cancelled = false;
     setShortening(true);
     fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(referralUrl)}`)
@@ -732,7 +735,9 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
       .catch(() => { /* fallback to long URL */ })
       .finally(() => { if (!cancelled) setShortening(false); });
     return () => { cancelled = true; };
-  }, [referralUrl, canShare]);
+  }, [open, referralUrl, canShare]);
+
+  if (!open || !counselor) return null;
 
   // Whichever URL is ready — short preferred, long as fallback.
   const linkForSharing = shortUrl || referralUrl;
