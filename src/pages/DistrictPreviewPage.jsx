@@ -440,11 +440,21 @@ function generateCounselorCompliancePdf() {
       c.campus,
       c.sb179 + '%',
       c.docCompleteness + '%',
-      c.status === 'green' ? '✓ Compliant' : c.status === 'amber' ? '⚠ Watch' : '✗ Action Needed',
+      c.status === 'green' ? 'COMPLIANT' : c.status === 'amber' ? 'WATCH' : 'ACTION NEEDED',
     ]),
     theme: 'striped',
     headStyles: { fillColor: [42, 157, 143] },
     margin: { left: 15, right: 15 },
+    didParseCell: (data) => {
+      // Color-code the status column (last column, body cells only).
+      if (data.section === 'body' && data.column.index === 4) {
+        const v = data.cell.raw;
+        if (v === 'COMPLIANT') data.cell.styles.textColor = [21, 128, 61];
+        else if (v === 'WATCH') data.cell.styles.textColor = [161, 98, 7];
+        else if (v === 'ACTION NEEDED') data.cell.styles.textColor = [185, 28, 28];
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
   });
 
   let y = doc.lastAutoTable.finalY + 14;
@@ -525,11 +535,15 @@ function generateAscaReportPdf() {
   doc.setFontSize(10);
   doc.setTextColor(75, 85, 99);
   const goals = [
-    '• Increase Tier 2 small-group attendance from 78% to 85% by spring semester.',
-    '• Reduce average referral-to-first-contact time from 3.2 days to 2.0 days.',
-    '• Achieve 90%+ documentation completeness across all counselors by Q3.',
+    'Increase Tier 2 small-group attendance from 78% to 85% by spring semester.',
+    'Reduce average referral-to-first-contact time from 3.2 days to 2.0 days.',
+    'Achieve 90%+ documentation completeness across all counselors by Q3.',
   ];
-  goals.forEach((g, i) => doc.text(g, 18, y + 8 + i * 6));
+  goals.forEach((g, i) => {
+    // Use a drawn circle for the bullet — works in any PDF viewer regardless of font encoding.
+    doc.circle(20, y + 7 + i * 6, 0.8, 'F');
+    doc.text(g, 24, y + 8 + i * 6);
+  });
 
   pdfFooter(doc);
   doc.save('ASCA_Annual_Program_Report_Demo.pdf');
@@ -640,7 +654,7 @@ function generateBoardSlideDeckPdf() {
     `${DEMO_CRISIS.suicideScreeningsYtd} suicide risk screenings completed YTD`,
     `${DEMO_CRISIS.activeSafetyPlans} active safety plans on file across district`,
     `${DEMO_CRISIS.threatAssessmentsCompleted} threat assessments completed`,
-    `${DEMO_CRISIS.avgCrisisResponseHours} hour average response time (referral → action)`,
+    `${DEMO_CRISIS.avgCrisisResponseHours} hour average response time (referral to action)`,
     `${DEMO_CRISIS.pendingSafetyPlanReviews} safety plans pending 30-day review this week`,
   ];
   sb11lines.forEach((line, i) => {
@@ -744,7 +758,7 @@ function generateSuicideRiskComplianceReportPdf() {
       ['Suicide risk screenings completed YTD', String(DEMO_CRISIS.suicideScreeningsYtd)],
       ['Active safety plans on file',           String(DEMO_CRISIS.activeSafetyPlans)],
       ['Threat assessments completed YTD',      String(DEMO_CRISIS.threatAssessmentsCompleted)],
-      ['Average response time (referral → action)', DEMO_CRISIS.avgCrisisResponseHours + ' hours'],
+      ['Average response time (referral to action)', DEMO_CRISIS.avgCrisisResponseHours + ' hours'],
       ['30-day safety plan reviews due this week', String(DEMO_CRISIS.pendingSafetyPlanReviews)],
     ],
     theme: 'striped',
