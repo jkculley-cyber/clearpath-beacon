@@ -682,6 +682,10 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
   const [copied, setCopied] = useState(false);
   const [editEmail, setEditEmail] = useState('');
   const [savingEmail, setSavingEmail] = useState(false);
+  // Offscreen container holding a print-sized QR. We grab its <svg> at print time
+  // and inject it inline into the print window — no external network call,
+  // so school content filters can't strip the QR.
+  const printQrRef = useRef(null);
 
   useEffect(() => {
     if (open && counselor) {
@@ -729,40 +733,57 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
   };
 
   const handlePrintPoster = () => {
+    if (!referralUrl) return;
+    // Grab the offscreen QR <svg> rendered by qrcode.react and inline it into
+    // the print window. Self-contained — no external image fetch (school
+    // content filters routinely block third-party QR generator domains).
+    const sourceSvg = printQrRef.current?.querySelector('svg');
+    if (!sourceSvg) {
+      alert('QR code is still rendering. Please try again in a moment.');
+      return;
+    }
+    const svgClone = sourceSvg.cloneNode(true);
+    svgClone.setAttribute('width', '320');
+    svgClone.setAttribute('height', '320');
+    // Ensure xmlns is set (required when SVG is used outside a normal browsing context)
+    if (!svgClone.getAttribute('xmlns')) {
+      svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    }
+    const svgMarkup = svgClone.outerHTML;
+
     const w = window.open('', '_blank');
     if (!w) return;
-    // QR code as PNG via a small inline SVG-to-data-URL for the print poster.
-    // We render a simple HTML page; the QR code is embedded via a Google Chart fallback link
-    // (the print preview shows the QR clearly without needing the React component to mount).
-    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(referralUrl)}`;
     w.document.write(`<!DOCTYPE html><html><head><title>Referral Form Link</title>
       <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 60px 40px; }
         h1 { font-size: 36px; font-weight: 800; color: #1a2332; margin-bottom: 16px; }
         h2 { font-size: 22px; font-weight: 600; color: #2A9D8F; margin: 24px 0 12px; }
         .qr { margin: 24px auto; padding: 24px; background: #fff; border: 3px solid #2A9D8F; border-radius: 16px; display: inline-block; }
-        .qr img { width: 280px; height: 280px; display: block; }
+        .qr svg { display: block; width: 320px; height: 320px; }
         .url { font-size: 14px; font-weight: 500; color: #6b7280; word-break: break-all; margin: 12px auto 32px; max-width: 600px; padding: 14px; background: #f9fafb; border-radius: 8px; }
         p { font-size: 18px; color: #6b7280; line-height: 1.6; max-width: 500px; margin: 0 auto 12px; }
         .footer { margin-top: 40px; font-size: 13px; color: #9ca3af; }
         .steps { text-align: left; max-width: 500px; margin: 24px auto; font-size: 15px; color: #374151; line-height: 1.8; }
         .steps li { margin-bottom: 6px; }
+        @media print { @page { margin: 0.4in; } }
       </style>
     </head><body>
       <h1>Need to refer a student?</h1>
       <p>Scan this QR code with your phone, or open the link below.</p>
-      <div class="qr"><img src="${qrSrc}" alt="QR code" /></div>
+      <div class="qr">${svgMarkup}</div>
       <h2>${(new URL(referralUrl)).pathname.slice(1) + (new URL(referralUrl)).search}</h2>
       <div class="url">${referralUrl}</div>
       <ol class="steps">
         <li>Fill out the form with the student's name, grade, and concern.</li>
         <li>Tap <strong>Open Email to Send</strong>.</li>
-        <li>Your email app will open with the referral pre-filled — tap <strong>Send</strong>.</li>
+        <li>Your email app will open with the referral pre-filled &mdash; tap <strong>Send</strong>.</li>
       </ol>
       <div class="footer">Beacon by Clear Path Education Group &middot; Your referral goes directly to ${counselorName}.</div>
     </body></html>`);
     w.document.close();
-    setTimeout(() => w.print(), 300);
+    // Inline SVG is ready immediately — no image load to wait on.
+    w.focus();
+    w.print();
   };
 
   return (
@@ -822,6 +843,11 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
 
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16, padding: 16, background: '#fff', border: '2px solid #2A9D8F', borderRadius: 12 }}>
               <QRCodeSVG value={referralUrl} size={180} level="M" includeMargin={false} fgColor="#1a2332" />
+            </div>
+
+            {/* Offscreen print-quality QR — grabbed by handlePrintPoster and inlined into the print window. */}
+            <div ref={printQrRef} aria-hidden="true" style={{ position: 'absolute', left: -99999, top: 0, pointerEvents: 'none' }}>
+              <QRCodeSVG value={referralUrl} size={400} level="H" includeMargin={false} fgColor="#1a2332" />
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
