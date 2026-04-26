@@ -25,6 +25,7 @@ import ReferralFormPage from './pages/ReferralFormPage';
 import LocalSetupPage from './pages/LocalSetupPage';
 import RequestAccessPage from './pages/RequestAccessPage';
 import LandingPage from './pages/LandingPage';
+import DistrictPreviewPage from './pages/DistrictPreviewPage';
 
 /* ── Auth guard ── */
 function RequireAuth({ children }) {
@@ -84,6 +85,7 @@ export default function App() {
         <Route path="templates" element={<TemplatesPage />} />
         <Route path="resources" element={<ResourcesPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="district-preview" element={<DistrictPreviewPage />} />
       </Route>
 
       {/* Catch-all */}

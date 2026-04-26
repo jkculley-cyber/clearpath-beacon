@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { db, exportLocalBackup, importLocalBackup } from '../lib/db';
@@ -1226,6 +1227,20 @@ export default function SettingsPage() {
               {impactCopied ? 'Copied!' : 'Copy Summary Text'}
             </button>
           </div>
+        </div>
+
+        {/* Pitch Your District — demo preview of district-wide Beacon */}
+        <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid #2A9D8F' }}>
+          <h2 style={sectionTitle}>Pitch Your District</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+            Open a polished, sample-data preview of what district-wide Beacon would look like. Show your director of counseling at-a-glance KPIs, SB 179 / SB 11 compliance reporting, cross-campus benchmarking, and audit-ready exports — without exposing any real student data.
+          </p>
+          <div style={{ background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: 12, color: '#0f766e', lineHeight: 1.6 }}>
+            <strong>What's inside:</strong> 6 KPI cards · Crisis Response Readiness card · Sessions trend chart · Time allocation donut · Cross-campus comparison · 4 active alerts · 7-counselor roster with SB 179 + documentation completeness · 5 sample exportable reports (Board Summary, Compliance, ASCA Annual, Suicide Risk Compliance, Caseload by Tier).
+          </div>
+          <Link to="/district-preview" className="btn btn-primary" style={{ fontSize: 13, textDecoration: 'none', display: 'inline-block', background: '#2A9D8F', borderColor: '#2A9D8F' }}>
+            Open District Preview →
+          </Link>
         </div>
 
         {/* Billing — Receipt + Campus/District Interest */}
