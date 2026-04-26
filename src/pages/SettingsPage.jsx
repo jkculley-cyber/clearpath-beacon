@@ -5,6 +5,7 @@ import { db, exportLocalBackup, importLocalBackup } from '../lib/db';
 import { hasSampleData, clearSampleData } from '../lib/seedSampleData';
 import { parseIcs } from '../lib/calendarImport';
 import { TIME_DOMAINS } from '../lib/constants';
+import ConfirmDestructive from '../components/ConfirmDestructive';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -28,6 +29,8 @@ const DAY_LABEL = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5:
 
 export default function SettingsPage() {
   const { counselor, refreshCounselor, isLocalMode, switchStorageMode, licenseState, saveLicenseKey, getLicenseKey } = useAuth();
+  const [confirmState, setConfirmState] = useState({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
+  const closeConfirm = () => setConfirmState((s) => ({ ...s, open: false }));
   const [licKey, setLicKey] = useState('');
   const [licMsg, setLicMsg] = useState('');
   const [licSaving, setLicSaving] = useState(false);
@@ -1090,10 +1093,16 @@ export default function SettingsPage() {
                     const file = e.target.files[0];
                     if (!file) return;
                     const text = await file.text();
-                    if (confirm('This will replace ALL local data. Continue?')) {
-                      await importLocalBackup(text);
-                      window.location.reload();
-                    }
+                    setConfirmState({
+                      open: true,
+                      title: 'Restore from backup?',
+                      message: 'This will replace ALL local data on this device with the contents of the selected file. Your current data will be overwritten.',
+                      confirmLabel: 'Replace all data',
+                      onConfirm: async () => {
+                        await importLocalBackup(text);
+                        window.location.reload();
+                      },
+                    });
                   };
                   input.click();
                 }}>
@@ -1109,11 +1118,19 @@ export default function SettingsPage() {
                   <button
                     className="btn btn-outline"
                     style={{ fontSize: 12, color: '#92400e', borderColor: '#f59e0b' }}
-                    onClick={async () => {
-                      if (!confirm('Remove only the demo/sample roster (Marcus, Emma, Aiden, Sofia, Jayden) and their sessions? Students you added yourself will NOT be removed.')) return;
-                      const count = await clearSampleData(counselor.id);
-                      alert(`${count} sample record${count === 1 ? '' : 's'} removed. Your own students, groups, and sessions were kept.`);
-                      window.location.reload();
+                    onClick={() => {
+                      setConfirmState({
+                        open: true,
+                        title: 'Clear sample data?',
+                        message: 'This removes the five demo students (Marcus, Emma, Aiden, Sofia, Jayden) and their groups, sessions, time entries, and referrals. Students, groups, and sessions you added yourself will NOT be touched.',
+                        confirmLabel: 'Clear sample data',
+                        confirmColor: '#d97706',
+                        onConfirm: async () => {
+                          const count = await clearSampleData(counselor.id);
+                          alert(`${count} sample record${count === 1 ? '' : 's'} removed. Your own students, groups, and sessions were kept.`);
+                          window.location.reload();
+                        },
+                      });
                     }}
                   >
                     Clear Sample Data & Start Fresh
@@ -1121,22 +1138,28 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 12 }}>
-                <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>
-                  Have a district data agreement? Switch to cloud mode for cross-device sync and AI features.
-                </p>
-                <button
-                  className="btn btn-outline"
-                  style={{ fontSize: 12, padding: '6px 14px' }}
-                  onClick={() => {
-                    if (confirm('Switch to cloud mode? You will need to sign in with a district account. Your local data will remain available if you switch back.')) {
-                      switchStorageMode('cloud');
-                    }
-                  }}
-                >
-                  Switch to Cloud Mode
-                </button>
-              </div>
+              {/* CC9 (2026-04-26): Cloud mode toggle hidden. Cloud auth is aspirational —
+                  flipping the toggle drops a counselor into a broken state with no working signup.
+                  Restore when the LoginPage cloud flow is wired end-to-end and a district DPA is signed.
+                  See beacon-feature-inventory-2026-04-20.md and DECISIONS.md (2026-03-21 FERPA model). */}
+              {false && (
+                <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 12 }}>
+                  <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>
+                    Have a district data agreement? Switch to cloud mode for cross-device sync and AI features.
+                  </p>
+                  <button
+                    className="btn btn-outline"
+                    style={{ fontSize: 12, padding: '6px 14px' }}
+                    onClick={() => {
+                      if (confirm('Switch to cloud mode? You will need to sign in with a district account. Your local data will remain available if you switch back.')) {
+                        switchStorageMode('cloud');
+                      }
+                    }}
+                  >
+                    Switch to Cloud Mode
+                  </button>
+                </div>
+              )}
             </>
           )}
 
@@ -1282,6 +1305,16 @@ export default function SettingsPage() {
           </p>
         </div>
       </div>
+
+      <ConfirmDestructive
+        open={confirmState.open}
+        onClose={closeConfirm}
+        title={confirmState.title}
+        message={confirmState.message}
+        confirmLabel={confirmState.confirmLabel}
+        confirmColor={confirmState.confirmColor}
+        onConfirm={confirmState.onConfirm || (() => {})}
+      />
     </div>
   );
 

@@ -1,15 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
-import { supabase } from '../lib/supabase';
 import { CONTACT_TYPES } from '../lib/constants';
 
-// Feature flag — flip to true once the `generate-parent-update` edge function
-// is deployed and the button should reappear for Cloud-mode users.
-const FEATURE_AI_GENERATE = false;
-
 export default function CommunicationsPage() {
-  const { counselor, isLocalMode } = useAuth();
+  const { counselor } = useAuth();
   const [comms, setComms] = useState([]);
   const [students, setStudents] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -23,10 +18,6 @@ export default function CommunicationsPage() {
   const [notes, setNotes] = useState('');
   const [language, setLanguage] = useState('en');
   const [saving, setSaving] = useState(false);
-
-  // AI generate
-  const [aiDraft, setAiDraft] = useState('');
-  const [generating, setGenerating] = useState(false);
 
   // Template
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -94,27 +85,6 @@ export default function CommunicationsPage() {
     setStudentId('');
     setStudentSearch('');
     loadData();
-  };
-
-  const handleGenerate = async () => {
-    if (!studentId) return;
-    setGenerating(true);
-    setAiDraft('');
-    try {
-      const student = students.find((s) => s.id === studentId);
-      const { data } = await supabase.functions.invoke('generate-parent-update', {
-        body: {
-          student_id: studentId,
-          student_name: student ? sName(student) : '',
-          language,
-          counselor_id: counselor.id,
-        },
-      });
-      setAiDraft(data?.draft || 'Unable to generate update. Please try again.');
-    } catch {
-      setAiDraft('Error calling AI service. You can write the update manually.');
-    }
-    setGenerating(false);
   };
 
   const handleSaveTemplate = async () => {
@@ -219,26 +189,10 @@ export default function CommunicationsPage() {
               <label className="form-label">Notes</label>
               <textarea className="form-input" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ marginBottom: 12 }} />
 
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="submit" className="btn btn-primary" disabled={saving || !studentId} style={{ flex: 1 }}>
-                  {saving ? 'Saving...' : 'Log Contact'}
-                </button>
-                {FEATURE_AI_GENERATE && !isLocalMode && (
-                  <button type="button" className="btn btn-outline" onClick={handleGenerate} disabled={generating || !studentId} style={{ flex: 1 }}>
-                    {generating ? 'Generating...' : 'Generate AI Update'}
-                  </button>
-                )}
-              </div>
+              <button type="submit" className="btn btn-primary" disabled={saving || !studentId} style={{ width: '100%' }}>
+                {saving ? 'Saving...' : 'Log Contact'}
+              </button>
             </form>
-
-            {/* AI Draft — only rendered while the feature flag is on */}
-            {FEATURE_AI_GENERATE && aiDraft && (
-              <div style={{ marginTop: 16 }}>
-                <label className="form-label">AI-Generated Draft</label>
-                <textarea className="form-input" rows={5} value={aiDraft} onChange={(e) => setAiDraft(e.target.value)} style={{ marginBottom: 8 }} />
-                <button className="btn btn-outline" onClick={() => setNotes(aiDraft)} style={{ fontSize: 13 }}>Use as Notes</button>
-              </div>
-            )}
           </div>
 
           {/* Templates */}

@@ -104,7 +104,7 @@
 | 28 total templates (14 scenarios × English + Spanish) | Shipped | Mustache placeholders: `{{student_name}}`, `{{progress_notes}}`, etc. |
 | Edit template inline | Shipped | |
 | Copy to clipboard | Shipped | |
-| **AI-Generate button** | **Hidden** | Feature-flagged off (`FEATURE_AI_GENERATE = false` in `CommunicationsPage.jsx` as of 2026-04-20). The `generate-parent-update` edge function is not deployed. Button and draft panel are no longer rendered. **Do not document.** |
+| **AI-Generate button** | **Removed** | Dead code deleted from `CommunicationsPage.jsx` (CC9, 2026-04-26). The `generate-parent-update` edge function was never deployed. Re-add cleanly if/when the edge function ships. **Do not document.** |
 | Scheduled email delivery | Aspirational | Templates are copy/paste only. No send path. |
 | Auto-fill placeholders from student data | Aspirational | Placeholders render as tokens; counselor fills them manually. |
 
@@ -131,7 +131,7 @@
 | Share Beacon (shareable text with compliance %) | Shipped | |
 | Impact Summary PDF (for principal) | Shipped | |
 | Grade promotion (batch) | Shipped | |
-| Storage mode toggle (Local ↔ Cloud) | **Hidden-in-spirit** | Code renders a toggle but Cloud target is Aspirational — a counselor who flips it ends up in a broken state. **Vera should not document the toggle.** Archer tracked separately to hide or disable until Cloud mode ships. |
+| Storage mode toggle (Local ↔ Cloud) | **Hidden in code** | Wrapped in `{false && (...)}` in `SettingsPage.jsx` (CC9, 2026-04-26). Cloud target is still Aspirational — restore the toggle when the LoginPage cloud flow is wired end-to-end. The dual-path `db.js` layer is unchanged. **Vera should not document the toggle.** |
 | Password change | Aspirational | Cloud-mode-only feature; no auth path to change a password against |
 
 ### Data portability
