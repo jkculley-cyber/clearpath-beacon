@@ -933,6 +933,32 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
 
         {canShare && referralUrl && (
           <>
+            {/* Per-counselor routing verification — confirms this QR/URL routes only to THIS counselor. */}
+            <div style={{
+              background: '#ecfdf5', border: '2px solid #2A9D8F', borderRadius: 8,
+              padding: '10px 14px', marginBottom: 14, display: 'flex',
+              alignItems: 'center', gap: 10,
+            }}>
+              <span style={{ fontSize: 18 }} aria-hidden="true">✓</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#0d9488', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
+                  Routes only to you
+                </div>
+                <div style={{ fontSize: 13, color: '#065f46', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                  <strong>{counselorName}</strong>
+                  {localMode && counselorEmail && (
+                    <> &middot; <span style={{ fontFamily: 'monospace' }}>{counselorEmail}</span></>
+                  )}
+                  {!localMode && counselor?.id && (
+                    <> &middot; <span style={{ fontFamily: 'monospace', fontSize: 11 }}>id: {counselor.id.slice(0, 8)}…</span></>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: '#0f766e', marginTop: 3, lineHeight: 1.4 }}>
+                  Each counselor's QR and short link are unique. Other Beacon counselors generate their own.
+                </div>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280' }}>
                 {shortUrl ? 'Short Link (auto-generated)' : 'Referral Form URL'}
