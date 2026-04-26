@@ -73,10 +73,10 @@ export default function DistrictPreviewPage() {
       <div style={footerStyle}>
         <strong>Ready to bring Beacon to your district?</strong>
         <p style={{ margin: '6px 0 14px', fontSize: 14, color: '#6b7280' }}>
-          $79/counselor/year. No volume discount required. Setup includes data migration assistance and TX-NDPA on file.
+          $79/counselor/year.
         </p>
         <a href="mailto:support@clearpathedgroup.com?subject=District%20adoption%20inquiry%20-%20Beacon" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-          Contact Clear Path →
+          Contact Clear Path Education Group →
         </a>
       </div>
     </div>
