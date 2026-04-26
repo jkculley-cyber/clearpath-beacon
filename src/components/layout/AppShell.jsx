@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { to: '/goals',         label: 'Goals',           icon: GoalsIcon },
   { to: '/needs-assessment', label: 'Assessments',  icon: AssessmentIcon },
   { to: '/reports',       label: 'Reports',          icon: ReportsIcon },
+  { to: '/crest',         label: 'CREST Award',     icon: CrestIcon },
   { to: '/templates',     label: 'Templates',       icon: TemplatesIcon },
   { to: '/resources',     label: 'Resources',       icon: ResourcesIcon },
   { to: '/settings',      label: 'Settings',        icon: SettingsIcon },
@@ -780,6 +781,19 @@ function ResourcesIcon() {
       <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
       <line x1="9" y1="7" x2="15" y2="7" />
       <line x1="9" y1="11" x2="13" y2="11" />
+    </svg>
+  );
+}
+
+function CrestIcon() {
+  // Trophy icon — fits the "award" framing
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9H4a2 2 0 0 1-2-2V5h4" />
+      <path d="M18 9h2a2 2 0 0 0 2-2V5h-4" />
+      <path d="M8 21h8" />
+      <path d="M12 17v4" />
+      <path d="M7 4h10v6a5 5 0 0 1-10 0V4z" />
     </svg>
   );
 }

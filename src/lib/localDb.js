@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'beacon_local';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const STORES = [
   'counselor',         // single record — counselor profile
@@ -26,6 +26,7 @@ const STORES = [
   'counselor_notes',
   'student_goals',     // per-student counseling goals
   'needs_assessments', // per-student needs assessments
+  'crest_artifacts',   // CREST award portfolio evidence
   'settings',          // key-value config
 ];
 
@@ -148,6 +149,14 @@ export function openDB() {
         na.createIndex('counselor_id', 'counselor_id', { unique: false });
         na.createIndex('student_id', 'student_id', { unique: false });
         na.createIndex('status', 'status', { unique: false });
+      }
+
+      // crest_artifacts — TSCA CREST award portfolio evidence (year-long collection)
+      if (!db.objectStoreNames.contains('crest_artifacts')) {
+        const ca = db.createObjectStore('crest_artifacts', { keyPath: 'id' });
+        ca.createIndex('counselor_id', 'counselor_id', { unique: false });
+        ca.createIndex('category', 'category', { unique: false });
+        ca.createIndex('school_year', 'school_year', { unique: false });
       }
 
       // settings (key-value)
