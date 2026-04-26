@@ -682,6 +682,9 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
   const [copied, setCopied] = useState(false);
   const [editEmail, setEditEmail] = useState('');
   const [savingEmail, setSavingEmail] = useState(false);
+  // Shortened URL via TinyURL (auto-fetched on open). Falls back to long URL on failure.
+  const [shortUrl, setShortUrl] = useState('');
+  const [shortening, setShortening] = useState(false);
   // Offscreen container holding a print-sized QR. We grab its <svg> at print time
   // and inject it inline into the print window — no external network call,
   // so school content filters can't strip the QR.
@@ -693,6 +696,7 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
       setEditEmail(counselor.email && counselor.email !== 'local@beacon.local' ? counselor.email : '');
       setCopied(false);
       setSavingEmail(false);
+      setShortUrl('');
     }
   }, [open, counselor]);
 
@@ -711,10 +715,32 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
 
   const canShare = !localMode || !!counselorEmail;
 
+  // Auto-fetch shortened URL when referralUrl is ready. TinyURL is a public free
+  // service; the only data sent is the URL itself (counselor email + name —
+  // counselor's own work info, not student PII). Falls back silently to long URL.
+  useEffect(() => {
+    if (!referralUrl || !canShare) return;
+    let cancelled = false;
+    setShortening(true);
+    fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(referralUrl)}`)
+      .then((r) => (r.ok ? r.text() : ''))
+      .then((text) => {
+        if (cancelled) return;
+        const t = (text || '').trim();
+        if (t.startsWith('http')) setShortUrl(t);
+      })
+      .catch(() => { /* fallback to long URL */ })
+      .finally(() => { if (!cancelled) setShortening(false); });
+    return () => { cancelled = true; };
+  }, [referralUrl, canShare]);
+
+  // Whichever URL is ready — short preferred, long as fallback.
+  const linkForSharing = shortUrl || referralUrl;
+
   const handleCopy = async () => {
-    if (!referralUrl) return;
+    if (!linkForSharing) return;
     try {
-      await navigator.clipboard.writeText(referralUrl);
+      await navigator.clipboard.writeText(linkForSharing);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch { /* fallback */ }
@@ -733,29 +759,32 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
   };
 
   const handleEmailTeacher = () => {
-    if (!referralUrl) return;
+    if (!linkForSharing) return;
     const subject = `Counselor Referral Form${counselorName !== 'your counselor' ? ' — ' + counselorName : ''}`;
+    // Plain-text mailto body. Standard email clients (Gmail, Outlook, Apple Mail,
+    // mobile) auto-detect URLs and render them as clickable hyperlinks. Putting
+    // the URL on its own line — surrounded by blank lines — gives the cleanest
+    // auto-link result across every client we tested.
     const lines = [
       `Hi,`,
       ``,
       `If you have a student you'd like to refer to me for counseling support, please use this referral form:`,
       ``,
-      referralUrl,
+      linkForSharing,
       ``,
       `Open it on your phone, tablet, or computer and fill in the student's name, grade, and concern. When you submit, your email client will open a pre-filled email to me — just tap Send.`,
       ``,
-      `Save the link or add it as a bookmark so you have it whenever you need it.`,
+      `Save the link or bookmark it so you have it whenever you need it.`,
       ``,
       `Thanks,`,
       counselorName === 'your counselor' ? '' : counselorName,
-    ].filter((l) => l !== null);
+    ];
     const body = lines.join('\n');
-    // Open mail client with empty To: counselor fills in the teacher's address(es).
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   const handlePrintPoster = () => {
-    if (!referralUrl) return;
+    if (!linkForSharing) return;
     // Grab the offscreen QR <svg> rendered by qrcode.react and inline it into
     // the print window. Self-contained — no external image fetch (school
     // content filters routinely block third-party QR generator domains).
@@ -793,8 +822,7 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
       <h1>Need to refer a student?</h1>
       <p>Scan this QR code with your phone, or open the link below.</p>
       <div class="qr">${svgMarkup}</div>
-      <h2>${(new URL(referralUrl)).pathname.slice(1) + (new URL(referralUrl)).search}</h2>
-      <div class="url">${referralUrl}</div>
+      <div class="url">${linkForSharing}</div>
       <ol class="steps">
         <li>Fill out the form with the student's name, grade, and concern.</li>
         <li>Tap <strong>Open Email to Send</strong>.</li>
@@ -849,11 +877,18 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
 
         {canShare && referralUrl && (
           <>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 6 }}>Referral Form URL</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280' }}>
+                {shortUrl ? 'Short Link (auto-generated)' : 'Referral Form URL'}
+              </label>
+              {shortening && !shortUrl && (
+                <span style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>shortening...</span>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <input
                 className="form-input"
-                value={referralUrl}
+                value={linkForSharing}
                 readOnly
                 onClick={(e) => e.target.select()}
                 style={{ flex: 1, fontSize: 13, fontFamily: 'monospace' }}
@@ -864,12 +899,12 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16, padding: 16, background: '#fff', border: '2px solid #2A9D8F', borderRadius: 12 }}>
-              <QRCodeSVG value={referralUrl} size={180} level="M" includeMargin={false} fgColor="#1a2332" />
+              <QRCodeSVG value={linkForSharing} size={180} level="M" includeMargin={false} fgColor="#1a2332" />
             </div>
 
             {/* Offscreen print-quality QR — grabbed by handlePrintPoster and inlined into the print window. */}
             <div ref={printQrRef} aria-hidden="true" style={{ position: 'absolute', left: -99999, top: 0, pointerEvents: 'none' }}>
-              <QRCodeSVG value={referralUrl} size={400} level="H" includeMargin={false} fgColor="#1a2332" />
+              <QRCodeSVG value={linkForSharing} size={400} level="H" includeMargin={false} fgColor="#1a2332" />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
