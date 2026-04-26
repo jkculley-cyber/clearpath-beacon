@@ -732,6 +732,28 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
     if (refreshCounselor) await refreshCounselor();
   };
 
+  const handleEmailTeacher = () => {
+    if (!referralUrl) return;
+    const subject = `Counselor Referral Form${counselorName !== 'your counselor' ? ' — ' + counselorName : ''}`;
+    const lines = [
+      `Hi,`,
+      ``,
+      `If you have a student you'd like to refer to me for counseling support, please use this referral form:`,
+      ``,
+      referralUrl,
+      ``,
+      `Open it on your phone, tablet, or computer and fill in the student's name, grade, and concern. When you submit, your email client will open a pre-filled email to me — just tap Send.`,
+      ``,
+      `Save the link or add it as a bookmark so you have it whenever you need it.`,
+      ``,
+      `Thanks,`,
+      counselorName === 'your counselor' ? '' : counselorName,
+    ].filter((l) => l !== null);
+    const body = lines.join('\n');
+    // Open mail client with empty To: counselor fills in the teacher's address(es).
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
   const handlePrintPoster = () => {
     if (!referralUrl) return;
     // Grab the offscreen QR <svg> rendered by qrcode.react and inline it into
@@ -850,14 +872,17 @@ function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
               <QRCodeSVG value={referralUrl} size={400} level="H" includeMargin={false} fgColor="#1a2332" />
             </div>
 
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-outline" onClick={handlePrintPoster} style={{ flex: 1, fontSize: 13 }}>
-                Print Poster (with QR)
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <button className="btn btn-outline" onClick={handlePrintPoster} style={{ fontSize: 13 }}>
+                Print Poster
               </button>
-              <button className="btn btn-outline" onClick={() => onClose()} style={{ flex: 1, fontSize: 13 }}>
-                Close
+              <button className="btn btn-outline" onClick={handleEmailTeacher} style={{ fontSize: 13 }}>
+                Email to Teacher
               </button>
             </div>
+            <button className="btn btn-outline" onClick={() => onClose()} style={{ width: '100%', fontSize: 13 }}>
+              Close
+            </button>
           </>
         )}
 
