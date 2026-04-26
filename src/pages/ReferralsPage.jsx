@@ -3,13 +3,16 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
 import { URGENCY_LEVELS, CONCERN_TYPES } from '../lib/constants';
+import { isReferralAlert, getAlertReasons, getTopAlertReason } from '../lib/referralAlerts';
 
 const urgencyColor = { Urgent: '#ef4444', Soon: '#f59e0b', Routine: '#6b7280' };
+const yes = (v) => typeof v === 'string' ? v.trim().toLowerCase() === 'yes' || v.trim().toLowerCase() === 'true' : !!v;
 
 // ── Helper: parse Beacon referral blocks out of pasted email body ──
 function parseReferralEmail(text) {
   const blockPattern = /---\s*BEACON REFERRAL\s*---([\s\S]*?)---\s*END BEACON REFERRAL\s*---/gi;
-  const fieldPattern = /^([A-Za-z]+):\s*(.+)$/;
+  // Field names may contain spaces (e.g., "Harm to Self"). Lowercase + collapse to a key.
+  const fieldPattern = /^([A-Za-z][A-Za-z\s]*?):\s*(.+)$/;
   const out = [];
   let match;
   while ((match = blockPattern.exec(text)) !== null) {
@@ -17,7 +20,7 @@ function parseReferralEmail(text) {
     const fields = {};
     block.split(/\r?\n/).forEach((line) => {
       const m = line.trim().match(fieldPattern);
-      if (m) fields[m[1].toLowerCase()] = m[2].trim();
+      if (m) fields[m[1].toLowerCase().replace(/\s+/g, '_')] = m[2].trim();
     });
     if (fields.student) {
       out.push({
@@ -26,6 +29,8 @@ function parseReferralEmail(text) {
         teacher_name: fields.teacher && fields.teacher !== '(not provided)' ? fields.teacher : '',
         concern_type: fields.concern || 'Academic',
         urgency: ['Routine', 'Soon', 'Urgent'].includes(fields.urgency) ? fields.urgency : 'Routine',
+        harm_to_self: yes(fields.harm_to_self),
+        harm_to_others: yes(fields.harm_to_others),
         notes: fields.notes && fields.notes !== '(none)' ? fields.notes : '',
       });
     }
@@ -465,6 +470,8 @@ function ImportEmailModal({ open, onClose, counselorId, onImported }) {
         teacher_name: r.teacher_name,
         concern_type: r.concern_type,
         urgency: r.urgency,
+        harm_to_self: !!r.harm_to_self,
+        harm_to_others: !!r.harm_to_others,
         notes: r.notes || null,
         status: 'open',
       };
@@ -514,44 +521,69 @@ function ImportEmailModal({ open, onClose, counselorId, onImported }) {
               Found {parsed.length} referral{parsed.length !== 1 ? 's' : ''}. Review and edit before importing.
             </p>
             <div style={{ display: 'grid', gap: 12, marginBottom: 14 }}>
-              {parsed.map((r, i) => (
-                <div key={i} style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <strong style={{ fontSize: 13, color: '#1a2332' }}>Referral {i + 1}</strong>
-                    <button onClick={() => removeBlock(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Remove</button>
+              {parsed.map((r, i) => {
+                const alerted = isReferralAlert(r);
+                return (
+                  <div key={i} style={{
+                    background: alerted ? '#fef2f2' : '#f9fafb',
+                    border: alerted ? '2px solid #ef4444' : '1px solid #e5e7eb',
+                    borderRadius: 8,
+                    padding: 12,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <strong style={{ fontSize: 13, color: alerted ? '#991b1b' : '#1a2332' }}>Referral {i + 1}</strong>
+                        {alerted && (
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', background: '#dc2626', color: '#fff', borderRadius: 10, letterSpacing: 0.5 }}>
+                            🚨 {getTopAlertReason(r)}
+                          </span>
+                        )}
+                      </div>
+                      <button onClick={() => removeBlock(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Remove</button>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div>
+                        <label style={smallLbl}>Student</label>
+                        <input className="form-input" value={r.student_name} onChange={(e) => updateField(i, 'student_name', e.target.value)} style={{ fontSize: 13 }} />
+                      </div>
+                      <div>
+                        <label style={smallLbl}>Grade</label>
+                        <input className="form-input" value={r.grade} onChange={(e) => updateField(i, 'grade', e.target.value)} style={{ fontSize: 13 }} />
+                      </div>
+                      <div>
+                        <label style={smallLbl}>Teacher</label>
+                        <input className="form-input" value={r.teacher_name} onChange={(e) => updateField(i, 'teacher_name', e.target.value)} style={{ fontSize: 13 }} />
+                      </div>
+                      <div>
+                        <label style={smallLbl}>Concern</label>
+                        <select className="form-input" value={r.concern_type} onChange={(e) => updateField(i, 'concern_type', e.target.value)} style={{ fontSize: 13 }}>
+                          {CONCERN_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={smallLbl}>Urgency</label>
+                        <select className="form-input" value={r.urgency} onChange={(e) => updateField(i, 'urgency', e.target.value)} style={{ fontSize: 13 }}>
+                          {URGENCY_LEVELS.map((u) => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 14, padding: '6px 8px', background: alerted ? '#fee2e2' : '#fff', border: '1px solid #fecaca', borderRadius: 6 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#7f1d1d', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={!!r.harm_to_self} onChange={(e) => updateField(i, 'harm_to_self', e.target.checked)} />
+                          Harm to self
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#7f1d1d', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={!!r.harm_to_others} onChange={(e) => updateField(i, 'harm_to_others', e.target.checked)} />
+                          Harm to others
+                        </label>
+                      </div>
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <label style={smallLbl}>Notes</label>
+                        <textarea className="form-input" rows={2} value={r.notes} onChange={(e) => updateField(i, 'notes', e.target.value)} style={{ fontSize: 13 }} />
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <div>
-                      <label style={smallLbl}>Student</label>
-                      <input className="form-input" value={r.student_name} onChange={(e) => updateField(i, 'student_name', e.target.value)} style={{ fontSize: 13 }} />
-                    </div>
-                    <div>
-                      <label style={smallLbl}>Grade</label>
-                      <input className="form-input" value={r.grade} onChange={(e) => updateField(i, 'grade', e.target.value)} style={{ fontSize: 13 }} />
-                    </div>
-                    <div>
-                      <label style={smallLbl}>Teacher</label>
-                      <input className="form-input" value={r.teacher_name} onChange={(e) => updateField(i, 'teacher_name', e.target.value)} style={{ fontSize: 13 }} />
-                    </div>
-                    <div>
-                      <label style={smallLbl}>Concern</label>
-                      <select className="form-input" value={r.concern_type} onChange={(e) => updateField(i, 'concern_type', e.target.value)} style={{ fontSize: 13 }}>
-                        {CONCERN_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={smallLbl}>Urgency</label>
-                      <select className="form-input" value={r.urgency} onChange={(e) => updateField(i, 'urgency', e.target.value)} style={{ fontSize: 13 }}>
-                        {URGENCY_LEVELS.map((u) => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </div>
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <label style={smallLbl}>Notes</label>
-                      <textarea className="form-input" rows={2} value={r.notes} onChange={(e) => updateField(i, 'notes', e.target.value)} style={{ fontSize: 13 }} />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn btn-outline" onClick={() => { setParsed([]); setPasted(''); }} style={{ flex: 1 }}>Back</button>
@@ -573,6 +605,8 @@ function AddReferralModal({ open, onClose, counselorId }) {
   const [teacherName, setTeacherName] = useState('');
   const [concernType, setConcernType] = useState('');
   const [urgency, setUrgency] = useState('Routine');
+  const [harmToSelf, setHarmToSelf] = useState(false);
+  const [harmToOthers, setHarmToOthers] = useState(false);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -584,6 +618,8 @@ function AddReferralModal({ open, onClose, counselorId }) {
       setTeacherName('');
       setConcernType('');
       setUrgency('Routine');
+      setHarmToSelf(false);
+      setHarmToOthers(false);
       setNotes('');
       setSaving(false);
       setError('');
@@ -603,6 +639,8 @@ function AddReferralModal({ open, onClose, counselorId }) {
       teacher_name: teacherName,
       concern_type: concernType,
       urgency,
+      harm_to_self: harmToSelf,
+      harm_to_others: harmToOthers,
       notes: notes || null,
       submitted_by: teacherName,
       status: 'open',
@@ -658,6 +696,19 @@ function AddReferralModal({ open, onClose, counselorId }) {
                 {URGENCY_LEVELS.map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* Safety flags — escalate to counselor's queue alert. */}
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#991b1b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Safety Flags</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#7f1d1d', marginBottom: 4, cursor: 'pointer' }}>
+              <input type="checkbox" checked={harmToSelf} onChange={(e) => setHarmToSelf(e.target.checked)} />
+              Possible harm to self
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#7f1d1d', cursor: 'pointer' }}>
+              <input type="checkbox" checked={harmToOthers} onChange={(e) => setHarmToOthers(e.target.checked)} />
+              Possible harm to others
+            </label>
           </div>
 
           <label className="form-label">Notes</label>
@@ -963,8 +1014,16 @@ export default function ReferralsPage() {
   const openRefs = referrals.filter((r) => r.status === 'open' || r.status === 'in_progress');
   const closedRefs = referrals.filter((r) => r.status === 'closed' || r.status === 'deferred');
 
+  // Split into alert-worthy and regular open referrals. Alert-worthy ones surface
+  // in their own prominent red section above the regular Open Referrals queue.
+  const alertRefs = openRefs.filter(isReferralAlert);
+  const nonAlertOpenRefs = openRefs.filter((r) => !isReferralAlert(r));
+
   const urgencyOrder = { Urgent: 0, Soon: 1, Routine: 2 };
-  openRefs.sort((a, b) => (urgencyOrder[a.urgency] ?? 2) - (urgencyOrder[b.urgency] ?? 2));
+  // Alerts: newest first (most recent submission grabs attention)
+  alertRefs.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  // Regular: still order by urgency, then date
+  nonAlertOpenRefs.sort((a, b) => (urgencyOrder[a.urgency] ?? 2) - (urgencyOrder[b.urgency] ?? 2));
 
   const daysOpen = (ref) => {
     const created = new Date(ref.created_at);
@@ -1024,14 +1083,75 @@ export default function ReferralsPage() {
         <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
       ) : (
         <>
-          <h2 style={sectionTitle}>Open Referrals ({openRefs.length})</h2>
-          {openRefs.length === 0 ? (
+          {/* ── Active Safety Alerts — separated and visually screaming ── */}
+          {alertRefs.length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '12px 16px', background: '#dc2626', color: '#fff',
+                borderRadius: '8px 8px 0 0', fontWeight: 800, fontSize: 14, letterSpacing: 0.4,
+                animation: 'beacon-alert-pulse 2s ease-in-out infinite',
+              }}>
+                <span>🚨 {alertRefs.length} ACTIVE SAFETY ALERT{alertRefs.length !== 1 ? 'S' : ''} — REVIEW NOW</span>
+                <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.9 }}>Sorted by submission date, newest first</span>
+              </div>
+              <div style={{ display: 'grid', gap: 10, padding: 12, background: '#fef2f2', border: '2px solid #dc2626', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                {alertRefs.map((r) => {
+                  const reasons = getAlertReasons(r);
+                  const top = getTopAlertReason(r);
+                  return (
+                    <div key={r.id} style={{
+                      background: '#fff',
+                      border: '2px solid #dc2626',
+                      borderLeft: '8px solid #dc2626',
+                      borderRadius: 8,
+                      padding: 14,
+                      boxShadow: '0 4px 12px rgba(220, 38, 38, 0.18)',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 10 }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                            <span style={{ fontWeight: 800, color: '#991b1b', fontSize: 18 }}>{r.student_name}</span>
+                            <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700, background: '#dc2626', color: '#fff', letterSpacing: 0.4 }}>
+                              {top}
+                            </span>
+                          </div>
+                          {reasons.length > 1 && (
+                            <div style={{ fontSize: 12, color: '#7f1d1d', fontWeight: 600 }}>
+                              Flags: {reasons.join(' · ')}
+                            </div>
+                          )}
+                        </div>
+                        <span style={{ fontSize: 12, color: '#991b1b', fontWeight: 600, whiteSpace: 'nowrap' }}>{daysOpen(r)} day{daysOpen(r) !== 1 ? 's' : ''} open</span>
+                      </div>
+                      <div style={{ fontSize: 13, color: '#374151', marginBottom: 6 }}>
+                        <span>{r.concern_type}</span>
+                        {r.grade && <span> &middot; Grade {r.grade}</span>}
+                        {(r.teacher_name || r.submitted_by) && <span> &middot; From: {r.teacher_name || r.submitted_by}</span>}
+                        {r.created_at && <span> &middot; {r.created_at.slice(0, 10)}</span>}
+                      </div>
+                      {r.notes && <p style={{ fontSize: 13, color: '#1a2332', margin: '0 0 10px', padding: '8px 10px', background: '#fef2f2', borderRadius: 6, lineHeight: 1.5 }}>{r.notes}</p>}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-primary" style={{ padding: '6px 16px', fontSize: 13, background: '#dc2626', borderColor: '#dc2626' }} onClick={() => setAcceptRef(r)}>Accept &amp; Schedule</button>
+                        <button className="btn btn-outline" style={{ padding: '6px 16px', fontSize: 13 }} onClick={() => handleDefer(r)}>Defer</button>
+                        <button className="btn btn-outline" style={{ padding: '6px 16px', fontSize: 13, color: '#9ca3af' }} onClick={() => handleClose(r)}>Close</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <style>{`@keyframes beacon-alert-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); } 50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); } }`}</style>
+            </div>
+          )}
+
+          <h2 style={sectionTitle}>Open Referrals ({nonAlertOpenRefs.length})</h2>
+          {nonAlertOpenRefs.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: 32 }}>
-              <p style={{ color: 'var(--text-muted)' }}>No pending referrals. Nice work!</p>
+              <p style={{ color: 'var(--text-muted)' }}>{alertRefs.length > 0 ? 'No other open referrals.' : 'No pending referrals. Nice work!'}</p>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 10, marginBottom: 32 }}>
-              {openRefs.map((r) => (
+              {nonAlertOpenRefs.map((r) => (
                 <div key={r.id} className="card" style={{ borderLeft: `4px solid ${urgencyColor[r.urgency] || '#6b7280'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                     <div>

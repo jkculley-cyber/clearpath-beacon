@@ -22,6 +22,8 @@ export default function ReferralFormPage() {
   const [teacherName, setTeacherName] = useState('');
   const [concernType, setConcernType] = useState('');
   const [urgency, setUrgency] = useState('');
+  const [harmToSelf, setHarmToSelf] = useState(false);
+  const [harmToOthers, setHarmToOthers] = useState(false);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -37,9 +39,14 @@ export default function ReferralFormPage() {
   // No Clear Path infrastructure handles the data.
   const isMailtoMode = !!counselorEmail;
 
+  const isSafetyAlert = harmToSelf || harmToOthers || urgency === 'Urgent' || concernType === 'Crisis';
+
   const buildEmailBody = () => {
+    const headerLine = isSafetyAlert
+      ? '*** SAFETY ALERT — REVIEW IMMEDIATELY *** A teacher has submitted a student referral that may require urgent attention.'
+      : 'A teacher submitted a student referral via Beacon. Forward to your counselor inbox or paste the block below into Beacon → Referrals → Import from Email.';
     const lines = [
-      'A teacher submitted a student referral via Beacon. Forward to your counselor inbox or paste the block below into Beacon → Referrals → Import from Email.',
+      headerLine,
       '',
       '--- BEACON REFERRAL ---',
       `Student: ${studentName}`,
@@ -47,6 +54,8 @@ export default function ReferralFormPage() {
       `Teacher: ${teacherName || '(not provided)'}`,
       `Concern: ${concernType}`,
       `Urgency: ${urgency}`,
+      `Harm to Self: ${harmToSelf ? 'yes' : 'no'}`,
+      `Harm to Others: ${harmToOthers ? 'yes' : 'no'}`,
       `Notes: ${notes || '(none)'}`,
       `Submitted: ${new Date().toISOString().slice(0, 10)}`,
       '--- END BEACON REFERRAL ---',
@@ -61,7 +70,11 @@ export default function ReferralFormPage() {
 
     if (isMailtoMode) {
       // Build mailto: with structured body. Open in teacher's email client.
-      const subject = `Beacon Referral — ${studentName} (${urgency})`;
+      // Prefix [SAFETY ALERT] when the teacher checked harm-to-self / harm-to-others
+      // or marked the referral Urgent / Crisis — the alert is visible in the inbox preview
+      // before the counselor even opens the email.
+      const alertPrefix = isSafetyAlert ? '🚨 [SAFETY ALERT] ' : '';
+      const subject = `${alertPrefix}Beacon Referral — ${studentName} (${urgency})`;
       const body = buildEmailBody();
       const href = `mailto:${encodeURIComponent(counselorEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.location.href = href;
@@ -78,6 +91,8 @@ export default function ReferralFormPage() {
       teacher_name: teacherName,
       concern_type: concernType,
       urgency,
+      harm_to_self: harmToSelf,
+      harm_to_others: harmToOthers,
       notes: notes || null,
       status: 'open',
     };
@@ -146,7 +161,7 @@ export default function ReferralFormPage() {
               </div>
             )}
 
-            <button onClick={() => { setSubmitted(false); setMailtoOpened(false); setStudentName(''); setGrade(''); setTeacherName(''); setConcernType(''); setUrgency(''); setNotes(''); }}
+            <button onClick={() => { setSubmitted(false); setMailtoOpened(false); setStudentName(''); setGrade(''); setTeacherName(''); setConcernType(''); setUrgency(''); setHarmToSelf(false); setHarmToOthers(false); setNotes(''); }}
               className="btn btn-primary" style={{ marginTop: 8 }}>
               Submit Another Referral
             </button>
@@ -218,6 +233,30 @@ export default function ReferralFormPage() {
                 </button>
               );
             })}
+          </div>
+
+          {/* Safety concerns — escalates to a prominent alert in the counselor's queue + global banner. */}
+          <div style={{ background: '#fef2f2', border: '2px solid #fecaca', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#991b1b', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span aria-hidden="true">⚠️</span>
+              <span>Safety Concerns</span>
+            </div>
+            <p style={{ fontSize: 12, color: '#7f1d1d', margin: '0 0 10px', lineHeight: 1.5 }}>
+              <strong>If a student is in immediate danger, call 911 first.</strong> Then submit this referral so the counselor has a record.
+            </p>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7f1d1d', marginBottom: 8, cursor: 'pointer', lineHeight: 1.5 }}>
+              <input type="checkbox" checked={harmToSelf} onChange={(e) => setHarmToSelf(e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
+              <span>This concern involves <strong>possible harm to self</strong> (suicide ideation, self-injury, etc.)</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7f1d1d', cursor: 'pointer', lineHeight: 1.5 }}>
+              <input type="checkbox" checked={harmToOthers} onChange={(e) => setHarmToOthers(e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
+              <span>This concern involves <strong>possible harm to others</strong> (threats, weapons, violence)</span>
+            </label>
+            {(harmToSelf || harmToOthers) && (
+              <div style={{ marginTop: 10, padding: '8px 12px', background: '#fee2e2', borderRadius: 6, fontSize: 12, color: '#991b1b', fontWeight: 600 }}>
+                This referral will be flagged as a SAFETY ALERT to the counselor's attention.
+              </div>
+            )}
           </div>
 
           <label className="form-label">Additional Notes</label>

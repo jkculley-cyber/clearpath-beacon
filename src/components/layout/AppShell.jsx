@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
+import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { db, exportLocalBackup } from '../../lib/db';
+import { isReferralAlert } from '../../lib/referralAlerts';
 
 /* ─── Nav items ─── */
 const NAV_ITEMS = [
@@ -101,12 +102,49 @@ export default function AppShell() {
     })();
   }, [counselor?.id]);
 
-  const hasBanner = showTrialBanner || isSoftGated || showBackupBanner;
+  // Active safety-alert poll. Refreshes every 30s and on window focus.
+  // Counts open referrals where harm-to-self / harm-to-others / urgency=Urgent / concern=Crisis.
+  const [alertCount, setAlertCount] = useState(0);
+  useEffect(() => {
+    if (!counselor?.id) return;
+    let active = true;
+    const check = async () => {
+      const { data } = await db.select('referrals', { eq: { counselor_id: counselor.id } });
+      if (!active) return;
+      const open = (data || []).filter((r) => r.status === 'open' || r.status === 'in_progress');
+      setAlertCount(open.filter(isReferralAlert).length);
+    };
+    check();
+    const interval = setInterval(check, 30000);
+    const onFocus = () => check();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [counselor?.id]);
+
+  // Measure the header-stack height so the content spacer always matches,
+  // regardless of how many banners are stacked (safety + trial + backup, etc.)
+  const headerStackRef = useRef(null);
+  const [headerHeight, setHeaderHeight] = useState(56);
+  useLayoutEffect(() => {
+    if (!headerStackRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect?.height;
+      if (h) setHeaderHeight(h);
+    });
+    ro.observe(headerStackRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const hasBanner = showTrialBanner || isSoftGated || showBackupBanner || alertCount > 0;
 
   return (
     <div className={`shell${hasBanner ? ' has-banner' : ''}`}>
       {/* Fixed header stack: topbar + banners */}
-      <div className="header-stack">
+      <div className="header-stack" ref={headerStackRef}>
         <header className="topbar">
           <button className="topbar-hamburger" onClick={() => setDrawerOpen(o => !o)} aria-label="Toggle menu">
             <HamburgerIcon />
@@ -120,6 +158,16 @@ export default function AppShell() {
             <button className="btn-ghost" onClick={handleSignOut}>Sign out</button>
           </div>
         </header>
+
+      {/* Safety alert banner — most prominent, sits above other banners */}
+      {alertCount > 0 && (
+        <Link to="/referrals" className="safety-alert-banner">
+          <span className="safety-alert-text">
+            🚨 {alertCount} ACTIVE SAFETY ALERT{alertCount !== 1 ? 'S' : ''} — Review now
+          </span>
+          <span className="safety-alert-btn">Open Referrals →</span>
+        </Link>
+      )}
 
       {/* Trial / gate banners */}
       {showTrialBanner && (
@@ -267,7 +315,7 @@ export default function AppShell() {
 
       {/* Main content — spacer pushes below fixed header-stack */}
       <main className="main-content">
-        <div className="header-spacer" />
+        <div className="header-spacer" style={{ height: headerHeight }} />
         <Outlet />
         <div className="content-footer">
           © {new Date().getFullYear()} Clear Path Education Group, LLC · Beacon Counselor Command Center
@@ -351,6 +399,38 @@ const shellStyles = `
 .btn-ghost:hover { background: rgba(255,255,255,0.1); }
 
 /* ── Banners (inside header-stack, flow naturally below topbar) ── */
+.safety-alert-banner {
+  background: #dc2626;
+  color: #fff !important;
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  text-decoration: none;
+  border-bottom: 2px solid #991b1b;
+  animation: safety-alert-pulse 2.2s ease-in-out infinite;
+  cursor: pointer;
+}
+.safety-alert-banner:hover { background: #b91c1c; }
+.safety-alert-text { letter-spacing: 0.4px; }
+.safety-alert-btn {
+  background: #fff;
+  color: #dc2626;
+  padding: 4px 14px;
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+@keyframes safety-alert-pulse {
+  0%, 100% { background: #dc2626; }
+  50% { background: #ef4444; }
+}
+
 .trial-banner {
   background: #f59e0b;
   color: #1a2332;
