@@ -103,8 +103,21 @@ function OverviewTab() {
   const [detail, setDetail] = useState(null);
   return (
     <>
-      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, fontStyle: 'italic' }}>
-        💡 Click any stat or alert below for the breakdown.
+      <div style={{
+        background: 'linear-gradient(135deg, #f0fdfa 0%, #ecfeff 100%)',
+        border: '1px solid #99f6e4',
+        borderRadius: 8,
+        padding: '10px 14px',
+        marginBottom: 16,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        fontSize: 13,
+        color: '#0f766e',
+        fontWeight: 500,
+      }}>
+        <span style={{ fontSize: 18 }} aria-hidden="true">👆</span>
+        <span><strong>Click any stat, alert, or counselor row</strong> for the breakdown.</span>
       </div>
 
       {/* KPI grid */}
