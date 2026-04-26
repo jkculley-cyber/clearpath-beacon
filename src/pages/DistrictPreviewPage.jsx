@@ -100,16 +100,21 @@ function TabButton({ active, onClick, children }) {
 
 /* ─────── TAB 1 - Overview ─────── */
 function OverviewTab() {
+  const [detail, setDetail] = useState(null);
   return (
     <>
+      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, fontStyle: 'italic' }}>
+        💡 Click any stat or alert below for the breakdown.
+      </div>
+
       {/* KPI grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <KPICard label="Students Served YTD"        value={DEMO_KPIS.studentsServedYtd.toLocaleString()} />
-        <KPICard label="Sessions YTD"               value={DEMO_KPIS.sessionsYtd.toLocaleString()} />
-        <KPICard label="Open Referrals"             value={DEMO_KPIS.openReferrals} />
-        <KPICard label="Hours Logged This Month"    value={DEMO_KPIS.hoursLoggedThisMonth.toLocaleString()} />
-        <KPICard label="SB 179 80/20 District Avg"  value={DEMO_KPIS.sb179DistrictAverage + '%'} status={DEMO_KPIS.sb179DistrictAverage >= 80 ? 'green' : 'red'} />
-        <KPICard label="FERPA Delete Requests"      value={DEMO_KPIS.ferpaDeleteRequests} sub="Honored YTD" />
+        <KPICard label="Students Served YTD"        value={DEMO_KPIS.studentsServedYtd.toLocaleString()} onClick={() => setDetail('studentsServed')} />
+        <KPICard label="Sessions YTD"               value={DEMO_KPIS.sessionsYtd.toLocaleString()} onClick={() => setDetail('sessionsYtd')} />
+        <KPICard label="Open Referrals"             value={DEMO_KPIS.openReferrals} onClick={() => setDetail('openReferrals')} />
+        <KPICard label="Hours Logged This Month"    value={DEMO_KPIS.hoursLoggedThisMonth.toLocaleString()} onClick={() => setDetail('hoursLogged')} />
+        <KPICard label="SB 179 80/20 District Avg"  value={DEMO_KPIS.sb179DistrictAverage + '%'} status={DEMO_KPIS.sb179DistrictAverage >= 80 ? 'green' : 'red'} onClick={() => setDetail('sb179')} />
+        <KPICard label="FERPA Delete Requests"      value={DEMO_KPIS.ferpaDeleteRequests} sub="Honored YTD" onClick={() => setDetail('ferpa')} />
       </div>
 
       {/* Crisis Response Card */}
@@ -119,11 +124,11 @@ function OverviewTab() {
           <span style={{ fontSize: 11, padding: '2px 8px', background: '#fee2e2', color: '#b91c1c', borderRadius: 10, fontWeight: 700, textTransform: 'uppercase' }}>SB 11 Compliance</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14 }}>
-          <CrisisStat label="Suicide Screenings YTD"       value={DEMO_CRISIS.suicideScreeningsYtd} />
-          <CrisisStat label="Active Safety Plans"          value={DEMO_CRISIS.activeSafetyPlans} />
-          <CrisisStat label="Threat Assessments"           value={DEMO_CRISIS.threatAssessmentsCompleted} sub="completed YTD" />
-          <CrisisStat label="Avg Crisis Response"          value={DEMO_CRISIS.avgCrisisResponseHours + 'h'} sub="referral → action" />
-          <CrisisStat label="Safety Plan 30-day Reviews"   value={DEMO_CRISIS.pendingSafetyPlanReviews} sub="due this week" status="amber" />
+          <CrisisStat label="Suicide Screenings YTD"       value={DEMO_CRISIS.suicideScreeningsYtd} onClick={() => setDetail('crisisScreenings')} />
+          <CrisisStat label="Active Safety Plans"          value={DEMO_CRISIS.activeSafetyPlans} onClick={() => setDetail('crisisSafetyPlans')} />
+          <CrisisStat label="Threat Assessments"           value={DEMO_CRISIS.threatAssessmentsCompleted} sub="completed YTD" onClick={() => setDetail('crisisThreat')} />
+          <CrisisStat label="Avg Crisis Response"          value={DEMO_CRISIS.avgCrisisResponseHours + 'h'} sub="referral to action" onClick={() => setDetail('crisisResponseTime')} />
+          <CrisisStat label="Safety Plan 30-day Reviews"   value={DEMO_CRISIS.pendingSafetyPlanReviews} sub="due this week" status="amber" onClick={() => setDetail('crisisReviews')} />
         </div>
       </div>
 
@@ -175,18 +180,41 @@ function OverviewTab() {
         <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1a2332', margin: '0 0 12px' }}>District Alerts</h3>
         <div style={{ display: 'grid', gap: 10 }}>
           {DEMO_ALERTS.map((alert, i) => (
-            <div key={i} className="card" style={{ borderLeft: `4px solid ${ALERT_BORDER[alert.severity]}`, padding: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 11, padding: '2px 8px', background: STATUS_COLORS[alert.severity].bg, color: STATUS_COLORS[alert.severity].fg, borderRadius: 10, fontWeight: 700, textTransform: 'uppercase' }}>
-                  {alert.severity === 'red' ? 'Action Needed' : alert.severity === 'amber' ? 'Watch' : 'OK'}
-                </span>
-                <strong style={{ fontSize: 14, color: '#1a2332' }}>{alert.title}</strong>
+            <button
+              key={i}
+              onClick={() => setDetail({ alertIndex: i })}
+              className="card"
+              style={{
+                borderLeft: `4px solid ${ALERT_BORDER[alert.severity]}`,
+                padding: 14,
+                background: '#fff',
+                textAlign: 'left',
+                cursor: 'pointer',
+                width: '100%',
+                border: '1px solid #e5e7eb',
+                borderLeftWidth: 4,
+                borderLeftColor: ALERT_BORDER[alert.severity],
+                transition: 'transform 0.1s, box-shadow 0.1s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, padding: '2px 8px', background: STATUS_COLORS[alert.severity].bg, color: STATUS_COLORS[alert.severity].fg, borderRadius: 10, fontWeight: 700, textTransform: 'uppercase' }}>
+                    {alert.severity === 'red' ? 'Action Needed' : alert.severity === 'amber' ? 'Watch' : 'OK'}
+                  </span>
+                  <strong style={{ fontSize: 14, color: '#1a2332' }}>{alert.title}</strong>
+                </div>
+                <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>View →</span>
               </div>
               <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 0 0', lineHeight: 1.5 }}>{alert.detail}</p>
-            </div>
+            </button>
           ))}
         </div>
       </div>
+
+      <DataDetailModal detail={detail} onClose={() => setDetail(null)} />
     </>
   );
 }
@@ -796,27 +824,360 @@ function generateSuicideRiskComplianceReportPdf() {
 
 /* ─────── Reusable subcomponents ─────── */
 
-function KPICard({ label, value, sub, status }) {
+function KPICard({ label, value, sub, status, onClick }) {
   const c = status ? STATUS_COLORS[status] : null;
+  const interactive = !!onClick;
   return (
-    <div className="card" style={{ padding: 14 }}>
-      <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>{label}</div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!interactive}
+      className="card"
+      style={{
+        padding: 14,
+        background: '#fff',
+        textAlign: 'left',
+        cursor: interactive ? 'pointer' : 'default',
+        border: '1px solid #e5e7eb',
+        width: '100%',
+        transition: 'transform 0.1s, box-shadow 0.1s, border-color 0.1s',
+      }}
+      onMouseEnter={(e) => { if (interactive) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.08)'; e.currentTarget.style.borderColor = '#2A9D8F'; } }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; e.currentTarget.style.borderColor = '#e5e7eb'; }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>{label}</div>
+        {interactive && <span style={{ fontSize: 11, color: '#2A9D8F', fontWeight: 700 }}>→</span>}
+      </div>
       <div style={{ fontSize: 28, fontWeight: 800, color: c ? c.fg : '#1a2332', marginTop: 4 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{sub}</div>}
+    </button>
+  );
+}
+
+function CrisisStat({ label, value, sub, status, onClick }) {
+  const c = status ? STATUS_COLORS[status] : null;
+  const interactive = !!onClick;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!interactive}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        padding: 8,
+        margin: -8,
+        textAlign: 'left',
+        cursor: interactive ? 'pointer' : 'default',
+        borderRadius: 6,
+        transition: 'background 0.1s',
+      }}
+      onMouseEnter={(e) => { if (interactive) e.currentTarget.style.background = '#fef2f2'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: c ? c.fg : '#1a2332', marginTop: 2 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{sub}</div>}
+    </button>
+  );
+}
+
+/* ─────── Detail drill-down modal ─────── */
+
+function DataDetailModal({ detail, onClose }) {
+  if (!detail) return null;
+  const content = getDetailContent(detail);
+  if (!content) return null;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 100, padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: '#fff', borderRadius: 12, width: '100%',
+          maxWidth: 640, maxHeight: '90vh', overflow: 'auto',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+        }}
+      >
+        <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '8px 20px', fontSize: 12, color: '#92400e', textAlign: 'center', fontWeight: 600 }}>
+          DEMO PREVIEW | Sample data
+        </div>
+        <div style={{ padding: '24px 28px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1a2332' }}>{content.title}</h2>
+            <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: '#9ca3af', lineHeight: 1, padding: 0 }}>×</button>
+          </div>
+          {content.sub && <p style={{ margin: '0 0 16px', color: '#6b7280', fontSize: 14, lineHeight: 1.5 }}>{content.sub}</p>}
+          {content.value && (
+            <div style={{ fontSize: 36, fontWeight: 800, color: content.valueColor || '#2A9D8F', marginBottom: 16 }}>
+              {content.value}
+            </div>
+          )}
+          {content.body}
+          {content.interpretation && (
+            <div style={{ marginTop: 16, padding: 14, background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 8, fontSize: 13, color: '#0f766e', lineHeight: 1.6 }}>
+              <strong style={{ display: 'block', marginBottom: 4, color: '#0d9488' }}>What this means</strong>
+              {content.interpretation}
+            </div>
+          )}
+          <button onClick={onClose} className="btn btn-outline" style={{ marginTop: 16, width: '100%', fontSize: 13 }}>
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-function CrisisStat({ label, value, sub, status }) {
-  const c = status ? STATUS_COLORS[status] : null;
+function getDetailContent(detail) {
+  // Alert click — { alertIndex: n }
+  if (typeof detail === 'object' && detail.alertIndex != null) {
+    const alert = DEMO_ALERTS[detail.alertIndex];
+    if (!alert) return null;
+    const sevLabel = alert.severity === 'red' ? 'ACTION NEEDED' : alert.severity === 'amber' ? 'WATCH' : 'OK';
+    const sevColor = STATUS_COLORS[alert.severity].fg;
+    return {
+      title: alert.title,
+      sub: alert.detail,
+      value: sevLabel,
+      valueColor: sevColor,
+      body: (
+        <div>
+          <h4 style={miniHeading}>Recommended action</h4>
+          <ol style={{ margin: 0, paddingLeft: 22, fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+            {RECOMMENDED_ACTIONS[detail.alertIndex]?.map((step, i) => <li key={i}>{step}</li>) || <li>Review and document next steps in counselor notes.</li>}
+          </ol>
+        </div>
+      ),
+    };
+  }
+
+  switch (detail) {
+    case 'studentsServed': {
+      const total = DEMO_CASELOAD_BY_TIER.reduce((s, t) => s + t.count, 0);
+      return {
+        title: 'Students Served YTD',
+        value: DEMO_KPIS.studentsServedYtd.toLocaleString(),
+        sub: 'Unique students who received at least one direct counseling service this school year, broken down by MTSS tier.',
+        body: <MiniBarChart data={DEMO_CASELOAD_BY_TIER.map((t) => ({ label: t.tier, value: t.count, color: t.color }))} />,
+        interpretation: `${total.toLocaleString()} total students on caseload. Healthy distribution leans heavy on Tier 1 (universal/preventive), with Tier 2 small-group at 8% and Tier 3 intensive at 3% — within ASCA-recommended ranges.`,
+      };
+    }
+    case 'sessionsYtd':
+      return {
+        title: 'Sessions YTD',
+        value: DEMO_KPIS.sessionsYtd.toLocaleString(),
+        sub: 'Documented counseling sessions across the district. Both individual and group sessions count once per session, not per student.',
+        body: <MiniBarChart data={DEMO_COUNSELORS.map((c) => ({ label: c.name.split(' ')[0], value: c.sessionsYtd, color: c.status === 'green' ? '#22c55e' : c.status === 'amber' ? '#f59e0b' : '#ef4444' }))} />,
+        interpretation: 'Sessions per counselor range 385 to 510. Marcus Davis leads at 510 (12 years experience, lower caseload). Robert Kim trails at 385 — first-year counselor with assigned non-counseling duties pulling time away from direct services.',
+      };
+    case 'openReferrals': {
+      const urgentMix = [
+        { label: 'Urgent', value: 5, color: '#ef4444' },
+        { label: 'Soon', value: 12, color: '#f59e0b' },
+        { label: 'Routine', value: 20, color: '#6b7280' },
+      ];
+      return {
+        title: 'Open Referrals',
+        value: DEMO_KPIS.openReferrals,
+        sub: 'Pending referrals that have not yet been accepted into individual or group services.',
+        body: <MiniBarChart data={urgentMix} />,
+        interpretation: '5 urgent referrals require same-week response. 12 marked Soon should be addressed within 2 weeks. 20 routine referrals queued for next available cycle. Open referral volume is consistent with mid-year norms.',
+      };
+    }
+    case 'hoursLogged': {
+      const total = DEMO_TIME_ALLOCATION.reduce((s, c) => s + c.hours, 0);
+      const direct = DEMO_TIME_ALLOCATION[0].hours + DEMO_TIME_ALLOCATION[1].hours;
+      const directPct = Math.round((direct / total) * 100);
+      return {
+        title: 'Hours Logged This Month',
+        value: total.toLocaleString() + ' hrs',
+        sub: 'All counselor work time, broken down by activity category. SB 179 / TEC §33.006 requires 80% on direct + indirect counseling services.',
+        body: <MiniBarChart data={DEMO_TIME_ALLOCATION.map((d) => ({ label: d.category, value: d.hours, color: d.color }))} />,
+        interpretation: `${directPct}% of counselor time is on direct + indirect counseling services this month — at the SB 179 threshold. Pulling counselors off testing coordination (currently 5%) is the easiest lever to push compliance higher.`,
+      };
+    }
+    case 'sb179':
+      return {
+        title: 'SB 179 80/20 Compliance — District Average',
+        value: DEMO_KPIS.sb179DistrictAverage + '%',
+        valueColor: DEMO_KPIS.sb179DistrictAverage >= 80 ? '#15803d' : '#b91c1c',
+        sub: 'Per-counselor SB 179 compliance percentage (TEC §33.006). 80% is the statutory threshold for direct + indirect counseling services.',
+        body: <MiniBarChart
+          threshold={80}
+          data={DEMO_COUNSELORS.map((c) => ({
+            label: c.name.split(' ')[0],
+            value: c.sb179,
+            color: c.sb179 >= 80 ? '#22c55e' : c.sb179 >= 75 ? '#f59e0b' : '#ef4444',
+          }))}
+        />,
+        interpretation: '5 of 7 counselors meet the 80% threshold. 2 in the 75-79% watch zone (Sarah Chen, Maria Rodriguez). 1 noncompliant: Robert Kim at 72% — first-year counselor; reassigning his non-counseling duties for one quarter typically lifts compliance into the green.',
+      };
+    case 'ferpa':
+      return {
+        title: 'FERPA Delete Requests',
+        value: DEMO_KPIS.ferpaDeleteRequests,
+        sub: 'Parent / guardian requests to delete a student record under FERPA (34 C.F.R. §99.20–22), honored year-to-date.',
+        body: (
+          <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+            <strong>Process:</strong> Each delete request is logged with date received, reviewer, and date fulfilled. Records are removed from local IndexedDB (or Supabase, district mode) and confirmed in writing to the requestor.<br /><br />
+            <strong>Average fulfillment time:</strong> Same-day response, full deletion within 3 school days.
+          </div>
+        ),
+        interpretation: 'Districts are not required to honor every delete request — FERPA permits retention when records are needed for legal compliance or institutional accountability. Beacon flags those exceptions for review before action.',
+      };
+    case 'crisisScreenings': {
+      const byMonth = [
+        { label: 'Aug', value: 3, color: '#ef4444' },
+        { label: 'Sep', value: 6, color: '#ef4444' },
+        { label: 'Oct', value: 8, color: '#ef4444' },
+        { label: 'Nov', value: 5, color: '#ef4444' },
+        { label: 'Dec', value: 4, color: '#ef4444' },
+        { label: 'Jan', value: 9, color: '#ef4444' },
+        { label: 'Feb', value: 7, color: '#ef4444' },
+        { label: 'Mar', value: 5, color: '#ef4444' },
+      ];
+      return {
+        title: 'Suicide Risk Screenings YTD',
+        value: DEMO_CRISIS.suicideScreeningsYtd,
+        sub: 'Documented suicide risk screenings completed this school year, monthly. Required under SB 11 (86th Leg., 2019) when a student is referred for self-harm concern.',
+        body: <MiniBarChart data={byMonth} />,
+        interpretation: 'Screenings tend to spike in January (return from winter break) and October. Every screening is documented with date, screener, instrument used (Columbia, ASQ), outcome, and follow-up plan — audit-ready for TEA reviews.',
+      };
+    }
+    case 'crisisSafetyPlans': {
+      const byCampus = [
+        { label: 'Sample ES',      value: 4, color: '#ef4444' },
+        { label: 'Sample East ES', value: 3, color: '#ef4444' },
+        { label: 'Sample West ES', value: 5, color: '#ef4444' },
+      ];
+      return {
+        title: 'Active Safety Plans',
+        value: DEMO_CRISIS.activeSafetyPlans,
+        sub: 'Students with documented safety plans on file, broken down by campus. Each plan is reviewed every 30 days.',
+        body: <MiniBarChart data={byCampus} />,
+        interpretation: '12 students currently have active safety plans. Sample West has the highest concentration (5) and the largest caseload — counselor coverage there is monitored. 3 plans are due for 30-day review this week (see "Safety Plan 30-day Reviews" stat).',
+      };
+    }
+    case 'crisisThreat':
+      return {
+        title: 'Threat Assessments Completed',
+        value: DEMO_CRISIS.threatAssessmentsCompleted,
+        sub: 'Multidisciplinary threat assessments conducted this school year per district SB 11 protocol. Each involves a counselor, administrator, and (when applicable) school resource officer.',
+        body: (
+          <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+            <strong>Most recent (last 60 days):</strong>
+            <ul style={{ margin: '8px 0 0', paddingLeft: 22 }}>
+              <li>2 low-risk findings, no further action needed</li>
+              <li>1 moderate-risk finding, ongoing safety plan + parent contact</li>
+              <li>1 escalated to law enforcement consult (per protocol)</li>
+            </ul>
+          </div>
+        ),
+        interpretation: 'Threat assessments are formally documented per SB 11 + 19 TAC Chapter 103. Beacon stores the assessment record, the team roster, the determination, and the follow-up actions in one place — defensible if the district faces a TEA review or due-process hearing.',
+      };
+    case 'crisisResponseTime':
+      return {
+        title: 'Average Crisis Response Time',
+        value: DEMO_CRISIS.avgCrisisResponseHours + ' hours',
+        sub: 'Average elapsed time from referral submission to counselor first action (initial contact, screening, or safety plan).',
+        body: (
+          <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
+            <strong>Distribution:</strong><br />
+            Within 1 hour: 62%<br />
+            1–4 hours: 28%<br />
+            Same school day: 8%<br />
+            Next school day: 2%
+          </div>
+        ),
+        interpretation: 'Best practice for an urgent referral is contact within 1 school day. District is well below that, with 90% of crisis referrals reaching the counselor within 4 hours. The 2% next-day cases are typically referrals submitted after-hours.',
+      };
+    case 'crisisReviews':
+      return {
+        title: 'Safety Plan 30-Day Reviews — Due This Week',
+        value: DEMO_CRISIS.pendingSafetyPlanReviews,
+        valueColor: '#a16207',
+        sub: 'Students with active safety plans that require a 30-day review this week. Reviews verify the plan is still appropriate and document any changes.',
+        body: (
+          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 14, fontSize: 13, color: '#92400e', lineHeight: 1.7 }}>
+            <strong>Pending this week:</strong>
+            <ul style={{ margin: '8px 0 0', paddingLeft: 22 }}>
+              <li>Student #A — Sample West ES — assigned: Lisa Anderson</li>
+              <li>Student #B — Sample West ES — assigned: Maria Rodriguez</li>
+              <li>Student #C — Sample East ES — assigned: Marcus Davis</li>
+            </ul>
+          </div>
+        ),
+        interpretation: 'Reviews block-scheduled for Wednesday. Counselors meet with the student, update the plan as needed, document the review, and — if changes warrant — re-engage parents. Beacon auto-flags the next 30-day check before it lapses.',
+      };
+    default:
+      return null;
+  }
+}
+
+const RECOMMENDED_ACTIONS = [
+  // Index matches DEMO_ALERTS order
+  [ // 0: SB 179 noncompliance risk (Robert Kim)
+    'Review Robert Kim\'s last 4 weeks of time entries to identify the largest non-counseling time sinks.',
+    'Reassign at least one block of testing coordination or substitute coverage to a non-counseling staff member.',
+    'Schedule a 15-minute coaching check-in for Friday to confirm the calendar shift.',
+    'Re-run the SB 179 report next Friday — target 78%+ to exit the red zone.',
+  ],
+  [ // 1: Caseload over ASCA
+    'Pull Sample West Elementary enrollment + counselor staffing into the next budget proposal.',
+    'Document specific service gaps caused by the 270:1 ratio (referral wait times, group capacity).',
+    'Cite ASCA recommendation (250:1) and Texas Counselor Association guidance.',
+    'Propose 0.5 FTE counselor at next cabinet meeting.',
+  ],
+  [ // 2: Active safety plans pending 30-day review
+    'Confirm Wednesday block-scheduling on counselor calendars.',
+    'Pull each student\'s current plan and any incident updates from the last 30 days.',
+    'Document review meeting outcome (continue / modify / close) per district protocol.',
+    'Re-engage parent if plan changes — log the contact in Beacon\'s communication record.',
+  ],
+  [ // 3: Documentation completeness below 80%
+    'Pull Robert Kim\'s last 4 weeks of session notes and identify entries marked draft / unfinished.',
+    'Schedule a 30-minute coaching session focused on session-note efficiency (templates, voice-to-text).',
+    'Re-check completeness in 2 weeks — target 90%+.',
+    'If pattern persists, evaluate whether caseload reassignment is warranted.',
+  ],
+];
+
+function MiniBarChart({ data, threshold }) {
+  const max = Math.max(...data.map((d) => d.value), threshold || 0);
   return (
-    <div>
-      <div style={{ fontSize: 11, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: c ? c.fg : '#1a2332', marginTop: 2 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{sub}</div>}
+    <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14 }}>
+      {data.map((d, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: i === data.length - 1 ? 0 : 8 }}>
+          <div style={{ width: 110, fontSize: 12, color: '#374151', textAlign: 'right', fontWeight: 500 }}>{d.label}</div>
+          <div style={{ flex: 1, position: 'relative', height: 20, background: '#e5e7eb', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${(d.value / max) * 100}%`, background: d.color || '#2A9D8F', transition: 'width 0.3s' }} />
+            {threshold != null && (
+              <div style={{ position: 'absolute', left: `${(threshold / max) * 100}%`, top: -2, bottom: -2, width: 2, background: '#1a2332' }} title={`Threshold: ${threshold}`} />
+            )}
+          </div>
+          <div style={{ width: 50, fontSize: 13, fontWeight: 700, color: '#1a2332', textAlign: 'right' }}>{d.value}</div>
+        </div>
+      ))}
+      {threshold != null && (
+        <div style={{ marginTop: 8, fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'inline-block', width: 14, height: 2, background: '#1a2332' }} />
+          <span>Threshold: {threshold}{typeof threshold === 'number' && threshold <= 100 ? '%' : ''}</span>
+        </div>
+      )}
     </div>
   );
 }
+
+const miniHeading = { fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: 0.5, margin: '0 0 8px' };
 
 function ChartCard({ title, subtitle, children }) {
   return (
