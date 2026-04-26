@@ -1,14 +1,14 @@
 /**
- * DistrictPreviewPage — "Pitch Your District" demo view.
+ * DistrictPreviewPage - "Pitch Your District" demo view.
  *
  * Read-only mock dashboard a counselor can show their director of counseling
- * to demonstrate what district-wide Beacon would look like. Pure render-from-static —
+ * to demonstrate what district-wide Beacon would look like. Pure render-from-static -
  * no real student data is touched, no IndexedDB writes happen.
  *
  * Three tabs:
- *   1. District at a Glance — KPIs, crisis response, sessions trend, time allocation, campus comparison, alerts
- *   2. Counselor Roster — 7 counselors with status, caseload, SB 179 compliance, doc completeness
- *   3. Reports & Exports — 5 sample exportable PDF/Excel reports
+ *   1. District at a Glance - KPIs, crisis response, sessions trend, time allocation, campus comparison, alerts
+ *   2. Counselor Roster - 7 counselors with status, caseload, SB 179 compliance, doc completeness
+ *   3. Reports & Exports - 5 sample exportable PDF/Excel reports
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -40,7 +40,7 @@ export default function DistrictPreviewPage() {
     <div style={pageStyle}>
       {/* Persistent demo banner */}
       <div style={demoBanner}>
-        <strong>DEMO PREVIEW</strong> &nbsp;·&nbsp; Sample data only. Beacon never moves your real data without district authorization.
+        <strong>DEMO PREVIEW</strong> &nbsp;|&nbsp; Sample data only. Beacon never moves your real data without district authorization.
       </div>
 
       {/* Header */}
@@ -98,7 +98,7 @@ function TabButton({ active, onClick, children }) {
   );
 }
 
-/* ─────── TAB 1 — Overview ─────── */
+/* ─────── TAB 1 - Overview ─────── */
 function OverviewTab() {
   return (
     <>
@@ -141,7 +141,7 @@ function OverviewTab() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Time Allocation" subtitle="This month — direct + indirect must be ≥ 80% per SB 179">
+        <ChartCard title="Time Allocation" subtitle="This month - direct + indirect must be ≥ 80% per SB 179">
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
               <Pie data={DEMO_TIME_ALLOCATION} dataKey="hours" nameKey="category" cx="50%" cy="50%" outerRadius={70} innerRadius={40}>
@@ -191,14 +191,14 @@ function OverviewTab() {
   );
 }
 
-/* ─────── TAB 2 — Roster ─────── */
+/* ─────── TAB 2 - Roster ─────── */
 function RosterTab() {
   return (
     <>
       <div style={{ marginBottom: 16 }}>
         <p style={{ fontSize: 13, color: '#6b7280', margin: 0, lineHeight: 1.6 }}>
           {DEMO_COUNSELORS.length} counselors across {DEMO_CAMPUSES.length} campuses.
-          Status combines SB 179 80/20 compliance with documentation completeness — green ≥80% on both, amber 70–79%, red &lt;70% on either.
+          Status combines SB 179 80/20 compliance with documentation completeness - green ≥80% on both, amber 70-79%, red &lt;70% on either.
         </p>
       </div>
 
@@ -278,13 +278,13 @@ function CampusCard({ campus }) {
   );
 }
 
-/* ─────── TAB 3 — Reports ─────── */
+/* ─────── TAB 3 - Reports ─────── */
 function ReportsTab() {
   return (
     <>
       <div style={{ marginBottom: 16 }}>
         <p style={{ fontSize: 13, color: '#6b7280', margin: 0, lineHeight: 1.6 }}>
-          Five sample reports — click any to download a real PDF or Excel built from the demo data above.
+          Five sample reports - click any to download a real PDF or Excel built from the demo data above.
           District Beacon ships with these formatted to your district letterhead and submitted-ready for board, TEA, and OCR audits.
         </p>
       </div>
@@ -310,7 +310,7 @@ function ReportsTab() {
         <ReportCard
           title="Annual ASCA Program Report"
           format="PDF"
-          desc="ASCA Model–formatted annual report. Use of time analysis, program goals, closing-the-gap data. Drop into RAMP application."
+          desc="ASCA Model-formatted annual report. Use of time analysis, program goals, closing-the-gap data. Drop into RAMP application."
           onDownload={generateAscaReportPdf}
         />
         <ReportCard
@@ -322,7 +322,7 @@ function ReportsTab() {
         <ReportCard
           title="Board Presentation Slide Deck"
           format="PDF"
-          desc="5-slide presentation deck formatted for school board meetings. Drop into your agenda packet or screen-share at budget season — each slide is a clean visual."
+          desc="5-slide presentation deck formatted for school board meetings. Drop into your agenda packet or screen-share at budget season - each slide is a clean visual."
           onDownload={generateBoardSlideDeckPdf}
         />
       </div>
@@ -376,12 +376,12 @@ function pdfFooter(doc) {
   const pageHeight = doc.internal.pageSize.getHeight();
   doc.setTextColor(156, 163, 175);
   doc.setFontSize(8);
-  doc.text('DEMO PREVIEW · Sample data only · Beacon by Clear Path Education Group, LLC', 15, pageHeight - 10);
+  doc.text('DEMO PREVIEW | Sample data only | Beacon by Clear Path Education Group, LLC', 15, pageHeight - 10);
 }
 
 function generateBoardSummaryPdf() {
   const doc = new jsPDF();
-  pdfHeader(doc, 'District Counseling Board Summary', `${DEMO_DISTRICT.name} · ${DEMO_DISTRICT.schoolYear}`);
+  pdfHeader(doc, 'District Counseling Board Summary', `${DEMO_DISTRICT.name} | ${DEMO_DISTRICT.schoolYear}`);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
@@ -425,7 +425,7 @@ function generateBoardSummaryPdf() {
 
 function generateCounselorCompliancePdf() {
   const doc = new jsPDF();
-  pdfHeader(doc, 'Counselor SB 179 Compliance Report', `${DEMO_DISTRICT.name} · ${DEMO_DISTRICT.schoolYear}`);
+  pdfHeader(doc, 'Counselor SB 179 Compliance Report', `${DEMO_DISTRICT.name} | ${DEMO_DISTRICT.schoolYear}`);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
@@ -474,7 +474,7 @@ function generateCounselorCompliancePdf() {
 }
 
 function generateCaseloadByTierCsv() {
-  // Simple CSV — districts can open in Excel.
+  // Simple CSV - districts can open in Excel.
   const lines = ['Counselor,Campus,Caseload,Tier 1,Tier 2,Tier 3'];
   DEMO_COUNSELORS.forEach((c) => {
     // Distribute caseload roughly 88% / 9% / 3% (matches district totals)
@@ -494,7 +494,7 @@ function generateCaseloadByTierCsv() {
 
 function generateAscaReportPdf() {
   const doc = new jsPDF();
-  pdfHeader(doc, 'Annual ASCA National Model Program Report', `${DEMO_DISTRICT.name} · ${DEMO_DISTRICT.schoolYear}`);
+  pdfHeader(doc, 'Annual ASCA National Model Program Report', `${DEMO_DISTRICT.name} | ${DEMO_DISTRICT.schoolYear}`);
 
   let y = 60;
   doc.setFont('helvetica', 'bold');
@@ -540,7 +540,7 @@ function generateAscaReportPdf() {
     'Achieve 90%+ documentation completeness across all counselors by Q3.',
   ];
   goals.forEach((g, i) => {
-    // Use a drawn circle for the bullet — works in any PDF viewer regardless of font encoding.
+    // Use a drawn circle for the bullet - works in any PDF viewer regardless of font encoding.
     doc.circle(20, y + 7 + i * 6, 0.8, 'F');
     doc.text(g, 24, y + 8 + i * 6);
   });
@@ -560,7 +560,7 @@ function generateBoardSlideDeckPdf() {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text('BEACON · ' + DEMO_DISTRICT.name + ' · ' + DEMO_DISTRICT.schoolYear, 12, 10);
+    doc.text('BEACON | ' + DEMO_DISTRICT.name + ' | ' + DEMO_DISTRICT.schoolYear, 12, 10);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text(title, W - 12, 10, { align: 'right' });
@@ -568,10 +568,10 @@ function generateBoardSlideDeckPdf() {
   const slideFooter = (n, total) => {
     doc.setTextColor(156, 163, 175);
     doc.setFontSize(8);
-    doc.text(`DEMO PREVIEW · Slide ${n} of ${total} · Sample data only`, W / 2, H - 6, { align: 'center' });
+    doc.text(`DEMO PREVIEW | Slide ${n} of ${total} | Sample data only`, W / 2, H - 6, { align: 'center' });
   };
 
-  // ─── Slide 1 — Title ───
+  // ─── Slide 1 - Title ───
   slideHeader('Cover');
   doc.setTextColor(26, 35, 50);
   doc.setFontSize(36);
@@ -583,13 +583,13 @@ function generateBoardSlideDeckPdf() {
   doc.text(DEMO_DISTRICT.name, W / 2, 90, { align: 'center' });
   doc.setFontSize(14);
   doc.setTextColor(107, 114, 128);
-  doc.text(DEMO_DISTRICT.schoolYear + ' · Mid-year Report', W / 2, 102, { align: 'center' });
+  doc.text(DEMO_DISTRICT.schoolYear + ' | Mid-year Report', W / 2, 102, { align: 'center' });
   doc.setFontSize(11);
   doc.text('Presented by: Director of Counseling', W / 2, 120, { align: 'center' });
   doc.text('To: Board of Trustees', W / 2, 128, { align: 'center' });
   slideFooter(1, 5);
 
-  // ─── Slide 2 — KPIs ───
+  // ─── Slide 2 - KPIs ───
   doc.addPage();
   slideHeader('Year-to-Date Highlights');
   doc.setTextColor(26, 35, 50);
@@ -625,11 +625,11 @@ function generateBoardSlideDeckPdf() {
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(75, 85, 99);
-  const takeaway = doc.splitTextToSize('District counselors served 942 students through 3,175 documented sessions, with the district averaging 80% direct/indirect counseling time — at the SB 179 threshold.', 110);
+  const takeaway = doc.splitTextToSize('District counselors served 942 students through 3,175 documented sessions, with the district averaging 80% direct/indirect counseling time - at the SB 179 threshold.', 110);
   doc.text(takeaway, 165, 72);
   slideFooter(2, 5);
 
-  // ─── Slide 3 — Compliance ───
+  // ─── Slide 3 - Compliance ───
   doc.addPage();
   slideHeader('Compliance');
   doc.setTextColor(26, 35, 50);
@@ -639,15 +639,15 @@ function generateBoardSlideDeckPdf() {
 
   // SB 179 traffic light
   doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-  doc.text('SB 179 / TEC §33.006 — 80/20 Direct Services', 20, 60);
+  doc.text('SB 179 / TEC §33.006 - 80/20 Direct Services', 20, 60);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
   doc.setTextColor(75, 85, 99);
-  doc.text('Compliant counselors: 5 of 7 · Watch: 2 · Action needed: 1 (Robert Kim, 72%)', 20, 70);
+  doc.text('Compliant counselors: 5 of 7 | Watch: 2 | Action needed: 1 (Robert Kim, 72%)', 20, 70);
 
   // SB 11 box
   doc.setFontSize(14); doc.setFont('helvetica', 'bold');
   doc.setTextColor(26, 35, 50);
-  doc.text('SB 11 — Suicide Prevention & Threat Assessment', 20, 95);
+  doc.text('SB 11 - Suicide Prevention & Threat Assessment', 20, 95);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
   doc.setTextColor(75, 85, 99);
   const sb11lines = [
@@ -665,13 +665,13 @@ function generateBoardSlideDeckPdf() {
   // FERPA
   doc.setFontSize(14); doc.setFont('helvetica', 'bold');
   doc.setTextColor(26, 35, 50);
-  doc.text('FERPA — Student Records Privacy', 20, 160);
+  doc.text('FERPA - Student Records Privacy', 20, 160);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
   doc.setTextColor(75, 85, 99);
-  doc.text(`${DEMO_KPIS.ferpaDeleteRequests} delete requests honored YTD · TX-NDPA on file with vendor`, 20, 170);
+  doc.text(`${DEMO_KPIS.ferpaDeleteRequests} delete requests honored YTD | TX-NDPA on file with vendor`, 20, 170);
   slideFooter(3, 5);
 
-  // ─── Slide 4 — Cross-campus ───
+  // ─── Slide 4 - Cross-campus ───
   doc.addPage();
   slideHeader('Campus Comparison');
   doc.setTextColor(26, 35, 50);
@@ -699,7 +699,7 @@ function generateBoardSlideDeckPdf() {
   doc.text(rec, 20, doc.lastAutoTable.finalY + 28);
   slideFooter(4, 5);
 
-  // ─── Slide 5 — Investment ───
+  // ─── Slide 5 - Investment ───
   doc.addPage();
   slideHeader('Investment');
   doc.setTextColor(26, 35, 50);
@@ -710,11 +710,11 @@ function generateBoardSlideDeckPdf() {
   doc.setFontSize(14); doc.setFont('helvetica', 'bold');
   const totalCounselors = DEMO_COUNSELORS.length;
   const annualCost = totalCounselors * 79;
-  doc.text(`${totalCounselors} counselors × $79 = $${annualCost.toLocaleString()}/year`, 20, 60);
+  doc.text(`${totalCounselors} counselors x $79 = $${annualCost.toLocaleString()}/year`, 20, 60);
 
   doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
   doc.setTextColor(75, 85, 99);
-  doc.text(`That is $${(annualCost / totalCounselors).toFixed(0)} per counselor per year — less than 0.05% of a counselor's salary.`, 20, 72);
+  doc.text(`That is $${(annualCost / totalCounselors).toFixed(0)} per counselor per year - less than 0.05% of a counselor's salary.`, 20, 72);
 
   doc.setFontSize(13); doc.setFont('helvetica', 'bold');
   doc.setTextColor(26, 35, 50);
@@ -724,10 +724,10 @@ function generateBoardSlideDeckPdf() {
   const benefits = [
     'Audit-ready compliance documentation (SB 179, SB 11, FERPA, ASCA Model)',
     'Cross-campus visibility with this dashboard',
-    'Documentation completeness tracking — defensible in TEA reviews and due-process',
-    'Texas-NDPA on file with the vendor — pre-cleared by district legal',
+    'Documentation completeness tracking - defensible in TEA reviews and due-process',
+    'Texas-NDPA on file with the vendor - pre-cleared by district legal',
     'Setup includes data migration assistance from existing tools (CountSel, spreadsheets, etc.)',
-    'No volume discount needed — same per-counselor price for individuals and districts',
+    'No volume discount needed - same per-counselor price for individuals and districts',
   ];
   benefits.forEach((b, i) => {
     doc.circle(22, 105 + i * 7, 1.5, 'F');
@@ -736,7 +736,7 @@ function generateBoardSlideDeckPdf() {
 
   doc.setFontSize(10); doc.setFont('helvetica', 'italic');
   doc.setTextColor(107, 114, 128);
-  doc.text('Vendor: Clear Path Education Group, LLC · support@clearpathedgroup.com', 20, 175);
+  doc.text('Vendor: Clear Path Education Group, LLC | support@clearpathedgroup.com', 20, 175);
   slideFooter(5, 5);
 
   doc.save('Board_Presentation_Slide_Deck_Demo.pdf');
@@ -744,7 +744,7 @@ function generateBoardSlideDeckPdf() {
 
 function generateSuicideRiskComplianceReportPdf() {
   const doc = new jsPDF();
-  pdfHeader(doc, 'Suicide Risk Screening Compliance Report', `${DEMO_DISTRICT.name} · ${DEMO_DISTRICT.schoolYear}`);
+  pdfHeader(doc, 'Suicide Risk Screening Compliance Report', `${DEMO_DISTRICT.name} | ${DEMO_DISTRICT.schoolYear}`);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
