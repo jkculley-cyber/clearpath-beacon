@@ -1,10 +1,21 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { db, isLocalMode } from '../lib/db';
 import { CONCERN_TYPES, URGENCY_LEVELS } from '../lib/constants';
 
 const GRADES = ['K', '1', '2', '3', '4', '5'];
 
+/**
+ * ReferralFormPage — public form, two transport modes:
+ *   1. mailto mode (default for individual / local-mode counselors):
+ *      URL: /referral-form?to=counselor@email.com&n=Counselor+Name
+ *      Submission opens the teacher's email client with a structured body.
+ *      Counselor pastes the email content into Beacon's "Import from Email" feature.
+ *      Zero data ever touches Clear Path infrastructure.
+ *   2. cloud mode (district-licensed counselors):
+ *      URL: /referral-form?c=COUNSELOR_UUID
+ *      Submission writes directly to Supabase referrals table.
+ */
 export default function ReferralFormPage() {
   const [studentName, setStudentName] = useState('');
   const [grade, setGrade] = useState('');
@@ -14,15 +25,53 @@ export default function ReferralFormPage() {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [mailtoOpened, setMailtoOpened] = useState(false);
   const [error, setError] = useState('');
+
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const counselorEmail = params.get('to') || '';
+  const counselorName = params.get('n') || 'your counselor';
+  const counselorIdParam = params.get('c') || '';
+
+  // Mailto mode: when a counselor email is in the URL, the form relays via the teacher's email client.
+  // No Clear Path infrastructure handles the data.
+  const isMailtoMode = !!counselorEmail;
+
+  const buildEmailBody = () => {
+    const lines = [
+      'A teacher submitted a student referral via Beacon. Forward to your counselor inbox or paste the block below into Beacon → Referrals → Import from Email.',
+      '',
+      '--- BEACON REFERRAL ---',
+      `Student: ${studentName}`,
+      `Grade: ${grade}`,
+      `Teacher: ${teacherName || '(not provided)'}`,
+      `Concern: ${concernType}`,
+      `Urgency: ${urgency}`,
+      `Notes: ${notes || '(none)'}`,
+      `Submitted: ${new Date().toISOString().slice(0, 10)}`,
+      '--- END BEACON REFERRAL ---',
+    ];
+    return lines.join('\n');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setError('');
 
-    // In local mode, write to IndexedDB with the local counselor's ID.
-    // In cloud mode, write to Supabase (counselor_id assigned by RLS or app logic).
+    if (isMailtoMode) {
+      // Build mailto: with structured body. Open in teacher's email client.
+      const subject = `Beacon Referral — ${studentName} (${urgency})`;
+      const body = buildEmailBody();
+      const href = `mailto:${encodeURIComponent(counselorEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = href;
+      setMailtoOpened(true);
+      setSubmitting(false);
+      setSubmitted(true);
+      return;
+    }
+
+    // Cloud mode (existing behavior) — direct insert
     const referralData = {
       student_name: studentName,
       grade,
@@ -34,14 +83,10 @@ export default function ReferralFormPage() {
     };
 
     if (isLocalMode()) {
-      // Get the local counselor ID so the referral appears in their queue
       const localCounselorId = localStorage.getItem('beacon_local_counselor_id');
       if (localCounselorId) referralData.counselor_id = localCounselorId;
-    } else {
-      // In cloud mode, get counselor_id from URL query parameter (?c=UUID)
-      const params = new URLSearchParams(window.location.search);
-      const counselorIdParam = params.get('c');
-      if (counselorIdParam) referralData.counselor_id = counselorIdParam;
+    } else if (counselorIdParam) {
+      referralData.counselor_id = counselorIdParam;
     }
 
     const { error: err } = isLocalMode()
@@ -56,6 +101,12 @@ export default function ReferralFormPage() {
 
     setSubmitting(false);
     setSubmitted(true);
+  };
+
+  const copyEmailBody = async () => {
+    try {
+      await navigator.clipboard.writeText(buildEmailBody());
+    } catch { /* ignore */ }
   };
 
   if (submitted) {
@@ -77,12 +128,26 @@ export default function ReferralFormPage() {
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1a2332', margin: '0 0 8px' }}>Referral Submitted</h2>
-            <p style={{ color: '#6b7280', fontSize: 14, margin: 0 }}>
-              Thank you. The school counselor will review this referral and follow up as needed.
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: '#1a2332', margin: '0 0 8px' }}>
+              {isMailtoMode ? 'Email Opened' : 'Referral Submitted'}
+            </h2>
+            <p style={{ color: '#6b7280', fontSize: 14, margin: '0 0 16px', lineHeight: 1.5 }}>
+              {isMailtoMode
+                ? <>Your email client should have opened with the referral pre-filled to <strong>{counselorName}</strong>. <strong>Click Send</strong> to deliver it.</>
+                : 'Thank you. The school counselor will review this referral and follow up as needed.'}
             </p>
-            <button onClick={() => { setSubmitted(false); setStudentName(''); setGrade(''); setTeacherName(''); setConcernType(''); setUrgency(''); setNotes(''); }}
-              className="btn btn-primary" style={{ marginTop: 24 }}>
+
+            {isMailtoMode && (
+              <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, fontSize: 12, color: '#6b7280', textAlign: 'left', marginBottom: 16 }}>
+                <strong>Email didn't open?</strong> Copy the referral text and email it to <strong>{counselorEmail}</strong> manually.
+                <button onClick={copyEmailBody} className="btn btn-outline" style={{ marginTop: 10, fontSize: 12, padding: '6px 12px', width: '100%' }}>
+                  Copy Referral Text
+                </button>
+              </div>
+            )}
+
+            <button onClick={() => { setSubmitted(false); setMailtoOpened(false); setStudentName(''); setGrade(''); setTeacherName(''); setConcernType(''); setUrgency(''); setNotes(''); }}
+              className="btn btn-primary" style={{ marginTop: 8 }}>
               Submit Another Referral
             </button>
           </div>
@@ -106,8 +171,10 @@ export default function ReferralFormPage() {
         <h2 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', textAlign: 'center', margin: '0 0 4px' }}>
           Student Referral Form
         </h2>
-        <p style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', margin: '0 0 24px' }}>
-          Use this form to refer a student to the school counselor.
+        <p style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', margin: '0 0 20px', lineHeight: 1.5 }}>
+          {isMailtoMode
+            ? <>This referral will be sent to <strong>{counselorName}</strong> via your email client. No data is stored on any server.</>
+            : 'Use this form to refer a student to the school counselor.'}
         </p>
 
         {error && (
@@ -157,8 +224,14 @@ export default function ReferralFormPage() {
           <textarea className="form-input" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Describe the concern, what you have observed, and any steps already taken..." style={{ marginBottom: 24 }} />
 
           <button type="submit" className="btn btn-primary" disabled={submitting || !urgency} style={{ width: '100%' }}>
-            {submitting ? 'Submitting...' : 'Submit Referral'}
+            {submitting ? (isMailtoMode ? 'Opening email...' : 'Submitting...') : (isMailtoMode ? 'Open Email to Send' : 'Submit Referral')}
           </button>
+
+          {isMailtoMode && (
+            <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 12, marginBottom: 0, lineHeight: 1.5 }}>
+              Your email client will open with the referral pre-filled. You'll need to click <strong>Send</strong> to deliver it.
+            </p>
+          )}
         </form>
       </div>
       <p style={{ textAlign: 'center', fontSize: 12, color: '#9ca3af', marginTop: 20 }}>

@@ -1,14 +1,45 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
 import { URGENCY_LEVELS, CONCERN_TYPES } from '../lib/constants';
 
 const urgencyColor = { Urgent: '#ef4444', Soon: '#f59e0b', Routine: '#6b7280' };
 
+// ── Helper: parse Beacon referral blocks out of pasted email body ──
+function parseReferralEmail(text) {
+  const blockPattern = /---\s*BEACON REFERRAL\s*---([\s\S]*?)---\s*END BEACON REFERRAL\s*---/gi;
+  const fieldPattern = /^([A-Za-z]+):\s*(.+)$/;
+  const out = [];
+  let match;
+  while ((match = blockPattern.exec(text)) !== null) {
+    const block = match[1];
+    const fields = {};
+    block.split(/\r?\n/).forEach((line) => {
+      const m = line.trim().match(fieldPattern);
+      if (m) fields[m[1].toLowerCase()] = m[2].trim();
+    });
+    if (fields.student) {
+      out.push({
+        student_name: fields.student,
+        grade: fields.grade || '',
+        teacher_name: fields.teacher && fields.teacher !== '(not provided)' ? fields.teacher : '',
+        concern_type: fields.concern || 'Academic',
+        urgency: ['Routine', 'Soon', 'Urgent'].includes(fields.urgency) ? fields.urgency : 'Routine',
+        notes: fields.notes && fields.notes !== '(none)' ? fields.notes : '',
+      });
+    }
+  }
+  return out;
+}
+
 function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
   const [mode, setMode] = useState('individual');
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
+  const [sessionDate, setSessionDate] = useState('');
+  const [startTime, setStartTime] = useState('09:00');
+  const [duration, setDuration] = useState(30);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [matchedStudent, setMatchedStudent] = useState(null);
@@ -17,6 +48,14 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
     if (open) {
       setMode('individual');
       setSelectedGroup('');
+      // Default to next school day 9am
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      // Skip weekends
+      while (tomorrow.getDay() === 0 || tomorrow.getDay() === 6) tomorrow.setDate(tomorrow.getDate() + 1);
+      setSessionDate(tomorrow.toISOString().slice(0, 10));
+      setStartTime('09:00');
+      setDuration(30);
       setSaving(false);
       setError('');
       setMatchedStudent(null);
@@ -25,6 +64,14 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
   }, [open, counselorId]);
 
   if (!open || !referral) return null;
+
+  const computeEndTime = (start, durationMin) => {
+    const [h, m] = start.split(':').map(Number);
+    const endMin = h * 60 + m + durationMin;
+    const eh = Math.floor(endMin / 60);
+    const em = endMin % 60;
+    return `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`;
+  };
 
   const handleAccept = async () => {
     setSaving(true);
@@ -44,7 +91,6 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
       student = match;
       setMatchedStudent(match);
     } else {
-      // Create student record
       const nameParts = (referral.student_name || '').split(' ');
       const { data: newStudent, error: insertErr } = await db.insert('students', {
         counselor_id: counselorId,
@@ -65,7 +111,7 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
       student = newStudent;
     }
 
-    // Link to group if selected
+    // Mode-specific actions
     if (mode === 'group' && selectedGroup && student) {
       const { error: gmErr } = await db.insert('group_members', { group_id: selectedGroup, student_id: student.id });
       if (gmErr) {
@@ -73,18 +119,47 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
         setSaving(false);
         return;
       }
+    } else if (mode === 'session' && student) {
+      const endTime = computeEndTime(startTime, duration);
+      const { error: sErr } = await db.insert('sessions', {
+        counselor_id: counselorId,
+        student_id: student.id,
+        group_id: null,
+        session_date: sessionDate,
+        start_time: startTime,
+        end_time: endTime,
+        duration_minutes: duration,
+        status: 'Scheduled',
+        session_type: 'individual',
+        notes: `From referral: ${referral.concern_type} (${referral.urgency})${referral.notes ? '. ' + referral.notes : ''}`,
+      });
+      if (sErr) {
+        setError(sErr.message || String(sErr));
+        setSaving(false);
+        return;
+      }
     }
 
     // Update referral status
+    const resolutionLabel = mode === 'group'
+      ? 'Added to group'
+      : mode === 'session'
+        ? `Individual session scheduled ${sessionDate} ${startTime}`
+        : 'Individual services';
+
     await db.update('referrals', referral.id, {
       status: 'closed',
-      resolution: mode === 'group' ? `Added to group` : 'Individual services',
+      resolution: resolutionLabel,
       response_date: new Date().toISOString().slice(0, 10),
     });
 
     // Log teacher notification as a communication record
     const teacherName = referral.teacher_name || referral.submitted_by || 'Unknown';
-    const assignmentType = mode === 'group' ? 'group counseling' : 'individual services';
+    const assignmentType = mode === 'group'
+      ? 'group counseling'
+      : mode === 'session'
+        ? `an individual session on ${sessionDate} at ${startTime}`
+        : 'individual services';
     if (student) {
       const { error: commErr } = await db.insert('communications', {
         counselor_id: counselorId,
@@ -102,12 +177,13 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
     }
 
     setSaving(false);
-    // Notify parent component to show toast
     if (onAccepted) {
       onAccepted({
         studentName: referral.student_name,
         teacherName,
         matched: !!match,
+        mode,
+        sessionDate: mode === 'session' ? sessionDate : null,
       });
     }
     onClose(true);
@@ -134,16 +210,21 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
         )}
 
         <label className="form-label">Assign To</label>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
           <button type="button"
             className={mode === 'individual' ? 'btn btn-primary' : 'btn btn-outline'}
-            onClick={() => setMode('individual')} style={{ flex: 1 }}>
-            Individual Services
+            onClick={() => setMode('individual')} style={{ fontSize: 12, padding: '8px 4px' }}>
+            Individual<br />Services
+          </button>
+          <button type="button"
+            className={mode === 'session' ? 'btn btn-primary' : 'btn btn-outline'}
+            onClick={() => setMode('session')} style={{ fontSize: 12, padding: '8px 4px' }}>
+            Schedule<br />1:1 Session
           </button>
           <button type="button"
             className={mode === 'group' ? 'btn btn-primary' : 'btn btn-outline'}
-            onClick={() => setMode('group')} style={{ flex: 1 }}>
-            Existing Group
+            onClick={() => setMode('group')} style={{ fontSize: 12, padding: '8px 4px' }}>
+            Existing<br />Group
           </button>
         </div>
 
@@ -154,12 +235,40 @@ function AcceptModal({ open, onClose, referral, counselorId, onAccepted }) {
               <option value="">Choose a group...</option>
               {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
+            {groups.length === 0 && (
+              <p style={{ fontSize: 12, color: '#9ca3af', marginTop: -8, marginBottom: 14 }}>
+                No active groups yet. Create one in Groups, then come back.
+              </p>
+            )}
           </>
+        )}
+
+        {mode === 'session' && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+            <div>
+              <label className="form-label">Session Date</label>
+              <input type="date" className="form-input" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="form-label">Start Time</label>
+              <input type="time" className="form-input" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label className="form-label">Duration</label>
+              <select className="form-input" value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
+                <option value={15}>15 minutes</option>
+                <option value={20}>20 minutes</option>
+                <option value={30}>30 minutes</option>
+                <option value={45}>45 minutes</option>
+                <option value={60}>60 minutes</option>
+              </select>
+            </div>
+          </div>
         )}
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="btn btn-outline" onClick={() => onClose(false)} style={{ flex: 1 }}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleAccept} disabled={saving || (mode === 'group' && !selectedGroup)} style={{ flex: 1 }}>
+          <button className="btn btn-primary" onClick={handleAccept} disabled={saving || (mode === 'group' && !selectedGroup) || (mode === 'session' && !sessionDate)} style={{ flex: 1 }}>
             {saving ? 'Processing...' : 'Accept'}
           </button>
         </div>
@@ -201,6 +310,14 @@ function ImportModal({ open, onClose, counselorId, onImported }) {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef(null);
+
+  useEffect(() => {
+    if (open) {
+      setPreview([]);
+      setImporting(false);
+      setError('');
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -254,13 +371,6 @@ function ImportModal({ open, onClose, counselorId, onImported }) {
           Optional columns: Grade, Teacher Name, Concern Type, Urgency, Notes.
         </p>
 
-        <div style={{ background: '#f9fafb', borderRadius: 8, padding: 14, marginBottom: 14, fontSize: 12, color: '#6b7280' }}>
-          <strong>Google Form tip:</strong> Create a Google Form with these questions, then export responses as CSV:
-          <div style={{ fontFamily: 'monospace', marginTop: 6, fontSize: 11, lineHeight: 1.6 }}>
-            Student Name, Grade, Teacher Name, Concern Type, Urgency, Notes
-          </div>
-        </div>
-
         {error && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 10 }}>{error}</div>}
 
         <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{ marginBottom: 14 }} />
@@ -303,6 +413,154 @@ function ImportModal({ open, onClose, counselorId, onImported }) {
             {importing ? 'Importing...' : `Import ${preview.length} Referral${preview.length !== 1 ? 's' : ''}`}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Email-Paste Import Modal (paste teacher referral email body → parse → batch insert) ---
+function ImportEmailModal({ open, onClose, counselorId, onImported }) {
+  const [pasted, setPasted] = useState('');
+  const [parsed, setParsed] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      setPasted('');
+      setParsed([]);
+      setImporting(false);
+      setError('');
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const handleParse = () => {
+    setError('');
+    const blocks = parseReferralEmail(pasted);
+    if (blocks.length === 0) {
+      setError('No referral blocks found. Make sure to paste the email body that includes the "--- BEACON REFERRAL ---" markers.');
+      return;
+    }
+    setParsed(blocks);
+  };
+
+  const updateField = (idx, field, value) => {
+    setParsed((p) => p.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  };
+
+  const removeBlock = (idx) => {
+    setParsed((p) => p.filter((_, i) => i !== idx));
+  };
+
+  const handleImport = async () => {
+    setImporting(true);
+    setError('');
+    for (const r of parsed) {
+      const rec = {
+        counselor_id: counselorId,
+        student_name: r.student_name,
+        grade: r.grade,
+        teacher_name: r.teacher_name,
+        concern_type: r.concern_type,
+        urgency: r.urgency,
+        notes: r.notes || null,
+        status: 'open',
+      };
+      const { error: err } = await db.insert('referrals', rec);
+      if (err) {
+        setError(err.message || String(err));
+        setImporting(false);
+        return;
+      }
+    }
+    setImporting(false);
+    onImported(parsed.length);
+    onClose();
+  };
+
+  return (
+    <div style={overlay} onClick={() => onClose()}>
+      <div style={{ ...modal, width: 700, maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={modalTitle}>Import from Email</h3>
+        <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12, lineHeight: 1.5 }}>
+          Paste a teacher's referral email below. You can paste multiple referrals at once — Beacon will detect each
+          <code style={{ background: '#f3f4f6', padding: '1px 6px', borderRadius: 4, fontSize: 12, margin: '0 4px' }}>--- BEACON REFERRAL ---</code> block.
+        </p>
+
+        {error && <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+
+        {parsed.length === 0 ? (
+          <>
+            <textarea
+              className="form-input"
+              rows={10}
+              value={pasted}
+              onChange={(e) => setPasted(e.target.value)}
+              placeholder={'Paste the email body here...\n\nExample:\n--- BEACON REFERRAL ---\nStudent: Marcus Johnson\nGrade: 3\nTeacher: Ms. Smith\nConcern: Behavioral\nUrgency: Soon\nNotes: Hitting peers at recess.\n--- END BEACON REFERRAL ---'}
+              style={{ marginBottom: 14, fontFamily: 'monospace', fontSize: 12 }}
+            />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-outline" onClick={() => onClose()} style={{ flex: 1 }}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleParse} disabled={!pasted.trim()} style={{ flex: 1 }}>
+                Detect Referrals
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
+              Found {parsed.length} referral{parsed.length !== 1 ? 's' : ''}. Review and edit before importing.
+            </p>
+            <div style={{ display: 'grid', gap: 12, marginBottom: 14 }}>
+              {parsed.map((r, i) => (
+                <div key={i} style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <strong style={{ fontSize: 13, color: '#1a2332' }}>Referral {i + 1}</strong>
+                    <button onClick={() => removeBlock(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Remove</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div>
+                      <label style={smallLbl}>Student</label>
+                      <input className="form-input" value={r.student_name} onChange={(e) => updateField(i, 'student_name', e.target.value)} style={{ fontSize: 13 }} />
+                    </div>
+                    <div>
+                      <label style={smallLbl}>Grade</label>
+                      <input className="form-input" value={r.grade} onChange={(e) => updateField(i, 'grade', e.target.value)} style={{ fontSize: 13 }} />
+                    </div>
+                    <div>
+                      <label style={smallLbl}>Teacher</label>
+                      <input className="form-input" value={r.teacher_name} onChange={(e) => updateField(i, 'teacher_name', e.target.value)} style={{ fontSize: 13 }} />
+                    </div>
+                    <div>
+                      <label style={smallLbl}>Concern</label>
+                      <select className="form-input" value={r.concern_type} onChange={(e) => updateField(i, 'concern_type', e.target.value)} style={{ fontSize: 13 }}>
+                        {CONCERN_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={smallLbl}>Urgency</label>
+                      <select className="form-input" value={r.urgency} onChange={(e) => updateField(i, 'urgency', e.target.value)} style={{ fontSize: 13 }}>
+                        {URGENCY_LEVELS.map((u) => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={smallLbl}>Notes</label>
+                      <textarea className="form-input" rows={2} value={r.notes} onChange={(e) => updateField(i, 'notes', e.target.value)} style={{ fontSize: 13 }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-outline" onClick={() => { setParsed([]); setPasted(''); }} style={{ flex: 1 }}>Back</button>
+              <button className="btn btn-primary" onClick={handleImport} disabled={importing || parsed.length === 0} style={{ flex: 1 }}>
+                {importing ? 'Importing...' : `Import ${parsed.length} Referral${parsed.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -416,15 +674,41 @@ function AddReferralModal({ open, onClose, counselorId }) {
 }
 
 // --- Share Referral Form Modal ---
-function ShareReferralModal({ open, onClose, counselorId }) {
+// Local mode: builds a mailto-relay URL (?to=email&n=name) and renders a QR code.
+//             Teacher's submission opens their email client and routes through email — zero Clear Path storage.
+// Cloud mode: builds a direct-submit URL (?c=counselor_id) and renders a QR code.
+function ShareReferralModal({ open, onClose, counselor, refreshCounselor }) {
+  const { isLocalMode: localMode } = useAuth();
   const [copied, setCopied] = useState(false);
-  if (!open) return null;
+  const [editEmail, setEditEmail] = useState('');
+  const [savingEmail, setSavingEmail] = useState(false);
 
-  const referralUrl = counselorId
-    ? `${window.location.origin}/referral-form?c=${counselorId}`
-    : `${window.location.origin}/referral-form`;
+  useEffect(() => {
+    if (open && counselor) {
+      // Initialize email editor with current counselor email (or blank if it's the placeholder)
+      setEditEmail(counselor.email && counselor.email !== 'local@beacon.local' ? counselor.email : '');
+      setCopied(false);
+      setSavingEmail(false);
+    }
+  }, [open, counselor]);
+
+  if (!open || !counselor) return null;
+
+  const emailIsPlaceholder = !counselor.email || counselor.email === 'local@beacon.local';
+  const counselorName = counselor.name || 'your counselor';
+  const counselorEmail = counselor.email && !emailIsPlaceholder ? counselor.email : '';
+
+  // Mailto-relay URL for local mode; direct-submit URL for cloud mode
+  const referralUrl = localMode
+    ? (counselorEmail
+        ? `${window.location.origin}/referral-form?to=${encodeURIComponent(counselorEmail)}&n=${encodeURIComponent(counselorName)}`
+        : '')
+    : `${window.location.origin}/referral-form?c=${counselor.id}`;
+
+  const canShare = !localMode || !!counselorEmail;
 
   const handleCopy = async () => {
+    if (!referralUrl) return;
     try {
       await navigator.clipboard.writeText(referralUrl);
       setCopied(true);
@@ -432,74 +716,143 @@ function ShareReferralModal({ open, onClose, counselorId }) {
     } catch { /* fallback */ }
   };
 
+  const handleSaveEmail = async () => {
+    setSavingEmail(true);
+    const trimmed = editEmail.trim();
+    if (!trimmed || !trimmed.includes('@')) {
+      setSavingEmail(false);
+      return;
+    }
+    await db.update('counselor', counselor.id, { email: trimmed });
+    setSavingEmail(false);
+    if (refreshCounselor) await refreshCounselor();
+  };
+
   const handlePrintPoster = () => {
     const w = window.open('', '_blank');
+    if (!w) return;
+    // QR code as PNG via a small inline SVG-to-data-URL for the print poster.
+    // We render a simple HTML page; the QR code is embedded via a Google Chart fallback link
+    // (the print preview shows the QR clearly without needing the React component to mount).
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(referralUrl)}`;
     w.document.write(`<!DOCTYPE html><html><head><title>Referral Form Link</title>
       <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 60px 40px; }
         h1 { font-size: 36px; font-weight: 800; color: #1a2332; margin-bottom: 16px; }
-        .url { font-size: 28px; font-weight: 700; color: #2A9D8F; word-break: break-all; margin: 32px 0; padding: 24px; border: 3px solid #2A9D8F; border-radius: 12px; }
-        p { font-size: 18px; color: #6b7280; line-height: 1.6; max-width: 500px; margin: 0 auto; }
-        .footer { margin-top: 40px; font-size: 14px; color: #9ca3af; }
+        h2 { font-size: 22px; font-weight: 600; color: #2A9D8F; margin: 24px 0 12px; }
+        .qr { margin: 24px auto; padding: 24px; background: #fff; border: 3px solid #2A9D8F; border-radius: 16px; display: inline-block; }
+        .qr img { width: 280px; height: 280px; display: block; }
+        .url { font-size: 14px; font-weight: 500; color: #6b7280; word-break: break-all; margin: 12px auto 32px; max-width: 600px; padding: 14px; background: #f9fafb; border-radius: 8px; }
+        p { font-size: 18px; color: #6b7280; line-height: 1.6; max-width: 500px; margin: 0 auto 12px; }
+        .footer { margin-top: 40px; font-size: 13px; color: #9ca3af; }
+        .steps { text-align: left; max-width: 500px; margin: 24px auto; font-size: 15px; color: #374151; line-height: 1.8; }
+        .steps li { margin-bottom: 6px; }
       </style>
     </head><body>
-      <h1>Need to refer a student to the counselor?</h1>
-      <p>Open this link on your phone, tablet, or computer to submit a referral form.</p>
+      <h1>Need to refer a student?</h1>
+      <p>Scan this QR code with your phone, or open the link below.</p>
+      <div class="qr"><img src="${qrSrc}" alt="QR code" /></div>
+      <h2>${(new URL(referralUrl)).pathname.slice(1) + (new URL(referralUrl)).search}</h2>
       <div class="url">${referralUrl}</div>
-      <p>Fill out the form with the student's name, grade, and concern. The counselor will be notified.</p>
-      <div class="footer">Beacon by Clear Path Education Group</div>
+      <ol class="steps">
+        <li>Fill out the form with the student's name, grade, and concern.</li>
+        <li>Tap <strong>Open Email to Send</strong>.</li>
+        <li>Your email app will open with the referral pre-filled — tap <strong>Send</strong>.</li>
+      </ol>
+      <div class="footer">Beacon by Clear Path Education Group &middot; Your referral goes directly to ${counselorName}.</div>
     </body></html>`);
     w.document.close();
-    w.print();
+    setTimeout(() => w.print(), 300);
   };
 
   return (
     <div style={overlay} onClick={() => onClose()}>
-      <div style={{ ...modal, width: 500 }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={modalTitle}>Share Referral Form</h3>
+      <div style={{ ...modal, width: 540, maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={modalTitle}>Share Referral Form with Teachers</h3>
         <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
-          Share this link with teachers. They can submit referrals from any device.
+          {localMode
+            ? "Teachers fill the form and their email client opens with the referral pre-filled. They click Send, you receive it in your email, then paste it into Beacon's Import from Email."
+            : 'Share this link with teachers. They can submit referrals from any device.'}
         </p>
 
-        <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 4 }}>Referral Form URL</label>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          <input
-            className="form-input"
-            value={referralUrl}
-            readOnly
-            onClick={(e) => e.target.select()}
-            style={{ flex: 1, fontSize: 13, fontFamily: 'monospace' }}
-          />
-          <button className="btn btn-primary" style={{ fontSize: 13, whiteSpace: 'nowrap' }} onClick={handleCopy}>
-            {copied ? 'Copied!' : 'Copy Link'}
-          </button>
-        </div>
+        {localMode && (
+          <div style={{ background: emailIsPlaceholder ? '#fffbeb' : '#f0fdfa', border: `1px solid ${emailIsPlaceholder ? '#fde68a' : '#a7f3d0'}`, borderRadius: 8, padding: 14, marginBottom: 16 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: emailIsPlaceholder ? '#92400e' : '#0d9488', display: 'block', marginBottom: 6 }}>
+              {emailIsPlaceholder ? '⚠ Set your email to enable referrals' : 'Your referral inbox'}
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="form-input"
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                placeholder="you@yourschool.org"
+                style={{ flex: 1, fontSize: 13 }}
+              />
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: 13, whiteSpace: 'nowrap' }}
+                onClick={handleSaveEmail}
+                disabled={savingEmail || !editEmail.trim() || editEmail === counselorEmail}
+              >
+                {savingEmail ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: '#6b7280', marginTop: 6, marginBottom: 0, lineHeight: 1.5 }}>
+              Teachers' referrals will be emailed here. No data is stored on Clear Path servers — referrals only exist in your inbox and your local Beacon device.
+            </p>
+          </div>
+        )}
 
-        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 14, marginBottom: 16, fontSize: 13, color: '#92400e', lineHeight: 1.6 }}>
-          <strong>Note:</strong> In local mode, teachers must be on this same device to submit referrals.
-          For cross-device referrals, ask teachers to email you or use a Google Form and import via CSV.
-        </div>
+        {canShare && referralUrl && (
+          <>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 6 }}>Referral Form URL</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <input
+                className="form-input"
+                value={referralUrl}
+                readOnly
+                onClick={(e) => e.target.select()}
+                style={{ flex: 1, fontSize: 13, fontFamily: 'monospace' }}
+              />
+              <button className="btn btn-primary" style={{ fontSize: 13, whiteSpace: 'nowrap' }} onClick={handleCopy}>
+                {copied ? 'Copied!' : 'Copy Link'}
+              </button>
+            </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline" onClick={handlePrintPoster} style={{ flex: 1, fontSize: 13 }}>
-            Print Poster
-          </button>
-          <button className="btn btn-outline" onClick={() => onClose()} style={{ flex: 1, fontSize: 13 }}>
-            Close
-          </button>
-        </div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16, padding: 16, background: '#fff', border: '2px solid #2A9D8F', borderRadius: 12 }}>
+              <QRCodeSVG value={referralUrl} size={180} level="M" includeMargin={false} fgColor="#1a2332" />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-outline" onClick={handlePrintPoster} style={{ flex: 1, fontSize: 13 }}>
+                Print Poster (with QR)
+              </button>
+              <button className="btn btn-outline" onClick={() => onClose()} style={{ flex: 1, fontSize: 13 }}>
+                Close
+              </button>
+            </div>
+          </>
+        )}
+
+        {!canShare && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 14, fontSize: 13, color: '#991b1b', lineHeight: 1.5 }}>
+            Set your email above to generate a teacher referral link and QR code.
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 export default function ReferralsPage() {
-  const { counselor } = useAuth();
+  const { counselor, refreshCounselor } = useAuth();
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [acceptRef, setAcceptRef] = useState(null);
   const [toast, setToast] = useState(null);
   const [showImport, setShowImport] = useState(false);
+  const [showImportEmail, setShowImportEmail] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [showShare, setShowShare] = useState(false);
 
@@ -519,7 +872,6 @@ export default function ReferralsPage() {
   const openRefs = referrals.filter((r) => r.status === 'open' || r.status === 'in_progress');
   const closedRefs = referrals.filter((r) => r.status === 'closed' || r.status === 'deferred');
 
-  // Sort open referrals by urgency
   const urgencyOrder = { Urgent: 0, Soon: 1, Routine: 2 };
   openRefs.sort((a, b) => (urgencyOrder[a.urgency] ?? 2) - (urgencyOrder[b.urgency] ?? 2));
 
@@ -545,9 +897,12 @@ export default function ReferralsPage() {
     <div className="page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <h1 className="page-title" style={{ margin: 0 }}>Referrals</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => setShowShare(true)}>
-            Share Referral Form
+            Share Form
+          </button>
+          <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => setShowImportEmail(true)}>
+            Import from Email
           </button>
           <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => setShowImport(true)}>
             Import CSV
@@ -558,13 +913,12 @@ export default function ReferralsPage() {
         </div>
       </div>
 
-      {/* Toast notification */}
       {toast && (
         <div style={toastStyle}>
           <div style={{ flex: 1 }}>
-            <strong>Referral accepted!</strong> Remember to notify{' '}
-            <strong>{toast.teacherName}</strong> that{' '}
-            <strong>{toast.studentName}</strong> has been placed in services.
+            <strong>{toast.title || 'Referral accepted!'}</strong> {toast.detail || (
+              <>Remember to notify <strong>{toast.teacherName}</strong> that <strong>{toast.studentName}</strong> has been placed in services.</>
+            )}
           </div>
           <button
             onClick={() => setToast(null)}
@@ -579,7 +933,6 @@ export default function ReferralsPage() {
         <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
       ) : (
         <>
-          {/* Open Queue */}
           <h2 style={sectionTitle}>Open Referrals ({openRefs.length})</h2>
           {openRefs.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: 32 }}>
@@ -616,7 +969,6 @@ export default function ReferralsPage() {
             </div>
           )}
 
-          {/* History */}
           <h2 style={sectionTitle}>History</h2>
           {closedRefs.length === 0 ? (
             <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>No closed referrals.</p>
@@ -654,8 +1006,13 @@ export default function ReferralsPage() {
         onClose={(done) => { setAcceptRef(null); if (done) loadReferrals(); }}
         referral={acceptRef}
         counselorId={counselor?.id}
-        onAccepted={({ studentName, teacherName }) => {
-          setToast({ studentName, teacherName });
+        onAccepted={({ studentName, teacherName, mode, sessionDate }) => {
+          const detail = mode === 'session'
+            ? <>Individual session for <strong>{studentName}</strong> scheduled <strong>{sessionDate}</strong>. Notify <strong>{teacherName}</strong>.</>
+            : mode === 'group'
+              ? <>Added <strong>{studentName}</strong> to a group. Notify <strong>{teacherName}</strong>.</>
+              : <>Remember to notify <strong>{teacherName}</strong> that <strong>{studentName}</strong> has been placed in services.</>;
+          setToast({ title: 'Referral accepted!', detail, studentName, teacherName });
           setTimeout(() => setToast(null), 15000);
         }}
       />
@@ -665,7 +1022,18 @@ export default function ReferralsPage() {
         onClose={() => { setShowImport(false); }}
         counselorId={counselor?.id}
         onImported={(count) => {
-          setToast({ studentName: `${count} referral${count !== 1 ? 's' : ''}`, teacherName: 'CSV import' });
+          setToast({ title: 'CSV imported!', detail: `${count} referral${count !== 1 ? 's' : ''} added to the open queue.` });
+          setTimeout(() => setToast(null), 8000);
+          loadReferrals();
+        }}
+      />
+
+      <ImportEmailModal
+        open={showImportEmail}
+        onClose={() => { setShowImportEmail(false); }}
+        counselorId={counselor?.id}
+        onImported={(count) => {
+          setToast({ title: 'Email referrals imported!', detail: `${count} referral${count !== 1 ? 's' : ''} added to the open queue.` });
           setTimeout(() => setToast(null), 8000);
           loadReferrals();
         }}
@@ -680,7 +1048,8 @@ export default function ReferralsPage() {
       <ShareReferralModal
         open={showShare}
         onClose={() => setShowShare(false)}
-        counselorId={counselor?.id}
+        counselor={counselor}
+        refreshCounselor={refreshCounselor}
       />
     </div>
   );
@@ -697,3 +1066,4 @@ const modalTitle = { fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0
 const sectionTitle = { fontSize: 15, fontWeight: 600, color: '#374151', margin: '0 0 12px' };
 const thStyle = { padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' };
 const tdStyle = { padding: '10px 14px' };
+const smallLbl = { fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.3 };
