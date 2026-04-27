@@ -5,6 +5,11 @@ import { supabase } from '../lib/supabase';
 import { db, exportLocalBackup, importLocalBackup } from '../lib/db';
 import { hasSampleData, clearSampleData } from '../lib/seedSampleData';
 import { parseIcs } from '../lib/calendarImport';
+import {
+  getNotificationPrefs, setNotificationPrefs, getPermissionState, requestNotificationPermission,
+  isNotificationsSupported, startNotificationPoll,
+} from '../lib/notifications';
+import { downloadCalendarIcs } from '../lib/calendarExport';
 import { TIME_DOMAINS } from '../lib/constants';
 import ConfirmDestructive from '../components/ConfirmDestructive';
 import jsPDF from 'jspdf';
@@ -725,6 +730,9 @@ export default function SettingsPage() {
             Email notifications for new referrals
           </label>
         </div>
+
+        {/* Reminders & Calendar */}
+        <RemindersPanel counselorId={counselor?.id} />
 
         {/* Save button */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
@@ -1482,6 +1490,150 @@ export default function SettingsPage() {
     const dateSlug = new Date().toISOString().slice(0, 10);
     doc.save(`Beacon_Receipt_${dateSlug}.pdf`);
   }
+}
+
+/* ─── Reminders + ICS export panel ─── */
+function RemindersPanel({ counselorId }) {
+  const [prefs, setPrefs] = useState(null);
+  const [permission, setPermission] = useState(getPermissionState());
+  const [busy, setBusy] = useState(false);
+  const [includeNames, setIncludeNames] = useState(false);
+  const supported = isNotificationsSupported();
+
+  useEffect(() => {
+    (async () => {
+      const p = await getNotificationPrefs();
+      setPrefs(p);
+    })();
+  }, []);
+
+  if (!prefs) return null;
+
+  const updatePrefs = async (patch) => {
+    setBusy(true);
+    const next = await setNotificationPrefs(patch);
+    setPrefs(next);
+    setBusy(false);
+  };
+
+  const enableAlerts = async () => {
+    if (!supported) return;
+    const result = await requestNotificationPermission();
+    setPermission(result);
+    if (result === 'granted') {
+      await updatePrefs({ enabled: true });
+      if (counselorId) startNotificationPoll(counselorId);
+    }
+  };
+
+  const fireTest = async () => {
+    if (Notification.permission !== 'granted') return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      reg.active?.postMessage({
+        type: 'BEACON_NOTIFY',
+        title: 'Beacon test reminder',
+        body: 'You\'ll see one of these before each session.',
+        url: '/schedule',
+        tag: 'beacon-test',
+      });
+    } catch {
+      new Notification('Beacon test reminder', { body: 'You\'ll see one of these before each session.' });
+    }
+  };
+
+  const downloadIcs = async () => {
+    if (!counselorId) return;
+    setBusy(true);
+    try {
+      await downloadCalendarIcs(counselorId, { includeNames, weeksAhead: 12 });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ marginBottom: 20 }}>
+      <h2 style={sectionTitle}>Reminders & Calendar Export</h2>
+      <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 14, lineHeight: 1.5 }}>
+        Browser reminders for upcoming sessions + follow-ups. All on-device — no push server, no data leaves your device.
+      </p>
+
+      {!supported && (
+        <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: 10, fontSize: 13, color: '#92400e', marginBottom: 12 }}>
+          Your browser doesn't support notifications. Reminders work on Chrome, Edge, Safari, and Firefox. The .ics download below works everywhere.
+        </div>
+      )}
+
+      {supported && permission !== 'granted' && (
+        <button className="btn btn-primary" onClick={enableAlerts} disabled={permission === 'denied'} style={{ marginBottom: 12 }}>
+          {permission === 'denied' ? 'Notifications blocked — re-enable in browser settings' : 'Enable browser reminders'}
+        </button>
+      )}
+
+      {supported && permission === 'granted' && (
+        <>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, cursor: 'pointer', marginBottom: 10 }}>
+            <input
+              type="checkbox"
+              checked={prefs.enabled}
+              onChange={(e) => updatePrefs({ enabled: e.target.checked })}
+              disabled={busy}
+            />
+            Reminders are <strong>{prefs.enabled ? 'on' : 'off'}</strong>
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+            <label style={{ fontSize: 13, color: '#374151' }}>Lead time:</label>
+            <select
+              className="form-input"
+              style={{ width: 140 }}
+              value={prefs.leadMinutes}
+              disabled={busy || !prefs.enabled}
+              onChange={(e) => updatePrefs({ leadMinutes: parseInt(e.target.value, 10) })}
+            >
+              <option value={5}>5 minutes before</option>
+              <option value={10}>10 minutes before</option>
+              <option value={15}>15 minutes before</option>
+              <option value={30}>30 minutes before</option>
+              <option value={60}>1 hour before</option>
+            </select>
+            <button className="btn btn-outline" onClick={fireTest} style={{ fontSize: 12, padding: '6px 12px' }}>
+              Send test
+            </button>
+          </div>
+          <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 14px' }}>
+            Reminders fire while Beacon is open in any tab. Install Beacon as a PWA (Add to Home Screen on mobile, Install app on desktop) for reminders that work in the background.
+          </p>
+        </>
+      )}
+
+      <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 14, marginTop: 8 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: '#374151', margin: '0 0 8px' }}>Calendar export (.ics)</h3>
+        <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 10, lineHeight: 1.5 }}>
+          Download your Beacon schedule as an .ics file and import it into Google Calendar, Apple Calendar, or Outlook. Includes the next 12 weeks of sessions, recurring schedule blocks, and follow-up reminders.
+        </p>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
+          <input
+            type="checkbox"
+            checked={includeNames}
+            onChange={(e) => setIncludeNames(e.target.checked)}
+            style={{ marginTop: 3 }}
+          />
+          <span>
+            Include student names in event titles
+            <div style={{ fontSize: 11, color: includeNames ? '#b45309' : '#9ca3af', marginTop: 2 }}>
+              {includeNames
+                ? '⚠ Student names will sit in your calendar app\'s cloud (Google, Apple, Microsoft). Only enable if your district has a DPA with that vendor.'
+                : 'Default: titles use group/block name only — FERPA-clean.'}
+            </div>
+          </span>
+        </label>
+        <button className="btn btn-primary" onClick={downloadIcs} disabled={busy || !counselorId}>
+          {busy ? 'Generating...' : 'Download calendar (.ics)'}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 const sectionTitle = { fontSize: 15, fontWeight: 600, color: '#374151', margin: '0 0 12px' };

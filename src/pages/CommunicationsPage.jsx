@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
 import { CONTACT_TYPES } from '../lib/constants';
+import {
+  CONTACT_OUTCOMES, OUTCOME_LABELS,
+  escalationLevel, maybeCreateFollowUp, generateDueProcessPdf,
+} from '../lib/parentContacts';
 
 export default function CommunicationsPage() {
   const { counselor } = useAuth();
@@ -17,6 +21,8 @@ export default function CommunicationsPage() {
   const [duration, setDuration] = useState('15');
   const [notes, setNotes] = useState('');
   const [language, setLanguage] = useState('en');
+  const [outcome, setOutcome] = useState('answered');
+  const [trackingNumber, setTrackingNumber] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Template
@@ -71,19 +77,33 @@ export default function CommunicationsPage() {
     e.preventDefault();
     if (!studentId) return;
     setSaving(true);
-    await db.insert('communications', {
+    const { data: inserted } = await db.insert('communications', {
       counselor_id: counselor.id,
       student_id: studentId,
       contact_type: contactType,
       duration_minutes: parseInt(duration, 10),
       notes: notes || null,
       language,
+      outcome,
+      tracking_number: trackingNumber || null,
       contact_date: new Date().toISOString().slice(0, 10),
     });
+    // Auto-create follow-up if outcome is unanswered
+    if (inserted) {
+      const stu = students.find((s) => s.id === studentId);
+      await maybeCreateFollowUp({
+        counselorId: counselor.id,
+        studentId,
+        contact: inserted,
+        studentName: stu ? sName(stu) : null,
+      });
+    }
     setSaving(false);
     setNotes('');
     setStudentId('');
     setStudentSearch('');
+    setTrackingNumber('');
+    setOutcome('answered');
     loadData();
   };
 
@@ -186,8 +206,54 @@ export default function CommunicationsPage() {
                 ))}
               </div>
 
+              <label className="form-label">Outcome *</label>
+              <select className="form-input" value={outcome} onChange={(e) => setOutcome(e.target.value)} style={{ marginBottom: 12 }}>
+                {CONTACT_OUTCOMES.map((o) => (
+                  <option key={o} value={o}>{OUTCOME_LABELS[o]}</option>
+                ))}
+              </select>
+
+              {(contactType === 'Certified mail' || outcome === 'certified-mail-sent') && (
+                <>
+                  <label className="form-label">USPS tracking number</label>
+                  <input
+                    className="form-input"
+                    placeholder="e.g., 9407 1118 9956 9999 9999 99"
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                    style={{ marginBottom: 12 }}
+                  />
+                </>
+              )}
+
               <label className="form-label">Notes</label>
               <textarea className="form-input" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ marginBottom: 12 }} />
+
+              {/* Escalation banner — visible when this student already has 2+ unanswered attempts */}
+              {(() => {
+                if (!studentId) return null;
+                const studentHistory = comms.filter((c) => c.student_id === studentId);
+                const level = escalationLevel(studentHistory);
+                if (!level) return null;
+                const isUrgent = level === 'urgent';
+                return (
+                  <div style={{
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    marginBottom: 12,
+                    background: isUrgent ? '#fef2f2' : '#fffbeb',
+                    border: `1px solid ${isUrgent ? '#fecaca' : '#fde68a'}`,
+                    color: isUrgent ? '#991b1b' : '#92400e',
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                  }}>
+                    <strong>{isUrgent ? 'Urgent:' : 'Recommended:'}</strong>{' '}
+                    {isUrgent
+                      ? 'You\'ve had 3+ unanswered attempts in the last 14 days. Send certified mail next; document the tracking number above.'
+                      : 'You\'ve had 2 unanswered attempts in the last 14 days. Consider certified mail to create due-process documentation.'}
+                  </div>
+                );
+              })()}
 
               <button type="submit" className="btn btn-primary" disabled={saving || !studentId} style={{ width: '100%' }}>
                 {saving ? 'Saving...' : 'Log Contact'}
@@ -229,12 +295,36 @@ export default function CommunicationsPage() {
         {/* Right: Contact History */}
         <div>
           <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
               <h2 style={{ ...sectionTitle, margin: 0 }}>Contact History</h2>
-              <select className="form-input" value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ width: 160 }}>
-                <option value="">All Types</option>
-                {CONTACT_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {studentId && (
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap' }}
+                    onClick={() => {
+                      const stu = students.find((s) => s.id === studentId);
+                      if (!stu) return;
+                      const studentName = sName(stu);
+                      const studentContacts = comms
+                        .filter((c) => c.student_id === studentId)
+                        .sort((a, b) => (a.contact_date || '').localeCompare(b.contact_date || ''));
+                      generateDueProcessPdf({
+                        student: { ...stu, name: studentName },
+                        counselor,
+                        contacts: studentContacts,
+                      });
+                    }}
+                  >
+                    Due-Process PDF
+                  </button>
+                )}
+                <select className="form-input" value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ width: 160 }}>
+                  <option value="">All Types</option>
+                  {CONTACT_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
             </div>
 
             {loading ? (
@@ -252,7 +342,18 @@ export default function CommunicationsPage() {
                       <span style={{ fontSize: 12, color: '#9ca3af' }}>{c.contact_date || c.created_at?.slice(0, 10)}</span>
                     </div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>
-                      {c.contact_type} &middot; {c.duration_minutes} min
+                      {c.contact_type}
+                      {c.duration_minutes ? ` · ${c.duration_minutes} min` : ''}
+                      {c.outcome && (
+                        <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 4, background: '#f3f4f6', color: '#374151', fontSize: 11 }}>
+                          {OUTCOME_LABELS[c.outcome] || c.outcome}
+                        </span>
+                      )}
+                      {c.tracking_number && (
+                        <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 4, background: '#dbeafe', color: '#1e40af', fontSize: 11 }} title="USPS tracking">
+                          #{c.tracking_number.slice(-6)}
+                        </span>
+                      )}
                       {c.language === 'es' && <span style={{ marginLeft: 6, padding: '1px 5px', borderRadius: 4, background: '#fef3c7', color: '#d97706', fontSize: 11 }}>ES</span>}
                     </div>
                     {c.notes && <p style={{ fontSize: 13, color: '#4b5563', margin: '4px 0 0' }}>{c.notes}</p>}

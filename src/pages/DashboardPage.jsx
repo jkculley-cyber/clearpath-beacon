@@ -8,6 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { startOfWeek, subWeeks, format, subDays } from 'date-fns';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import Scorecard from '../components/Scorecard';
+import MorningBriefCard from '../components/MorningBriefCard';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -869,6 +870,9 @@ export default function DashboardPage() {
           {'\uD83D\uDCCA'} My Year
         </button>
       </div>
+
+      {/* Morning Brief: dismissible executive view */}
+      <MorningBriefCard counselorId={counselor?.id} />
 
       {/* ─── My Day: Priority View ─── */}
       {myDay && (

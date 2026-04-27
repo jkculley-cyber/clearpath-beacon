@@ -1,6 +1,6 @@
-// Beacon Service Worker — v1
+// Beacon Service Worker — v2 (notification support)
 // Network-first for HTML/JS/CSS, stale-while-revalidate for images/fonts
-const CACHE_NAME = 'beacon-v1';
+const CACHE_NAME = 'beacon-v2';
 
 // Install — no precaching, just activate immediately
 self.addEventListener('install', () => self.skipWaiting());
@@ -65,4 +65,36 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(request).catch(() => caches.match(request))
   );
+});
+
+// Notification click — focus or open Beacon and navigate to the target URL
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.focus();
+          if ('navigate' in client) client.navigate(targetUrl).catch(() => {});
+          return;
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+    })
+  );
+});
+
+// Receive scheduling messages from the page (the page is the only scheduler in v1)
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'BEACON_NOTIFY') {
+    const { title, body, url } = event.data;
+    self.registration.showNotification(title || 'Beacon Reminder', {
+      body: body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: event.data.tag || 'beacon-reminder',
+      data: { url: url || '/' },
+    });
+  }
 });

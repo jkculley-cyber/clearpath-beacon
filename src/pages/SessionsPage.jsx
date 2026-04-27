@@ -4,6 +4,7 @@ import { db } from '../lib/db';
 import { autoLogTime } from '../lib/autoLogTime';
 import { SESSION_STATUSES } from '../lib/constants';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks } from 'date-fns';
+import SessionNoteTemplateModal from '../components/SessionNoteTemplateModal';
 
 const sName = (s) => s?.name || 'Unknown';
 
@@ -32,7 +33,7 @@ const TYPE_OPTIONS = [
 ];
 
 /* ─── Quick Log Modal ─── */
-function QuickLogModal({ open, onClose, counselorId, students, groups, onSaved }) {
+function QuickLogModal({ open, onClose, counselorId, counselorName, students, groups, onSaved }) {
   const [sessionType, setSessionType] = useState('individual');
   const [studentId, setStudentId] = useState('');
   const [groupId, setGroupId] = useState('');
@@ -44,6 +45,7 @@ function QuickLogModal({ open, onClose, counselorId, students, groups, onSaved }
   const [status, setStatus] = useState('Completed');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [tmplOpen, setTmplOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -57,6 +59,7 @@ function QuickLogModal({ open, onClose, counselorId, students, groups, onSaved }
       setNotes('');
       setStatus('Completed');
       setError('');
+      setTmplOpen(false);
     }
   }, [open]);
 
@@ -258,15 +261,31 @@ function QuickLogModal({ open, onClose, counselorId, students, groups, onSaved }
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={lbl}>Notes</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={lbl}>Notes</label>
+              <button
+                type="button"
+                onClick={() => setTmplOpen(true)}
+                style={{ background: 'none', border: '1px solid #2A9D8F', color: '#2A9D8F', fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 6, cursor: 'pointer' }}
+              >
+                Use template
+              </button>
+            </div>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Session notes..."
-              rows={3}
-              style={{ ...inputStyle, resize: 'vertical' }}
+              placeholder="Session notes... or click 'Use template' for SOAP-format help."
+              rows={5}
+              style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
             />
           </div>
+
+          <SessionNoteTemplateModal
+            open={tmplOpen}
+            onClose={() => setTmplOpen(false)}
+            onUseNote={(text) => setNotes(text)}
+            ctx={{ counselorName, sessionDate }}
+          />
 
           <div style={{ display: 'flex', gap: 10 }}>
             <button
@@ -705,6 +724,7 @@ export default function SessionsPage() {
         open={showLogModal}
         onClose={() => setShowLogModal(false)}
         counselorId={counselor?.id}
+        counselorName={counselor?.name}
         students={students}
         groups={groups}
         onSaved={() => { setShowLogModal(false); loadData(); }}

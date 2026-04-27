@@ -29,7 +29,9 @@ export const PROGRESS_COLORS = {
 export const CONTACT_TYPES = [
   'Phone call',
   'Email',
+  'Text / SMS',
   'Parent conference',
+  'Certified mail',
   'Written notice',
   'Progress report',
   'No contact — attempted',

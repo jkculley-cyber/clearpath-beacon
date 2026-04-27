@@ -3,6 +3,8 @@ import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { db, exportLocalBackup } from '../../lib/db';
 import { isReferralAlert } from '../../lib/referralAlerts';
+import { startNotificationPoll, stopNotificationPoll, getNotificationPrefs } from '../../lib/notifications';
+import CrisisLaunchButton from '../CrisisLaunchButton';
 
 /* ─── Nav items ─── */
 const NAV_ITEMS = [
@@ -101,6 +103,22 @@ export default function AppShell() {
       setSidebarSessionCount(sessRes.count ?? 0);
       setSidebarStudentCount(stuRes.count ?? 0);
     })();
+  }, [counselor?.id]);
+
+  // Native notification poll — fires browser alerts for upcoming sessions + follow-ups.
+  // Honors counselor's enable/disable preference; no-op if permission not granted.
+  useEffect(() => {
+    if (!counselor?.id) return;
+    let cancelled = false;
+    (async () => {
+      const prefs = await getNotificationPrefs();
+      if (cancelled) return;
+      if (prefs.enabled) startNotificationPoll(counselor.id);
+    })();
+    return () => {
+      cancelled = true;
+      stopNotificationPoll();
+    };
   }, [counselor?.id]);
 
   // Active safety-alert poll. Refreshes every 30s and on window focus.
@@ -322,6 +340,9 @@ export default function AppShell() {
           © {new Date().getFullYear()} Clear Path Education Group, LLC · Beacon Counselor Command Center
         </div>
       </main>
+
+      {/* Floating Crisis Now button — visible on every authed page */}
+      <CrisisLaunchButton />
 
       {/* Scoped styles */}
       <style>{shellStyles}</style>

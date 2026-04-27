@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'beacon_local';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 const STORES = [
   'counselor',         // single record — counselor profile
@@ -27,6 +27,10 @@ const STORES = [
   'student_goals',     // per-student counseling goals
   'needs_assessments', // per-student needs assessments
   'crest_artifacts',   // CREST award portfolio evidence
+  'crisis_events',     // structured crisis workflow records (suicide screen, threat assessment, abuse report, acute distress)
+  'parent_contacts',   // timestamped parent contact log (calls, voicemail, certified mail) for due-process defense
+  'follow_ups',        // scheduled reminders (24h/72h/1wk follow-ups, escalation cues)
+  'session_note_templates', // SOAP-format note templates with prompted fields
   'settings',          // key-value config
 ];
 
@@ -157,6 +161,42 @@ export function openDB() {
         ca.createIndex('counselor_id', 'counselor_id', { unique: false });
         ca.createIndex('category', 'category', { unique: false });
         ca.createIndex('school_year', 'school_year', { unique: false });
+      }
+
+      // crisis_events — structured crisis workflow (suicide screen, threat, abuse report, acute distress)
+      if (!db.objectStoreNames.contains('crisis_events')) {
+        const ce = db.createObjectStore('crisis_events', { keyPath: 'id' });
+        ce.createIndex('counselor_id', 'counselor_id', { unique: false });
+        ce.createIndex('student_id', 'student_id', { unique: false });
+        ce.createIndex('event_date', 'event_date', { unique: false });
+        ce.createIndex('trigger_type', 'trigger_type', { unique: false });
+        ce.createIndex('status', 'status', { unique: false });
+      }
+
+      // parent_contacts — timestamped parent contact log (due-process documentation)
+      if (!db.objectStoreNames.contains('parent_contacts')) {
+        const pc = db.createObjectStore('parent_contacts', { keyPath: 'id' });
+        pc.createIndex('counselor_id', 'counselor_id', { unique: false });
+        pc.createIndex('student_id', 'student_id', { unique: false });
+        pc.createIndex('contact_date', 'contact_date', { unique: false });
+        pc.createIndex('contact_type', 'contact_type', { unique: false });
+      }
+
+      // follow_ups — scheduled reminders + escalation cues
+      if (!db.objectStoreNames.contains('follow_ups')) {
+        const fu = db.createObjectStore('follow_ups', { keyPath: 'id' });
+        fu.createIndex('counselor_id', 'counselor_id', { unique: false });
+        fu.createIndex('student_id', 'student_id', { unique: false });
+        fu.createIndex('due_at', 'due_at', { unique: false });
+        fu.createIndex('source_type', 'source_type', { unique: false });
+        fu.createIndex('status', 'status', { unique: false });
+      }
+
+      // session_note_templates — SOAP-format templates with prompted fields
+      if (!db.objectStoreNames.contains('session_note_templates')) {
+        const snt = db.createObjectStore('session_note_templates', { keyPath: 'id' });
+        snt.createIndex('counselor_id', 'counselor_id', { unique: false });
+        snt.createIndex('category', 'category', { unique: false });
       }
 
       // settings (key-value)
