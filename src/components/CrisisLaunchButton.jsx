@@ -20,12 +20,12 @@ export default function CrisisLaunchButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        title="Start a crisis workflow (Ctrl+Shift+C)"
+        title="Start a crisis workflow"
         aria-label="Crisis workflow"
         style={{
           position: 'fixed',
-          bottom: 24,
-          right: 24,
+          bottom: 96, // stacks above the Dashboard Quick-Log FAB (which sits at bottom:28, height:56)
+          right: 28,
           zIndex: 250,
           background: '#dc2626',
           color: '#fff',
