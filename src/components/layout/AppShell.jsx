@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { db, exportLocalBackup } from '../../lib/db';
+import { encryptBackup } from '../../lib/backupCrypto';
+import { saveBackupToHandle } from '../../lib/backupFolder';
 import { isReferralAlert } from '../../lib/referralAlerts';
 import { startNotificationPoll, stopNotificationPoll, getNotificationPrefs } from '../../lib/notifications';
 import CrisisLaunchButton from '../CrisisLaunchButton';
@@ -28,7 +30,7 @@ const NAV_ITEMS = [
 
 /* ─── Component ─── */
 export default function AppShell() {
-  const { counselor, signOut, isSoftGated, trialDaysLeft } = useAuth();
+  const { counselor, signOut, isSoftGated, trialDaysLeft, getLicenseKey } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -76,16 +78,33 @@ export default function AppShell() {
     setBackingUp(true);
     try {
       const data = await exportLocalBackup();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `beacon-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const licenseKey = getLicenseKey?.();
+      const dateSlug = new Date().toISOString().slice(0, 10);
+      let blob;
+      let filename;
+      if (licenseKey && counselor?.email) {
+        blob = await encryptBackup(data, { licenseKey, email: counselor.email });
+        filename = `beacon-backup-${dateSlug}.bcnbkp`;
+      } else {
+        blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        filename = `beacon-backup-${dateSlug}.json`;
+      }
+      // Try the persisted folder (e.g. OneDrive sync folder) first; fall back
+      // to a Downloads-folder download if no folder is set or perms expired.
+      const savedToFolder = await saveBackupToHandle(blob, filename);
+      if (!savedToFolder) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
       localStorage.setItem('beacon_last_backup', new Date().toISOString());
       setBackupDismissed(true);
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.warn('Quick backup failed:', err);
+    }
     setBackingUp(false);
   }
 
@@ -121,10 +140,10 @@ export default function AppShell() {
     };
   }, [counselor?.id]);
 
-  // Friday auto-backup-to-disk: on first sign-in or first dashboard visit on a
-  // Friday after 12:00, if last backup is >6 days old, silently emit a backup
-  // file. The browser's standard download dialog handles persistence; the
-  // counselor doesn't have to remember anything.
+  // Friday auto-backup: encrypted, written to the counselor's chosen folder
+  // (e.g. OneDrive-synced) when available, falling back to Downloads. Plain
+  // JSON only when no license key is set (trial users); after license entry,
+  // every backup is AES-GCM encrypted with a key derived from license+email.
   useEffect(() => {
     if (!counselor?.id) return;
     const todayIso = new Date().toISOString().slice(0, 10);
@@ -137,24 +156,35 @@ export default function AppShell() {
       ? (Date.now() - new Date(lastBackup).getTime()) / 86400000
       : 999;
     if (ageDays < 6) return;
-    // Mark before doing the work so a re-render race can't double-fire
     localStorage.setItem('beacon_last_auto_backup_try', todayIso);
     (async () => {
       try {
         const data = await exportLocalBackup();
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `beacon-backup-${todayIso}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const licenseKey = getLicenseKey?.();
+        let blob;
+        let filename;
+        if (licenseKey && counselor?.email) {
+          blob = await encryptBackup(data, { licenseKey, email: counselor.email });
+          filename = `beacon-backup-${todayIso}.bcnbkp`;
+        } else {
+          blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          filename = `beacon-backup-${todayIso}.json`;
+        }
+        const savedToFolder = await saveBackupToHandle(blob, filename);
+        if (!savedToFolder) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
         localStorage.setItem('beacon_last_backup', new Date().toISOString());
       } catch (err) {
         console.warn('Auto-backup failed:', err);
       }
     })();
-  }, [counselor?.id]);
+  }, [counselor?.id, counselor?.email, getLicenseKey]);
 
   // Active safety-alert poll. Refreshes every 30s and on window focus.
   // Counts open referrals where harm-to-self / harm-to-others / urgency=Urgent / concern=Crisis.

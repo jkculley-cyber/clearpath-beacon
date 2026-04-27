@@ -12,6 +12,8 @@ import autoTable from 'jspdf-autotable';
 import { WORKFLOWS, TRIGGER_TYPES } from './crisisWorkflow';
 import { format } from 'date-fns';
 import { hashPayload, stampIntegrityFooter } from './pdfIntegrity';
+import { attestPdfHash } from './pdfAttestation';
+import { getLicenseKey } from './license';
 
 const TEAL = [42, 157, 143];
 const RED = [220, 38, 38];
@@ -215,11 +217,20 @@ export async function generateCrisisPdf({ event, counselor, student }) {
     doc.text(`Page ${i} of ${pageCount}`, 196, ph - 22, { align: 'right' });
   }
 
-  // Integrity footer — content hash + generated-at on every page
-  stampIntegrityFooter(doc, { hash: integrityHash, docKind: 'Crisis Event Documentation' });
+  // Attestation log — fire-and-forget POST to ops Supabase. Returns null if
+  // offline. The PDF generation never blocks on this.
+  const attest = await attestPdfHash({
+    counselorId: counselor?.id,
+    documentKind: 'crisis',
+    contentHash: integrityHash,
+    licenseKey: getLicenseKey(),
+  });
+
+  // Integrity footer — content hash + generated-at + attestation receipt
+  stampIntegrityFooter(doc, { hash: integrityHash, docKind: 'Crisis Event Documentation', attest });
 
   const safeName = toAscii(student?.name || 'student').replace(/[^a-zA-Z0-9]+/g, '_');
   const triggerSlug = trigger?.key || 'event';
   doc.save(`Crisis_${triggerSlug}_${safeName}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
-  return integrityHash;
+  return { hash: integrityHash, attestation: attest };
 }

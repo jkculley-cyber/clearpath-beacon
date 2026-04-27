@@ -8,6 +8,8 @@ import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-f
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { hashPayload, stampIntegrityFooter } from '../lib/pdfIntegrity';
+import { attestPdfHash } from '../lib/pdfAttestation';
+import { getLicenseKey } from '../lib/license';
 
 const DOMAIN_KEYS = Object.keys(TIME_DOMAINS);
 const COUNSELING_DOMAINS = ['guidance', 'planning', 'responsive'];
@@ -342,10 +344,19 @@ async function generateSB179PDF(entries, counselor, periodLabel, from, to, filen
   }
 
   pdfFooter(doc);
-  // Integrity footer — content hash + generated-at on every page
-  stampIntegrityFooter(doc, { hash: integrityHash, docKind: 'SB 179 Compliance Report' });
+
+  // Attestation log — third-party witness via ops Supabase
+  const attest = await attestPdfHash({
+    counselorId: counselor?.id,
+    documentKind: 'sb179',
+    contentHash: integrityHash,
+    licenseKey: getLicenseKey(),
+  });
+
+  // Integrity footer — content hash + generated-at + attestation receipt
+  stampIntegrityFooter(doc, { hash: integrityHash, docKind: 'SB 179 Compliance Report', attest });
   doc.save(filename);
-  return integrityHash;
+  return { hash: integrityHash, attestation: attest };
 }
 
 /* ---- SB 179 Report Modal ---- */

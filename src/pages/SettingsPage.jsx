@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { db, exportLocalBackup, importLocalBackup } from '../lib/db';
+import { encryptBackup, decryptBackup } from '../lib/backupCrypto';
+import { saveBackupToHandle, pickAndPersistBackupFolder, getBackupFolderName, clearBackupFolder, isFsAccessSupported } from '../lib/backupFolder';
 import { hasSampleData, clearSampleData } from '../lib/seedSampleData';
 import { parseIcs } from '../lib/calendarImport';
 import {
@@ -1080,36 +1082,64 @@ export default function SettingsPage() {
               <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12, lineHeight: 1.5 }}>
                 All your data is stored in this browser's IndexedDB. Export a backup regularly to avoid data loss if you clear browser data.
               </p>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
                 <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={async () => {
-                  const data = await exportLocalBackup();
-                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `beacon-backup-${new Date().toISOString().slice(0, 10)}.json`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                  localStorage.setItem('beacon_last_backup', new Date().toISOString());
+                  try {
+                    const data = await exportLocalBackup();
+                    const licenseKey = getLicenseKey();
+                    const dateSlug = new Date().toISOString().slice(0, 10);
+                    let blob;
+                    let filename;
+                    if (licenseKey && counselor?.email) {
+                      blob = await encryptBackup(data, { licenseKey, email: counselor.email });
+                      filename = `beacon-backup-${dateSlug}.bcnbkp`;
+                    } else {
+                      // No license key yet — fall back to plaintext JSON so trial users
+                      // can still back up. The auto-backup loop will encrypt once a key is set.
+                      blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                      filename = `beacon-backup-${dateSlug}.json`;
+                      alert('Heads-up: this backup is unencrypted JSON because no license key is set. Add your key in Settings → License to encrypt future backups.');
+                    }
+                    const savedToFolder = await saveBackupToHandle(blob, filename);
+                    if (!savedToFolder) {
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = filename;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }
+                    localStorage.setItem('beacon_last_backup', new Date().toISOString());
+                  } catch (err) {
+                    alert(`Could not export backup: ${err?.message || err}`);
+                  }
                 }}>
-                  Export Backup (JSON)
+                  Export Backup (Encrypted)
                 </button>
                 <button className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => {
                   const input = document.createElement('input');
                   input.type = 'file';
-                  input.accept = '.json';
+                  input.accept = '.bcnbkp,.json,application/octet-stream,application/json';
                   input.onchange = async (e) => {
                     const file = e.target.files[0];
                     if (!file) return;
-                    const text = await file.text();
                     setConfirmState({
                       open: true,
                       title: 'Restore from backup?',
                       message: 'This will replace ALL local data on this device with the contents of the selected file. Your current data will be overwritten.',
                       confirmLabel: 'Replace all data',
                       onConfirm: async () => {
-                        await importLocalBackup(text);
-                        window.location.reload();
+                        try {
+                          const buf = new Uint8Array(await file.arrayBuffer());
+                          const payload = await decryptBackup(buf, {
+                            licenseKey: getLicenseKey(),
+                            email: counselor?.email,
+                          });
+                          await importLocalBackup(JSON.stringify(payload));
+                          window.location.reload();
+                        } catch (err) {
+                          alert(err?.message || 'Could not restore backup.');
+                        }
                       },
                     });
                   };
@@ -1118,6 +1148,9 @@ export default function SettingsPage() {
                   Restore from Backup
                 </button>
               </div>
+
+              <BackupFolderPicker />
+
               {hasSampleData() && (
                 <div style={{ marginBottom: 12, padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 6 }}>Sample Data Loaded</div>
@@ -1632,6 +1665,82 @@ function RemindersPanel({ counselorId }) {
           {busy ? 'Generating...' : 'Download calendar (.ics)'}
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Lets the counselor pick a folder once (e.g. ~/OneDrive/Beacon/) so future
+ * backups land in a folder that her OS already syncs to her cloud provider.
+ * No OAuth, no Clear Path infrastructure — just the browser's File System
+ * Access API + the OS-level OneDrive/Drive client she already has.
+ */
+function BackupFolderPicker() {
+  const [folderName, setFolderName] = useState(null);
+  const [supported, setSupported] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setSupported(isFsAccessSupported());
+    getBackupFolderName().then((n) => setFolderName(n));
+  }, []);
+
+  if (!supported) {
+    return (
+      <div style={{ padding: 12, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+        <strong>Off-device sync:</strong> backups land in your Downloads folder. Move the file to OneDrive / Google Drive manually, or open Beacon in Chrome / Edge to enable folder-pick + auto-save.
+      </div>
+    );
+  }
+
+  const choose = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const name = await pickAndPersistBackupFolder();
+      setFolderName(name);
+    } catch (err) {
+      if (err?.name !== 'AbortError') setError(err?.message || 'Could not set folder.');
+    }
+    setBusy(false);
+  };
+
+  const clear = async () => {
+    await clearBackupFolder();
+    setFolderName(null);
+  };
+
+  return (
+    <div style={{ padding: 12, background: folderName ? '#f0fdfa' : '#f9fafb', border: `1px solid ${folderName ? '#99f6e4' : '#e5e7eb'}`, borderRadius: 8, marginBottom: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2332', marginBottom: 4 }}>
+        Backup save location
+      </div>
+      {folderName ? (
+        <>
+          <div style={{ fontSize: 12, color: '#0f766e', marginBottom: 8, lineHeight: 1.5 }}>
+            Backups will save silently to <strong>{folderName}</strong>. If this is a OneDrive / Google Drive / iCloud folder, your OS will sync each backup off-device.
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={choose} disabled={busy}>
+              Change folder
+            </button>
+            <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={clear} disabled={busy}>
+              Clear (use Downloads)
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px', lineHeight: 1.5 }}>
+            Pick a folder once (try a OneDrive or Google Drive folder) and Beacon will save the Friday auto-backup there silently. Without this, backups go to your Downloads folder.
+          </p>
+          <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={choose} disabled={busy}>
+            {busy ? 'Choosing...' : 'Choose backup folder...'}
+          </button>
+          {error && <div style={{ marginTop: 6, fontSize: 11, color: '#b91c1c' }}>{error}</div>}
+        </>
+      )}
     </div>
   );
 }

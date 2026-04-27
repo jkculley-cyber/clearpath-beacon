@@ -57,10 +57,11 @@ export function shortHash(hash) {
  *
  * @param {jsPDF} doc
  * @param {Object} opts
- * @param {string} opts.hash      — full SHA-256 hex (or 'unsupported')
- * @param {string} opts.docKind   — 'Crisis' | 'Parent Contact' | 'SB 179' etc.
+ * @param {string} opts.hash       — full SHA-256 hex (or 'unsupported')
+ * @param {string} opts.docKind    — 'Crisis' | 'Parent Contact' | 'SB 179' etc.
+ * @param {Object} [opts.attest]   — { id, generated_at } from attestPdfHash() or null
  */
-export function stampIntegrityFooter(doc, { hash, docKind = 'Beacon document' }) {
+export function stampIntegrityFooter(doc, { hash, docKind = 'Beacon document', attest = null }) {
   const generated = new Date().toISOString();
   const pageCount = doc.internal.getNumberOfPages();
   const pageW = doc.internal.pageSize.getWidth();
@@ -70,14 +71,27 @@ export function stampIntegrityFooter(doc, { hash, docKind = 'Beacon document' })
     doc.setFontSize(7);
     doc.setTextColor(107, 114, 128);
     doc.setFont('helvetica', 'normal');
-    // First line: kind + generated timestamp + version
+
+    // Bottom line: kind + generated + page number
     doc.text(`${docKind} | Generated ${generated} | Beacon`, 14, ph - 4);
-    // Second line above default footer: content hash
-    if (hash && hash !== 'unsupported') {
-      doc.text(`SHA-256: ${hash}`, 14, ph - 16);
-    } else {
-      doc.text('SHA-256: unavailable in this browser', 14, ph - 16);
-    }
     doc.text(`Page ${i}/${pageCount}`, pageW - 14, ph - 4, { align: 'right' });
+
+    // Hash line (~12pt above bottom)
+    if (hash && hash !== 'unsupported') {
+      doc.text(`SHA-256: ${hash}`, 14, ph - 12);
+    } else {
+      doc.text('SHA-256: unavailable in this browser', 14, ph - 12);
+    }
+
+    // Attestation line (~20pt above bottom) — third-party witness via the
+    // ops Supabase pdf_attestations table. The reviewer visits the verify
+    // URL with the hash to confirm an attestation row exists.
+    if (attest?.id) {
+      const attLabel = `Attestation ${attest.id.slice(0, 8)} | logged ${attest.generated_at}`;
+      doc.text(attLabel, 14, ph - 20);
+      doc.text('Verify: clearpathedgroup.com/verify-attestation', pageW - 14, ph - 20, { align: 'right' });
+    } else {
+      doc.text('Attestation: offline at generation time (skipped)', 14, ph - 20);
+    }
   }
 }

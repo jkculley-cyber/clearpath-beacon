@@ -374,29 +374,8 @@ function FieldEditor({ step, value, setValue }) {
       return <input style={fieldInput} value={value || ''} onChange={(e) => setValue(e.target.value)} />;
     case 'long':
       return <textarea style={{ ...fieldInput, minHeight: 90, fontFamily: 'inherit', resize: 'vertical' }} value={value || ''} onChange={(e) => setValue(e.target.value)} />;
-    case 'datetime': {
-      // UX-only retroactive hint — exact wall-clock at render is fine; the
-      // authoritative retroactive_minutes is recomputed at save time.
-      // eslint-disable-next-line react-hooks/purity
-      const minutesBack = value ? Math.round((Date.now() - new Date(value).getTime()) / 60000) : 0;
-      const isRetroactive = minutesBack > 30;
-      return (
-        <>
-          <input type="datetime-local" style={fieldInput} value={isoToInput(value)} onChange={(e) => setValue(inputToIso(e.target.value))} />
-          {isRetroactive && (
-            <div style={{ marginTop: 8, padding: '8px 12px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
-              <strong>Note:</strong> You are recording an event that occurred about{' '}
-              {minutesBack < 60
-                ? `${minutesBack} minutes`
-                : minutesBack < 1440
-                  ? `${Math.round(minutesBack / 60)} hour${minutesBack >= 120 ? 's' : ''}`
-                  : `${Math.round(minutesBack / 1440)} day${minutesBack >= 2880 ? 's' : ''}`}{' '}
-              ago. The PDF will clearly flag this as a retroactive entry.
-            </div>
-          )}
-        </>
-      );
-    }
+    case 'datetime':
+      return <DateTimeOccurredField value={value} setValue={setValue} />;
     case 'select':
       return (
         <select style={fieldInput} value={value || ''} onChange={(e) => setValue(e.target.value)}>
@@ -443,6 +422,122 @@ function FieldEditor({ step, value, setValue }) {
     default:
       return null;
   }
+}
+
+/**
+ * Crisis "when did it happen?" field.
+ *
+ * Default: "This is happening right now" — value is locked to a fresh
+ * Date.now() ISO string captured each render (close enough; the save handler
+ * uses its own new Date() too). The PDF will print event-occurred and
+ * event-logged within seconds of each other; no retroactive banner fires.
+ *
+ * Affirmative backdating: counselor must click "Earlier than now" — only
+ * then does the datetime-local input appear. This makes backdating an
+ * explicit, conscious act rather than the default. Combined with the
+ * retroactive_minutes computation at save time + amber PDF banner, a counselor
+ * who quietly types "now" into a freeform field and produces a document
+ * that reads as contemporaneous is no longer the easy path.
+ *
+ * The lying-counselor attack from the lawyer's Q17 doesn't disappear, but it
+ * now requires affirmatively choosing "Earlier" then typing a fake current
+ * time — a deliberate act, not a quiet default.
+ */
+function DateTimeOccurredField({ value, setValue }) {
+  // Determine current mode from the stored value: if value is unset OR
+  // matches "now within 60s", treat as 'now'. Otherwise the counselor
+  // explicitly picked an earlier time.
+  // eslint-disable-next-line react-hooks/purity
+  const valueMs = value ? new Date(value).getTime() : null;
+  // eslint-disable-next-line react-hooks/purity
+  const isNow = !valueMs || Math.abs(Date.now() - valueMs) < 60_000;
+  const [mode, setMode] = useState(isNow ? 'now' : 'earlier');
+
+  const switchToNow = () => {
+    setMode('now');
+    setValue(new Date().toISOString());
+  };
+  const switchToEarlier = () => {
+    setMode('earlier');
+    // Pre-populate with current time as a starting point; counselor edits down
+    if (!value) setValue(new Date().toISOString());
+  };
+
+  // Keep the locked "now" value reasonably fresh while modal is open
+  useEffect(() => {
+    if (mode !== 'now') return;
+    setValue(new Date().toISOString());
+    // intentional: only re-pin on mode flip
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  // eslint-disable-next-line react-hooks/purity
+  const minutesBack = value && mode === 'earlier' ? Math.round((Date.now() - new Date(value).getTime()) / 60000) : 0;
+  const isRetroactive = minutesBack > 30;
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        <button
+          type="button"
+          onClick={switchToNow}
+          style={{
+            flex: 1,
+            padding: '10px 12px',
+            borderRadius: 8,
+            border: `2px solid ${mode === 'now' ? '#0d9488' : '#e5e7eb'}`,
+            background: mode === 'now' ? '#f0fdfa' : '#fff',
+            color: mode === 'now' ? '#0f766e' : '#374151',
+            fontWeight: 600,
+            cursor: 'pointer',
+            textAlign: 'left',
+            fontFamily: 'inherit',
+          }}
+        >
+          <div style={{ fontSize: 14 }}>This is happening right now</div>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Event time will be locked to current time</div>
+        </button>
+        <button
+          type="button"
+          onClick={switchToEarlier}
+          style={{
+            flex: 1,
+            padding: '10px 12px',
+            borderRadius: 8,
+            border: `2px solid ${mode === 'earlier' ? '#d97706' : '#e5e7eb'}`,
+            background: mode === 'earlier' ? '#fffbeb' : '#fff',
+            color: mode === 'earlier' ? '#92400e' : '#374151',
+            fontWeight: 600,
+            cursor: 'pointer',
+            textAlign: 'left',
+            fontFamily: 'inherit',
+          }}
+        >
+          <div style={{ fontSize: 14 }}>This happened earlier</div>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>PDF will be flagged as a retroactive entry</div>
+        </button>
+      </div>
+      {mode === 'earlier' && (
+        <input
+          type="datetime-local"
+          style={fieldInput}
+          value={isoToInput(value)}
+          onChange={(e) => setValue(inputToIso(e.target.value))}
+        />
+      )}
+      {mode === 'earlier' && isRetroactive && (
+        <div style={{ marginTop: 8, padding: '8px 12px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
+          <strong>Note:</strong> You are recording an event that occurred about{' '}
+          {minutesBack < 60
+            ? `${minutesBack} minutes`
+            : minutesBack < 1440
+              ? `${Math.round(minutesBack / 60)} hour${minutesBack >= 120 ? 's' : ''}`
+              : `${Math.round(minutesBack / 1440)} day${minutesBack >= 2880 ? 's' : ''}`}{' '}
+          ago. The PDF will prominently flag this as a retroactive entry.
+        </div>
+      )}
+    </>
+  );
 }
 
 function isoToInput(iso) {

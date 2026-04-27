@@ -1,7 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { db, isLocalMode } from '../lib/db';
 import { CONCERN_TYPES, URGENCY_LEVELS } from '../lib/constants';
+
+// Cloudflare Turnstile — bot/spam gate on the public referral form.
+// Set VITE_TURNSTILE_SITE_KEY in Cloudflare Pages env after registering a
+// Turnstile site at https://dash.cloudflare.com/?to=/:account/turnstile
+// (free, unlimited, Cloudflare-native). When unset, the widget is hidden
+// and the form behaves as before — useful for local dev and graceful
+// fallback when env config is in flight.
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
 
 const GRADES = ['K', '1', '2', '3', '4', '5'];
 
@@ -57,11 +65,55 @@ export default function ReferralFormPage() {
   const [submitted, setSubmitted] = useState(false);
   const [mailtoOpened, setMailtoOpened] = useState(false);
   const [error, setError] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const turnstileWidgetRef = useRef(null);
 
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const counselorEmail = params.get('to') || '';
   const counselorName = params.get('n') || 'your counselor';
   const counselorIdParam = params.get('c') || '';
+
+  // Lazy-load Turnstile script + render widget into the placeholder div.
+  // The script auto-discovers any element with class="cf-turnstile". We use
+  // explicit render via the JS API so the callback can update React state.
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return;
+    let widgetId = null;
+    const renderWidget = () => {
+      if (!window.turnstile || !turnstileWidgetRef.current) return;
+      widgetId = window.turnstile.render(turnstileWidgetRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: (token) => setTurnstileToken(token),
+        'expired-callback': () => setTurnstileToken(''),
+        'error-callback': () => setTurnstileToken(''),
+        theme: 'light',
+        size: 'normal',
+      });
+    };
+    if (window.turnstile) {
+      renderWidget();
+    } else {
+      const existing = document.querySelector('script[data-beacon-turnstile]');
+      if (!existing) {
+        const s = document.createElement('script');
+        s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=__beaconTurnstileLoad';
+        s.async = true;
+        s.defer = true;
+        s.dataset.beaconTurnstile = '1';
+        window.__beaconTurnstileLoad = renderWidget;
+        document.head.appendChild(s);
+      } else {
+        // Script already loading — register our render callback to fire on load
+        const prior = window.__beaconTurnstileLoad;
+        window.__beaconTurnstileLoad = () => { prior?.(); renderWidget(); };
+      }
+    }
+    return () => {
+      if (widgetId && window.turnstile) {
+        try { window.turnstile.remove(widgetId); } catch { /* noop */ }
+      }
+    };
+  }, []);
 
   // Mailto mode: when a counselor email is in the URL, the form relays via the teacher's email client.
   // No Clear Path infrastructure handles the data.
@@ -113,6 +165,17 @@ export default function ReferralFormPage() {
       return;
     }
 
+    // Cloudflare Turnstile gate — only enforced when a site key is configured.
+    // The token is submitted alongside the referral so an Edge Function can
+    // verify it server-side via the Turnstile siteverify endpoint when one
+    // is wired up. For now, presence of the token is enough to break trivial
+    // automated flooding (requires a real browser to solve the challenge).
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError('Please complete the bot-check below before submitting.');
+      setSubmitting(false);
+      return;
+    }
+
     if (isMailtoMode) {
       // Build mailto: with structured body. Open in teacher's email client.
       // Prefix [SAFETY ALERT] when the teacher checked harm-to-self / harm-to-others
@@ -129,7 +192,12 @@ export default function ReferralFormPage() {
       return;
     }
 
-    // Cloud mode (existing behavior) — direct insert
+    // Cloud mode (existing behavior) — direct insert.
+    // Note: the Turnstile token validates that this submission came from a
+    // real browser; once the token is collected the gate has done its job.
+    // We don't persist the token (no column on referrals; would 400 the insert).
+    // A future Edge Function in front of the insert can call Turnstile
+    // siteverify with the token before relaying to Supabase.
     const referralData = {
       student_name: studentName,
       grade,
@@ -307,7 +375,18 @@ export default function ReferralFormPage() {
           <label className="form-label">Additional Notes <span style={{ fontWeight: 400, color: '#9ca3af' }}>({notes.length}/{MAX_NOTES_LEN})</span></label>
           <textarea className="form-input" rows={4} maxLength={MAX_NOTES_LEN} value={notes} onChange={(e) => setNotes(e.target.value.slice(0, MAX_NOTES_LEN))} placeholder="Describe the concern, what you have observed, and any steps already taken..." style={{ marginBottom: 24 }} />
 
-          <button type="submit" className="btn btn-primary" disabled={submitting || !urgency} style={{ width: '100%' }}>
+          {TURNSTILE_SITE_KEY && (
+            <div style={{ marginBottom: 14, display: 'flex', justifyContent: 'center' }}>
+              <div ref={turnstileWidgetRef} />
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={submitting || !urgency || (Boolean(TURNSTILE_SITE_KEY) && !turnstileToken)}
+            style={{ width: '100%' }}
+          >
             {submitting ? (isMailtoMode ? 'Opening email...' : 'Submitting...') : (isMailtoMode ? 'Open Email to Send' : 'Submit Referral')}
           </button>
 

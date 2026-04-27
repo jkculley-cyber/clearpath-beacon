@@ -14,6 +14,8 @@ import { format, addBusinessDays } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { hashPayload, stampIntegrityFooter } from './pdfIntegrity';
+import { attestPdfHash } from './pdfAttestation';
+import { getLicenseKey } from './license';
 
 export const CONTACT_OUTCOMES = [
   'answered',
@@ -227,10 +229,18 @@ export async function generateDueProcessPdf({ student, counselor, contacts }) {
     pageHeight - 22,
   );
 
-  // Integrity footer — content hash + generated-at on every page
-  stampIntegrityFooter(doc, { hash: integrityHash, docKind: 'Parent Contact Documentation' });
+  // Attestation log — third-party witness via ops Supabase
+  const attest = await attestPdfHash({
+    counselorId: counselor?.id,
+    documentKind: 'parent_contact',
+    contentHash: integrityHash,
+    licenseKey: getLicenseKey(),
+  });
+
+  // Integrity footer — content hash + generated-at + attestation receipt
+  stampIntegrityFooter(doc, { hash: integrityHash, docKind: 'Parent Contact Documentation', attest });
 
   const safeName = toAscii(student.name || 'student').replace(/[^a-zA-Z0-9]+/g, '_');
   doc.save(`Parent_Contact_Log_${safeName}_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
-  return integrityHash;
+  return { hash: integrityHash, attestation: attest };
 }
