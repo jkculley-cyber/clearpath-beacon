@@ -4,12 +4,17 @@ import { db, isLocalMode } from '../lib/db';
 import { CONCERN_TYPES, URGENCY_LEVELS } from '../lib/constants';
 
 // Cloudflare Turnstile — bot/spam gate on the public referral form.
-// Set VITE_TURNSTILE_SITE_KEY in Cloudflare Pages env after registering a
-// Turnstile site at https://dash.cloudflare.com/?to=/:account/turnstile
-// (free, unlimited, Cloudflare-native). When unset, the widget is hidden
-// and the form behaves as before — useful for local dev and graceful
-// fallback when env config is in flight.
-const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
+// The site key is PUBLIC by design (Cloudflare embeds it client-side; the
+// secret key — separate value — is what stays server-side and is never
+// shipped). The env var path is preferred, but if it's empty for any
+// reason (Cloudflare Pages env-var quirks, dev mode, broken configs) we
+// fall back to the hardcoded site key so the widget always renders.
+//
+// To rotate: register a new Turnstile site, paste the new public key here,
+// and update VITE_TURNSTILE_SITE_KEY in Cloudflare Pages env. The env var
+// wins when set.
+const TURNSTILE_FALLBACK_KEY = '0x4AAAAAADEgqoGSVgO0m4aE';
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || TURNSTILE_FALLBACK_KEY;
 
 const GRADES = ['K', '1', '2', '3', '4', '5'];
 
