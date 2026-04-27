@@ -298,6 +298,9 @@ export default function DashboardPage() {
   const [overdueStudents, setOverdueStudents] = useState([]);
   const [weekDigest, setWeekDigest] = useState(null);
   const [myDay, setMyDay] = useState(null);
+  const [quickDomain, setQuickDomain] = useState(() => localStorage.getItem('beacon_last_quick_domain') || 'guidance');
+  const [quickToast, setQuickToast] = useState(null);
+  const [quickSaving, setQuickSaving] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!counselor?.id) return;
@@ -713,6 +716,33 @@ export default function DashboardPage() {
     loadMyDay();
   }, [loadData, loadMakeupQueue, loadTrend, loadMyDay]);
 
+  // Two-click quick-log: choose domain (sticky), tap a duration, done.
+  // No description, no modal, no friction. Bounces a toast confirming.
+  const quickLogSave = useCallback(async (minutes) => {
+    if (!counselor?.id || quickSaving) return;
+    setQuickSaving(true);
+    const today = new Date().toISOString().slice(0, 10);
+    const { error } = await db.insert('time_entries', {
+      counselor_id: counselor.id,
+      entry_date: today,
+      domain: quickDomain,
+      activity_description: 'Quick log',
+      duration_minutes: minutes,
+    });
+    if (error) {
+      alert(error.message || String(error));
+      setQuickSaving(false);
+      return;
+    }
+    localStorage.setItem('beacon_last_quick_domain', quickDomain);
+    setQuickToast({
+      text: `Logged ${minutes}m · ${TIME_DOMAINS[quickDomain]} · ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`,
+    });
+    setQuickSaving(false);
+    loadData();
+    setTimeout(() => setQuickToast(null), 2800);
+  }, [counselor, quickDomain, quickSaving, loadData]);
+
   /* ─── "My Year" Impact Summary PDF ─── */
   const generateImpactPDF = async () => {
     if (!counselor?.id) return;
@@ -1005,6 +1035,53 @@ export default function DashboardPage() {
       {/* Weekly scorecard — "How am I doing?" */}
       <div style={{ marginBottom: 20 }}>
         <Scorecard counselorId={counselor?.id} counselor={counselor} />
+      </div>
+
+      {/* Two-click quick-log: domain pill + duration pill = saved */}
+      <div style={styles.quickLogPanel}>
+        <div style={styles.quickLogHeader}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#1a2332', letterSpacing: 0.2 }}>{'⏱'} Log time, fast</span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Pick a domain, tap a duration. Done.</span>
+        </div>
+        <div style={styles.quickLogRow}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flex: 1, minWidth: 0 }}>
+            {Object.entries(TIME_DOMAINS).map(([key, label]) => {
+              const isActive = quickDomain === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setQuickDomain(key)}
+                  style={{
+                    ...styles.quickPill,
+                    background: isActive ? '#0d9488' : '#fff',
+                    color: isActive ? '#fff' : '#374151',
+                    borderColor: isActive ? '#0d9488' : '#d1d5db',
+                    fontWeight: isActive ? 700 : 500,
+                  }}
+                >
+                  {label.replace('Individual Student Planning', 'Planning').replace('Guidance Curriculum', 'Guidance').replace('Responsive Services', 'Responsive').replace('System Support', 'System').replace('Non-Counseling Duties', 'Non-couns.')}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            {[15, 30, 45, 60].map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => quickLogSave(m)}
+                disabled={quickSaving}
+                style={{ ...styles.quickDurationBtn, opacity: quickSaving ? 0.6 : 1 }}
+              >
+                {m}m
+              </button>
+            ))}
+          </div>
+        </div>
+        {quickToast && (
+          <div style={styles.quickLogToast}>{quickToast.text}</div>
+        )}
       </div>
 
       {/* Quick action row — Session log + Time log side by side */}
@@ -1359,6 +1436,60 @@ const styles = {
     gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: 12,
     marginBottom: 20,
+  },
+  quickLogPanel: {
+    background: '#f0fdfa',
+    border: '1px solid #99f6e4',
+    borderRadius: 12,
+    padding: '12px 16px',
+    marginBottom: 14,
+  },
+  quickLogHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: 12,
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  quickLogRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  quickPill: {
+    border: '1.5px solid',
+    borderRadius: 999,
+    padding: '5px 12px',
+    fontSize: 12,
+    cursor: 'pointer',
+    transition: 'all 0.12s',
+    fontFamily: 'inherit',
+  },
+  quickDurationBtn: {
+    border: '1.5px solid #0d9488',
+    background: '#fff',
+    color: '#0d9488',
+    borderRadius: 8,
+    padding: '7px 14px',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    transition: 'background 0.1s',
+    minWidth: 48,
+  },
+  quickLogToast: {
+    marginTop: 10,
+    padding: '7px 12px',
+    background: '#dcfce7',
+    color: '#166534',
+    border: '1px solid #86efac',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 600,
+    display: 'inline-block',
   },
   sessionCard: {
     display: 'flex',

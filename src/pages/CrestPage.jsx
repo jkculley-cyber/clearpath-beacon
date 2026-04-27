@@ -383,6 +383,22 @@ export default function CrestPage() {
 /* ─── Artifact add/edit modal ─── */
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024; // 5 MB
 
+// Whitelist of file types acceptable as CREST evidence. Keep narrow:
+// portfolios get reviewed by district admins / TSCA evaluators on shared
+// machines, so .exe / .hta / .lnk / scripts must never be attachable. A
+// counselor who needs to attach something else can ZIP it inside a PDF.
+const ALLOWED_ATTACHMENT_MIMES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+  'image/webp',
+  'text/plain',
+  'text/csv',
+]);
+const ALLOWED_ATTACHMENT_EXTS = /\.(pdf|png|jpe?g|gif|webp|txt|csv)$/i;
+
 function formatBytes(n) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -422,13 +438,29 @@ function ArtifactModal({ artifact, onClose, counselorId, onSaved }) {
       e.target.value = '';
       return;
     }
+    const declaredType = (file.type || '').toLowerCase();
+    const extOk = ALLOWED_ATTACHMENT_EXTS.test(file.name);
+    const typeOk = declaredType && ALLOWED_ATTACHMENT_MIMES.has(declaredType);
+    if (!extOk || !typeOk) {
+      setError('Only PDF, PNG, JPG, GIF, WEBP, TXT, or CSV files can be attached. Convert to PDF if your document is a different type.');
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
+      // Sanity-check the data URL prefix matches an allowed MIME, defense-in-depth
+      // against File objects with spoofed type fields.
+      const result = String(reader.result || '');
+      const dataUrlMime = result.match(/^data:([^;,]+)/)?.[1]?.toLowerCase() || '';
+      if (!ALLOWED_ATTACHMENT_MIMES.has(dataUrlMime)) {
+        setError('That file type is not allowed.');
+        return;
+      }
       setAttachment({
         name: file.name,
-        type: file.type || 'application/octet-stream',
+        type: declaredType,
         size: file.size,
-        dataUrl: reader.result,
+        dataUrl: result,
       });
     };
     reader.onerror = () => setError('Could not read the file. Try again.');
@@ -546,7 +578,7 @@ function ArtifactModal({ artifact, onClose, counselorId, onSaved }) {
             type="file"
             onChange={handleFile}
             style={{ marginBottom: 16, fontSize: 13 }}
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt,.csv"
+            accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv"
           />
         )}
 

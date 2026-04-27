@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { hashPayload, stampIntegrityFooter } from '../lib/pdfIntegrity';
 
 const DOMAIN_KEYS = Object.keys(TIME_DOMAINS);
 const COUNSELING_DOMAINS = ['guidance', 'planning', 'responsive'];
@@ -172,10 +173,27 @@ function generateAnnualPDF(entries, counselorName, yearLabel, filename) {
 }
 
 /* ---- SB 179 Compliance Report ---- */
-function generateSB179PDF(entries, counselor, periodLabel, from, to, filename) {
+async function generateSB179PDF(entries, counselor, periodLabel, from, to, filename) {
   const doc = new jsPDF();
   const counselorName = counselor?.name || counselor?.full_name || 'Counselor';
   const campus = counselor?.school_name || counselor?.campus || '';
+
+  // Hash the canonical entry list + period so a regenerated report from the
+  // same time entries produces the same hash. Any retroactive edit to a
+  // logged minute changes the hash.
+  const integrityHash = await hashPayload({
+    counselor_id: counselor?.id,
+    period_label: periodLabel,
+    from,
+    to,
+    entries: (entries || []).map((e) => ({
+      id: e.id,
+      entry_date: e.entry_date,
+      domain: e.domain,
+      duration_minutes: e.duration_minutes,
+      activity_description: e.activity_description,
+    })),
+  });
 
   // Header
   doc.setFontSize(20);
@@ -324,7 +342,10 @@ function generateSB179PDF(entries, counselor, periodLabel, from, to, filename) {
   }
 
   pdfFooter(doc);
+  // Integrity footer — content hash + generated-at on every page
+  stampIntegrityFooter(doc, { hash: integrityHash, docKind: 'SB 179 Compliance Report' });
   doc.save(filename);
+  return integrityHash;
 }
 
 /* ---- SB 179 Report Modal ---- */
@@ -705,8 +726,12 @@ export default function TimeTrackerPage() {
   };
 
   const handleSB179Generate = async (period) => {
-    const entries = await fetchEntriesRange(counselor.id, period.from, period.to);
-    generateSB179PDF(entries, counselor, period.label, period.from, period.to, `SB179-Compliance-${period.from}-to-${period.to}.pdf`);
+    try {
+      const entries = await fetchEntriesRange(counselor.id, period.from, period.to);
+      await generateSB179PDF(entries, counselor, period.label, period.from, period.to, `SB179-Compliance-${period.from}-to-${period.to}.pdf`);
+    } catch (err) {
+      alert(`Could not generate SB 179 report: ${err?.message || err}`);
+    }
   };
 
   const dayTotal = dayEntries.reduce((s, e) => s + (e.duration_minutes || 0), 0);

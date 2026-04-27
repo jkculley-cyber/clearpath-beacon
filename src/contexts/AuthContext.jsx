@@ -90,7 +90,9 @@ export function AuthProvider({ children }) {
   const [counselor, setCounselor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [storageMode, setMode] = useState(getStorageMode);
-  const [licenseState, setLicenseState] = useState({ valid: true, softGated: false, reason: null });
+  // Fail-closed: start as not-yet-checked. Trial logic in the useMemo below carries
+  // legitimate trial users; explicit license check then sets the truth before loading=false.
+  const [licenseState, setLicenseState] = useState({ valid: false, softGated: false, reason: 'pending' });
 
   const switchStorageMode = useCallback((mode) => {
     setStorageMode(mode);
@@ -136,12 +138,14 @@ export function AuthProvider({ children }) {
         if (profile) {
           setSession({ user: { id: profile.id, email: profile.email } });
         }
-        // Check license (non-blocking — app loads even if check fails)
+        // Check license — fail CLOSED. If anything throws we mark the gate active.
+        // Trial users without a license key are still carried by the useMemo below.
         try {
           const lic = await checkLicense();
           if (mounted) setLicenseState(lic);
-        } catch {
-          // License check failed — stay with default (valid: true)
+        } catch (err) {
+          if (mounted) setLicenseState({ valid: false, softGated: true, reason: 'check_failed' });
+          console.warn('License check threw:', err);
         }
         setLoading(false);
       });
@@ -191,6 +195,17 @@ export function AuthProvider({ children }) {
     if (storageMode === 'cloud') {
       await supabase.auth.signOut();
     }
+    // Purge service-worker caches so the previous counselor's UI cannot serve
+    // from cache on a shared device. Belt-and-suspenders to the IndexedDB
+    // sign-out (which clears in-memory state below).
+    try {
+      if (typeof caches !== 'undefined') {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      const reg = navigator.serviceWorker?.controller;
+      if (reg) reg.postMessage({ type: 'BEACON_PURGE_CACHE' });
+    } catch { /* purge is best-effort; never block signout */ }
     setSession(null);
     setCounselor(null);
   }, [storageMode]);

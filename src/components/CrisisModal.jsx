@@ -90,6 +90,7 @@ export default function CrisisModal({ open, onClose, counselor }) {
   const handleSave = async () => {
     setSaving(true);
     const eventId = crypto.randomUUID();
+    const createdAtIso = new Date().toISOString();
     const followUps = buildFollowUpRecords({
       counselorId: counselor.id,
       studentId,
@@ -98,13 +99,28 @@ export default function CrisisModal({ open, onClose, counselor }) {
       triggerKey,
       hoursList: workflow.followUps,
     });
+    // Retroactive marker: how long after the event the counselor recorded it.
+    // The PDF prominently flags any record where this exceeds 30 minutes so a
+    // reviewer (lawyer, OCR investigator, district admin) cannot be misled into
+    // thinking a backdated record is contemporaneous.
+    let retroactiveMinutes = 0;
+    if (answers.occurred_at) {
+      try {
+        const occurredMs = new Date(answers.occurred_at).getTime();
+        const createdMs = new Date(createdAtIso).getTime();
+        if (Number.isFinite(occurredMs) && Number.isFinite(createdMs)) {
+          retroactiveMinutes = Math.max(0, Math.round((createdMs - occurredMs) / 60000));
+        }
+      } catch { /* ignore parse error; retroactiveMinutes stays 0 */ }
+    }
     const eventRecord = {
       id: eventId,
       counselor_id: counselor.id,
       student_id: studentId,
       trigger_type: triggerKey,
-      event_date: (answers.occurred_at || new Date().toISOString()).slice(0, 10),
-      occurred_at: answers.occurred_at || new Date().toISOString(),
+      event_date: (answers.occurred_at || createdAtIso).slice(0, 10),
+      occurred_at: answers.occurred_at || createdAtIso,
+      retroactive_minutes: retroactiveMinutes,
       status: 'open',
       answers,
       parent_draft: draftParentNotification({
@@ -116,7 +132,7 @@ export default function CrisisModal({ open, onClose, counselor }) {
       }),
       admin_draft: draftAdminNotification({ trigger: triggerKey, studentName, counselorName: counselor?.name }),
       follow_up_schedule: followUps.map((f) => ({ label: f.title, due_at: f.due_at })),
-      created_at: new Date().toISOString(),
+      created_at: createdAtIso,
     };
     const { error } = await db.insert('crisis_events', eventRecord);
     if (error) {
@@ -133,9 +149,13 @@ export default function CrisisModal({ open, onClose, counselor }) {
     setSaving(false);
   };
 
-  const generatePdfNow = () => {
+  const generatePdfNow = async () => {
     if (!savedEvent) return;
-    generateCrisisPdf({ event: savedEvent, counselor, student });
+    try {
+      await generateCrisisPdf({ event: savedEvent, counselor, student });
+    } catch (err) {
+      alert(`Could not generate PDF: ${err?.message || err}`);
+    }
   };
 
   return (
@@ -354,8 +374,29 @@ function FieldEditor({ step, value, setValue }) {
       return <input style={fieldInput} value={value || ''} onChange={(e) => setValue(e.target.value)} />;
     case 'long':
       return <textarea style={{ ...fieldInput, minHeight: 90, fontFamily: 'inherit', resize: 'vertical' }} value={value || ''} onChange={(e) => setValue(e.target.value)} />;
-    case 'datetime':
-      return <input type="datetime-local" style={fieldInput} value={isoToInput(value)} onChange={(e) => setValue(inputToIso(e.target.value))} />;
+    case 'datetime': {
+      // UX-only retroactive hint — exact wall-clock at render is fine; the
+      // authoritative retroactive_minutes is recomputed at save time.
+      // eslint-disable-next-line react-hooks/purity
+      const minutesBack = value ? Math.round((Date.now() - new Date(value).getTime()) / 60000) : 0;
+      const isRetroactive = minutesBack > 30;
+      return (
+        <>
+          <input type="datetime-local" style={fieldInput} value={isoToInput(value)} onChange={(e) => setValue(inputToIso(e.target.value))} />
+          {isRetroactive && (
+            <div style={{ marginTop: 8, padding: '8px 12px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 8, fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
+              <strong>Note:</strong> You are recording an event that occurred about{' '}
+              {minutesBack < 60
+                ? `${minutesBack} minutes`
+                : minutesBack < 1440
+                  ? `${Math.round(minutesBack / 60)} hour${minutesBack >= 120 ? 's' : ''}`
+                  : `${Math.round(minutesBack / 1440)} day${minutesBack >= 2880 ? 's' : ''}`}{' '}
+              ago. The PDF will clearly flag this as a retroactive entry.
+            </div>
+          )}
+        </>
+      );
+    }
     case 'select':
       return (
         <select style={fieldInput} value={value || ''} onChange={(e) => setValue(e.target.value)}>

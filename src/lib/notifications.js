@@ -26,6 +26,11 @@ const DEFAULTS = {
   enabled: false,
   leadMinutes: 5,
   dailyBriefAt: '07:30', // not used in v1 alerts; reserved for Morning Brief feature
+  // 3:30 PM end-of-school nudge: "Log today's time" if no time entry yet today.
+  // Defaults on so the naysayer's "you'll forget by week 4" cliff stops the
+  // 80/20 ring from going fictional.
+  timeLogNudgeEnabled: true,
+  timeLogNudgeAt: '15:30',
 };
 
 export async function getNotificationPrefs() {
@@ -93,6 +98,44 @@ async function fireNotification({ title, body, url, tag }) {
  */
 const fired = new Set();
 
+const TIME_NUDGE_DISMISS_KEY = 'beacon_time_nudge_last_fired'; // YYYY-MM-DD
+
+/**
+ * 3:30 PM "log today's time" nudge. Fires once per day when:
+ *   - prefs.timeLogNudgeEnabled (default true)
+ *   - local time has crossed prefs.timeLogNudgeAt (default 15:30)
+ *   - no time_entry exists for the counselor for today
+ *   - we have not already fired the nudge for this date
+ */
+async function maybeFireTimeLogNudge(counselorId, prefs) {
+  if (!prefs.timeLogNudgeEnabled) return;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const lastFired = localStorage.getItem(TIME_NUDGE_DISMISS_KEY);
+  if (lastFired === todayIso) return;
+
+  const [hh, mm] = (prefs.timeLogNudgeAt || '15:30').split(':').map(Number);
+  const now = new Date();
+  const trigger = new Date(now);
+  trigger.setHours(hh || 15, mm || 30, 0, 0);
+  if (now < trigger) return;
+
+  // Only nudge if no time entry yet today
+  const { data } = await db.select('time_entries', {
+    eq: { counselor_id: counselorId, entry_date: todayIso },
+    select: 'id',
+  });
+  if ((data || []).length > 0) return;
+
+  // Mark fired BEFORE notifying so a poll race can't double-fire
+  localStorage.setItem(TIME_NUDGE_DISMISS_KEY, todayIso);
+  await fireNotification({
+    title: 'Log today\'s time',
+    body: 'Two clicks on the dashboard keeps your 80/20 ring honest.',
+    url: '/',
+    tag: `time-nudge:${todayIso}`,
+  });
+}
+
 /**
  * Walk upcoming sessions + follow-ups in the next 24h. Fire any whose
  * scheduled time falls inside the lead-time window (now → now + leadMinutes).
@@ -102,6 +145,9 @@ export async function scheduleUpcomingAlerts(counselorId) {
   if (!counselorId) return;
   const prefs = await getNotificationPrefs();
   if (!prefs.enabled || Notification.permission !== 'granted') return;
+
+  // Daily 3:30 PM time-log nudge — runs alongside the upcoming-event scan.
+  await maybeFireTimeLogNudge(counselorId, prefs);
 
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);

@@ -97,4 +97,11 @@ self.addEventListener('message', (event) => {
       data: { url: url || '/' },
     });
   }
+  // Auth-aware purge: clear all cached pages/JS/CSS so the next user on this
+  // device cannot retrieve the previous counselor's UI state from cache.
+  if (event.data?.type === 'BEACON_PURGE_CACHE') {
+    event.waitUntil(
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+    );
+  }
 });

@@ -303,18 +303,22 @@ export default function CommunicationsPage() {
                     type="button"
                     className="btn btn-outline"
                     style={{ fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap' }}
-                    onClick={() => {
+                    onClick={async () => {
                       const stu = students.find((s) => s.id === studentId);
                       if (!stu) return;
                       const studentName = sName(stu);
                       const studentContacts = comms
                         .filter((c) => c.student_id === studentId)
                         .sort((a, b) => (a.contact_date || '').localeCompare(b.contact_date || ''));
-                      generateDueProcessPdf({
-                        student: { ...stu, name: studentName },
-                        counselor,
-                        contacts: studentContacts,
-                      });
+                      try {
+                        await generateDueProcessPdf({
+                          student: { ...stu, name: studentName },
+                          counselor,
+                          contacts: studentContacts,
+                        });
+                      } catch (err) {
+                        alert(`Could not generate Due-Process PDF: ${err?.message || err}`);
+                      }
                     }}
                   >
                     Due-Process PDF

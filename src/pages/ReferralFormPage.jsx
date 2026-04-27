@@ -5,6 +5,34 @@ import { CONCERN_TYPES, URGENCY_LEVELS } from '../lib/constants';
 
 const GRADES = ['K', '1', '2', '3', '4', '5'];
 
+// Length caps — keep referrals well under the IndexedDB / Supabase row size limit
+// and short enough that a flooding attack can't pump huge payloads through.
+const MAX_NAME_LEN = 100;
+const MAX_TEACHER_LEN = 100;
+const MAX_NOTES_LEN = 2000;
+
+// Per-browser rate limit: max 5 submissions in any 10-minute rolling window.
+// A determined attacker can clear localStorage to reset, but this stops the
+// trivial form-spam case + accidental double-clicks.
+const RATE_LIMIT_KEY = 'beacon_referral_rate_log';
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX = 5;
+
+function recordSubmissionAndCheckRate() {
+  let log = [];
+  try {
+    log = JSON.parse(localStorage.getItem(RATE_LIMIT_KEY) || '[]');
+  } catch { log = []; }
+  const now = Date.now();
+  log = log.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (log.length >= RATE_LIMIT_MAX) {
+    return { allowed: false, retryAfterMin: Math.ceil((RATE_LIMIT_WINDOW_MS - (now - log[0])) / 60000) };
+  }
+  log.push(now);
+  try { localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(log)); } catch { /* private mode */ }
+  return { allowed: true, retryAfterMin: 0 };
+}
+
 /**
  * ReferralFormPage — public form, two transport modes:
  *   1. mailto mode (default for individual / local-mode counselors):
@@ -67,6 +95,23 @@ export default function ReferralFormPage() {
     e.preventDefault();
     setSubmitting(true);
     setError('');
+
+    // Length caps — defense against payload-flooding attacks
+    if ((studentName || '').length > MAX_NAME_LEN
+        || (teacherName || '').length > MAX_TEACHER_LEN
+        || (notes || '').length > MAX_NOTES_LEN) {
+      setError('Some fields exceed the maximum length. Trim before submitting.');
+      setSubmitting(false);
+      return;
+    }
+
+    // Per-browser rate limit — 5 submissions per 10 minutes
+    const rate = recordSubmissionAndCheckRate();
+    if (!rate.allowed) {
+      setError(`Too many recent submissions from this device. Try again in ~${rate.retryAfterMin} minute${rate.retryAfterMin === 1 ? '' : 's'}.`);
+      setSubmitting(false);
+      return;
+    }
 
     if (isMailtoMode) {
       // Build mailto: with structured body. Open in teacher's email client.
@@ -200,7 +245,7 @@ export default function ReferralFormPage() {
 
         <form onSubmit={handleSubmit}>
           <label className="form-label">Student Name *</label>
-          <input className="form-input" required value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="First and last name" style={{ marginBottom: 12 }} />
+          <input className="form-input" required maxLength={MAX_NAME_LEN} value={studentName} onChange={(e) => setStudentName(e.target.value.slice(0, MAX_NAME_LEN))} placeholder="First and last name" style={{ marginBottom: 12 }} />
 
           <label className="form-label">Grade *</label>
           <select className="form-input" required value={grade} onChange={(e) => setGrade(e.target.value)} style={{ marginBottom: 12 }}>
@@ -209,7 +254,7 @@ export default function ReferralFormPage() {
           </select>
 
           <label className="form-label">Your Name (Teacher)</label>
-          <input className="form-input" value={teacherName} onChange={(e) => setTeacherName(e.target.value)} placeholder="Your name" style={{ marginBottom: 12 }} />
+          <input className="form-input" maxLength={MAX_TEACHER_LEN} value={teacherName} onChange={(e) => setTeacherName(e.target.value.slice(0, MAX_TEACHER_LEN))} placeholder="Your name" style={{ marginBottom: 12 }} />
 
           <label className="form-label">Concern Category *</label>
           <select className="form-input" required value={concernType} onChange={(e) => setConcernType(e.target.value)} style={{ marginBottom: 12 }}>
@@ -259,8 +304,8 @@ export default function ReferralFormPage() {
             )}
           </div>
 
-          <label className="form-label">Additional Notes</label>
-          <textarea className="form-input" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Describe the concern, what you have observed, and any steps already taken..." style={{ marginBottom: 24 }} />
+          <label className="form-label">Additional Notes <span style={{ fontWeight: 400, color: '#9ca3af' }}>({notes.length}/{MAX_NOTES_LEN})</span></label>
+          <textarea className="form-input" rows={4} maxLength={MAX_NOTES_LEN} value={notes} onChange={(e) => setNotes(e.target.value.slice(0, MAX_NOTES_LEN))} placeholder="Describe the concern, what you have observed, and any steps already taken..." style={{ marginBottom: 24 }} />
 
           <button type="submit" className="btn btn-primary" disabled={submitting || !urgency} style={{ width: '100%' }}>
             {submitting ? (isMailtoMode ? 'Opening email...' : 'Submitting...') : (isMailtoMode ? 'Open Email to Send' : 'Submit Referral')}

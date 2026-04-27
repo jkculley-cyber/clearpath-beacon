@@ -121,6 +121,41 @@ export default function AppShell() {
     };
   }, [counselor?.id]);
 
+  // Friday auto-backup-to-disk: on first sign-in or first dashboard visit on a
+  // Friday after 12:00, if last backup is >6 days old, silently emit a backup
+  // file. The browser's standard download dialog handles persistence; the
+  // counselor doesn't have to remember anything.
+  useEffect(() => {
+    if (!counselor?.id) return;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const lastAutoTry = localStorage.getItem('beacon_last_auto_backup_try');
+    if (lastAutoTry === todayIso) return; // already attempted today
+    const now = new Date();
+    if (now.getDay() !== 5 || now.getHours() < 12) return; // Fridays after noon only
+    const lastBackup = localStorage.getItem('beacon_last_backup');
+    const ageDays = lastBackup
+      ? (Date.now() - new Date(lastBackup).getTime()) / 86400000
+      : 999;
+    if (ageDays < 6) return;
+    // Mark before doing the work so a re-render race can't double-fire
+    localStorage.setItem('beacon_last_auto_backup_try', todayIso);
+    (async () => {
+      try {
+        const data = await exportLocalBackup();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `beacon-backup-${todayIso}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        localStorage.setItem('beacon_last_backup', new Date().toISOString());
+      } catch (err) {
+        console.warn('Auto-backup failed:', err);
+      }
+    })();
+  }, [counselor?.id]);
+
   // Active safety-alert poll. Refreshes every 30s and on window focus.
   // Counts open referrals where harm-to-self / harm-to-others / urgency=Urgent / concern=Crisis.
   const [alertCount, setAlertCount] = useState(0);
