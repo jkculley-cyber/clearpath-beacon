@@ -36,7 +36,8 @@ function toAscii(s) {
     .replace(/✗/g, '[ ]')           // ballot x
     .replace(/⚠/g, '!')             // warning
     .replace(/[§]/g, 'Sec.')       // section sign
-    .replace(/[^\x00-\x7F]/g, '');       // strip everything else outside ASCII
+    // eslint-disable-next-line no-control-regex
+    .replace(/[^\x00-\x7F]/g, '');       // strip everything else outside ASCII (newlines + tabs preserved)
 }
 
 function header(doc, title, subtitle) {
