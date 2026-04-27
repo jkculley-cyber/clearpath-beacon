@@ -22,7 +22,7 @@ import autoTable from 'jspdf-autotable';
 import {
   DEMO_DISTRICT, DEMO_CAMPUSES, DEMO_COUNSELORS, DEMO_KPIS, DEMO_CRISIS,
   DEMO_MONTHLY_SESSIONS, DEMO_TIME_ALLOCATION, DEMO_CAMPUS_COMPARISON,
-  DEMO_ALERTS, DEMO_CASELOAD_BY_TIER,
+  DEMO_ALERTS, DEMO_CASELOAD_BY_TIER, DEMO_CREST_READINESS, DEMO_CREST_DISTRICT,
 } from '../lib/districtPreviewData';
 
 const STATUS_COLORS = {
@@ -142,6 +142,83 @@ function OverviewTab() {
           <CrisisStat label="Threat Assessments"           value={DEMO_CRISIS.threatAssessmentsCompleted} sub="completed YTD" onClick={() => setDetail('crisisThreat')} />
           <CrisisStat label="Avg Crisis Response"          value={DEMO_CRISIS.avgCrisisResponseHours + 'h'} sub="referral to action" onClick={() => setDetail('crisisResponseTime')} />
           <CrisisStat label="Safety Plan 30-day Reviews"   value={DEMO_CRISIS.pendingSafetyPlanReviews} sub="due this week" status="amber" onClick={() => setDetail('crisisReviews')} />
+        </div>
+      </div>
+
+      {/* CREST Award Readiness */}
+      <div className="card" style={{ marginBottom: 20, padding: 20, borderLeft: '4px solid #8b5cf6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1a2332' }}>CREST Award Portfolio Readiness</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280' }}>
+              TSCA submission deadline: November 1. Counselors build portfolios across the year inside Beacon.
+            </p>
+          </div>
+          <span style={{ fontSize: 11, padding: '2px 8px', background: '#ede9fe', color: '#6d28d9', borderRadius: 10, fontWeight: 700, textTransform: 'uppercase' }}>Texas Model</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14, marginBottom: 14 }}>
+          <CrisisStat
+            label="District Avg Coverage"
+            value={DEMO_CREST_DISTRICT.avgPct + '%'}
+            sub={`${DEMO_CREST_DISTRICT.counselorCount} counselors`}
+            status={DEMO_CREST_DISTRICT.avgPct >= 80 ? 'green' : DEMO_CREST_DISTRICT.avgPct >= 60 ? 'amber' : 'red'}
+            onClick={() => setDetail('crestDistrict')}
+          />
+          <CrisisStat
+            label="On Track for Submission"
+            value={DEMO_CREST_DISTRICT.onTrack}
+            sub={`of ${DEMO_CREST_DISTRICT.counselorCount} counselors`}
+            status="green"
+            onClick={() => setDetail('crestOnTrack')}
+          />
+          <CrisisStat
+            label="At Risk (under 60%)"
+            value={DEMO_CREST_DISTRICT.atRisk}
+            sub="needs coaching"
+            status={DEMO_CREST_DISTRICT.atRisk > 0 ? 'red' : 'green'}
+            onClick={() => setDetail('crestAtRisk')}
+          />
+          <CrisisStat
+            label="Auto-Derived Artifacts"
+            value={DEMO_CREST_DISTRICT.totalAuto}
+            sub={`of ${DEMO_CREST_DISTRICT.total} total`}
+            onClick={() => setDetail('crestAuto')}
+          />
+        </div>
+        <div style={{ display: 'grid', gap: 6 }}>
+          {DEMO_CREST_READINESS.map((c) => {
+            const status = c.crestPct >= 80 ? 'green' : c.crestPct >= 60 ? 'amber' : 'red';
+            const colors = STATUS_COLORS[status];
+            return (
+              <button
+                key={c.counselorId}
+                onClick={() => setDetail({ kind: 'crestCounselor', counselor: c })}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1.4fr 1.4fr 80px 1fr 60px',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 12px',
+                  background: '#fff',
+                  border: '1px solid #e5e7eb',
+                  borderLeft: `4px solid ${colors.dot}`,
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ fontWeight: 600, color: '#1a2332' }}>{c.counselorName}</span>
+                <span style={{ color: '#6b7280', fontSize: 12 }}>{c.campus}</span>
+                <span style={{ color: colors.fg, fontWeight: 700 }}>{c.crestPct}%</span>
+                <span style={{ color: '#6b7280', fontSize: 12 }}>
+                  <span style={{ color: '#8b5cf6', fontWeight: 600 }}>{c.crestAuto} auto</span> + {c.crestManual} manual
+                </span>
+                <span style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 700, textAlign: 'right' }}>View →</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -951,6 +1028,35 @@ function DataDetailModal({ detail, onClose }) {
 }
 
 function getDetailContent(detail) {
+  // CREST per-counselor click — { kind: 'crestCounselor', counselor: {...} }
+  if (typeof detail === 'object' && detail !== null && detail.kind === 'crestCounselor') {
+    const c = detail.counselor;
+    const status = c.crestPct >= 80 ? 'green' : c.crestPct >= 60 ? 'amber' : 'red';
+    const sevColor = STATUS_COLORS[status].fg;
+    // Build a per-category breakdown by interpolating roughly from the overall %.
+    // This is demo data — real Beacon-derived counselor pages would show actual category coverage.
+    const catRows = [
+      { cat: 'Cat 1: Introduction & Role',         pct: Math.min(100, Math.round(c.crestPct * 1.05)) },
+      { cat: 'Cat 2: Implementation Cycle',        pct: Math.min(100, Math.round(c.crestPct * 1.10)) },
+      { cat: 'Cat 3: Foundational',                pct: Math.max(0,   Math.round(c.crestPct * 0.85)) },
+      { cat: 'Cat 4: Service Delivery',            pct: Math.min(100, Math.round(c.crestPct * 1.00)) },
+      { cat: 'Cat 5: Curriculum',                  pct: Math.max(0,   Math.round(c.crestPct * 0.90)) },
+    ];
+    const interpretation = c.crestPct >= 80
+      ? `${c.counselorName} is on track. Beacon already auto-derived ${c.crestAuto} of the ${c.crestAuto + c.crestManual} artifacts in her portfolio. With November 1 still months away, she's free to add narrative case studies on top of the snapshots.`
+      : c.crestPct >= 60
+        ? `${c.counselorName} is borderline. Most service-delivery evidence is auto-derived from Beacon (${c.crestAuto} artifacts) but Foundational + Curriculum categories need manual additions: vision/mission, sample lesson plans, pre/post assessment data.`
+        : `${c.counselorName} is at risk. Only ${c.crestAuto + c.crestManual} artifacts on file with November 1 looming. Recommended action: 30-minute coaching session to review the 5 categories + auto-promote the available Beacon snapshots in one batch (gets the portfolio to ~50% in under an hour).`;
+    return {
+      title: `${c.counselorName} - CREST Portfolio`,
+      value: c.crestPct + '%',
+      valueColor: sevColor,
+      sub: `${c.campus} | ${c.crestAuto} auto-derived + ${c.crestManual} manual artifacts | TSCA submission deadline November 1`,
+      body: <MiniBarChart data={catRows.map((r) => ({ label: r.cat, value: r.pct, color: '#8b5cf6' }))} threshold={80} />,
+      interpretation,
+    };
+  }
+
   // Alert click — { alertIndex: n }
   if (typeof detail === 'object' && detail.alertIndex != null) {
     const alert = DEMO_ALERTS[detail.alertIndex];
@@ -1131,6 +1237,74 @@ function getDetailContent(detail) {
         ),
         interpretation: 'Reviews block-scheduled for Wednesday. Counselors meet with the student, update the plan as needed, document the review, and — if changes warrant — re-engage parents. Beacon auto-flags the next 30-day check before it lapses.',
       };
+    case 'crestDistrict': {
+      const buckets = [
+        { label: '90-100% (excellent)', value: DEMO_CREST_READINESS.filter((c) => c.crestPct >= 90).length, color: '#15803d' },
+        { label: '80-89% (on track)',   value: DEMO_CREST_READINESS.filter((c) => c.crestPct >= 80 && c.crestPct < 90).length, color: '#22c55e' },
+        { label: '60-79% (watch)',      value: DEMO_CREST_READINESS.filter((c) => c.crestPct >= 60 && c.crestPct < 80).length, color: '#f59e0b' },
+        { label: 'Under 60% (at risk)', value: DEMO_CREST_READINESS.filter((c) => c.crestPct < 60).length, color: '#ef4444' },
+      ];
+      return {
+        title: 'CREST Portfolio Coverage - District Average',
+        value: DEMO_CREST_DISTRICT.avgPct + '%',
+        valueColor: DEMO_CREST_DISTRICT.avgPct >= 80 ? '#15803d' : DEMO_CREST_DISTRICT.avgPct >= 60 ? '#a16207' : '#b91c1c',
+        sub: `Average percentage of suggested artifact types covered across the 5 Texas Model categories. ${DEMO_CREST_DISTRICT.counselorCount} counselors tracked.`,
+        body: <MiniBarChart data={buckets} />,
+        interpretation: `${DEMO_CREST_DISTRICT.onTrack} of ${DEMO_CREST_DISTRICT.counselorCount} counselors are on track for November 1 submission (≥80% coverage). ${DEMO_CREST_DISTRICT.atRisk} are at risk (<60%) — director coaching recommended this month to surface auto-derivable Beacon data and lift those portfolios into the watch zone or higher.`,
+      };
+    }
+    case 'crestOnTrack': {
+      const onTrack = DEMO_CREST_READINESS.filter((c) => c.crestPct >= 80);
+      return {
+        title: 'Counselors On Track for CREST Submission',
+        value: `${onTrack.length} of ${DEMO_CREST_DISTRICT.counselorCount}`,
+        valueColor: '#15803d',
+        sub: 'Counselors at 80%+ portfolio coverage with months still remaining before the November 1 deadline.',
+        body: (
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: 14, fontSize: 13, color: '#166534', lineHeight: 1.7 }}>
+            <strong>On track:</strong>
+            <ul style={{ margin: '8px 0 0', paddingLeft: 22 }}>
+              {onTrack.map((c) => <li key={c.counselorId}>{c.counselorName} ({c.campus}) — {c.crestPct}%</li>)}
+            </ul>
+          </div>
+        ),
+        interpretation: 'These counselors can polish narrative case studies and request peer review before November 1. Director\'s focus shifts to the at-risk and watch tiers.',
+      };
+    }
+    case 'crestAtRisk': {
+      const atRisk = DEMO_CREST_READINESS.filter((c) => c.crestPct < 60);
+      return {
+        title: 'Counselors At Risk - CREST Portfolio',
+        value: atRisk.length,
+        valueColor: '#b91c1c',
+        sub: 'Counselors below 60% coverage. Without a coaching intervention, they likely will not submit this year.',
+        body: (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 14, fontSize: 13, color: '#991b1b', lineHeight: 1.7 }}>
+            <strong>At risk:</strong>
+            <ul style={{ margin: '8px 0 0', paddingLeft: 22 }}>
+              {atRisk.map((c) => <li key={c.counselorId}>{c.counselorName} ({c.campus}) — {c.crestPct}% with {c.crestAuto + c.crestManual} artifacts</li>)}
+            </ul>
+          </div>
+        ),
+        interpretation: 'A 30-minute coaching session walking through the 5 categories + auto-promoting the available Beacon snapshots typically lifts a portfolio from sub-50% to 60-70% in one sitting. Schedule before mid-September.',
+      };
+    }
+    case 'crestAuto': {
+      const autoPct = DEMO_CREST_DISTRICT.total > 0
+        ? Math.round((DEMO_CREST_DISTRICT.totalAuto / DEMO_CREST_DISTRICT.total) * 100)
+        : 0;
+      return {
+        title: 'Auto-Derived Portfolio Artifacts',
+        value: DEMO_CREST_DISTRICT.totalAuto,
+        valueColor: '#8b5cf6',
+        sub: `Artifacts that Beacon auto-snapshotted from existing data (Time Tracker, Lessons, Sessions, Referrals, Communications). ${autoPct}% of all portfolio artifacts came from Beacon's existing modules with one click.`,
+        body: <MiniBarChart data={[
+          { label: 'Auto-derived from Beacon', value: DEMO_CREST_DISTRICT.totalAuto, color: '#8b5cf6' },
+          { label: 'Manually entered',          value: DEMO_CREST_DISTRICT.totalManual, color: '#6b7280' },
+        ]} />,
+        interpretation: 'The auto-derive feature is what makes a year-long CREST portfolio feel like a side-effect of regular Beacon use rather than a separate task. Counselors who already use Time Tracker + Lessons + Sessions can promote 7+ artifacts in under 5 minutes.',
+      };
+    }
     default:
       return null;
   }

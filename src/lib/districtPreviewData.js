@@ -116,3 +116,28 @@ export const DEMO_CASELOAD_BY_TIER = [
   { tier: 'Tier 2 (Targeted)',   count:  124, color: '#f59e0b' },
   { tier: 'Tier 3 (Intensive)',  count:   41, color: '#ef4444' },
 ];
+
+// CREST Award portfolio readiness per counselor.
+// crestPct = pct of suggested artifact types covered across the 5 Texas Model categories.
+// crestAuto = how many were auto-derived from Beacon vs entered manually.
+// Numbers tuned to mirror the rest of the demo: high performers near 90%+, Robert Kim trailing.
+export const DEMO_CREST_READINESS = [
+  { counselorId: 'co1', counselorName: 'Nicole Hill',     campus: 'Sample Elementary',      crestPct: 91, crestAuto: 7, crestManual: 12 },
+  { counselorId: 'co2', counselorName: 'Sarah Chen',      campus: 'Sample Elementary',      crestPct: 73, crestAuto: 6, crestManual:  8 },
+  { counselorId: 'co3', counselorName: 'Marcus Davis',    campus: 'Sample East Elementary', crestPct: 95, crestAuto: 7, crestManual: 14 },
+  { counselorId: 'co4', counselorName: 'Jennifer Lopez',  campus: 'Sample East Elementary', crestPct: 86, crestAuto: 7, crestManual: 11 },
+  { counselorId: 'co5', counselorName: 'Robert Kim',      campus: 'Sample East Elementary', crestPct: 41, crestAuto: 5, crestManual:  3 },
+  { counselorId: 'co6', counselorName: 'Lisa Anderson',   campus: 'Sample West Elementary', crestPct: 82, crestAuto: 7, crestManual: 10 },
+  { counselorId: 'co7', counselorName: 'Maria Rodriguez', campus: 'Sample West Elementary', crestPct: 77, crestAuto: 6, crestManual:  9 },
+];
+
+// District-wide CREST roll-up — average of per-counselor pct + total artifact counts.
+export const DEMO_CREST_DISTRICT = (() => {
+  const n = DEMO_CREST_READINESS.length;
+  const avg = Math.round(DEMO_CREST_READINESS.reduce((s, c) => s + c.crestPct, 0) / n);
+  const totalAuto = DEMO_CREST_READINESS.reduce((s, c) => s + c.crestAuto, 0);
+  const totalManual = DEMO_CREST_READINESS.reduce((s, c) => s + c.crestManual, 0);
+  const onTrack = DEMO_CREST_READINESS.filter((c) => c.crestPct >= 80).length;
+  const atRisk = DEMO_CREST_READINESS.filter((c) => c.crestPct < 60).length;
+  return { avgPct: avg, totalAuto, totalManual, total: totalAuto + totalManual, onTrack, atRisk, counselorCount: n };
+})();

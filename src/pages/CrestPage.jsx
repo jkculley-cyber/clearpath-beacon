@@ -22,6 +22,8 @@ import {
   categoryProgress,
   overallProgress,
 } from '../lib/crestData';
+import { deriveAllArtifacts, buildSnapshotRecord } from '../lib/crestAutoDerive';
+import { exportCrestPortfolio } from '../lib/crestExport';
 
 const SCHOOL_YEAR = (() => {
   const now = new Date();
@@ -34,18 +36,37 @@ export default function CrestPage() {
   const { counselor } = useAuth();
   const [view, setView] = useState({ type: 'dashboard' });
   const [artifacts, setArtifacts] = useState([]);
+  const [autoDerived, setAutoDerived] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editArtifact, setEditArtifact] = useState(null); // null | { ...record } | { _new: true, category }
+  const [promoting, setPromoting] = useState(null); // type key being promoted
 
   const loadArtifacts = useCallback(async () => {
     if (!counselor?.id) return;
     setLoading(true);
-    const { data } = await db.select('crest_artifacts', { eq: { counselor_id: counselor.id } });
+    const [{ data }, derived] = await Promise.all([
+      db.select('crest_artifacts', { eq: { counselor_id: counselor.id } }),
+      deriveAllArtifacts(counselor.id),
+    ]);
     setArtifacts((data || []).filter((a) => a.school_year === SCHOOL_YEAR));
+    setAutoDerived(derived);
     setLoading(false);
   }, [counselor]);
 
   useEffect(() => { loadArtifacts(); }, [loadArtifacts]);
+
+  const handlePromote = async (virtual) => {
+    if (!virtual?.enoughData) return;
+    setPromoting(virtual.type);
+    const record = buildSnapshotRecord(virtual, counselor.id, SCHOOL_YEAR, local.uuid);
+    const { error } = await db.insert('crest_artifacts', record);
+    setPromoting(null);
+    if (error) {
+      alert(`Could not promote: ${error.message || error}`);
+      return;
+    }
+    loadArtifacts();
+  };
 
   const deadline = getNextCrestDeadline();
   const overall = overallProgress(artifacts);
@@ -57,6 +78,10 @@ export default function CrestPage() {
       return null;
     }
     const catArtifacts = artifacts.filter((a) => a.category === cat.key);
+    const catAuto = autoDerived.filter((v) => v.category === cat.key);
+    // Hide auto-derived cards whose type already has a saved promotion this year
+    const promotedTypes = new Set(catArtifacts.filter((a) => a.auto_derived).map((a) => a.type));
+    const visibleAuto = catAuto.filter((v) => !promotedTypes.has(v.type));
     const progress = categoryProgress(cat, artifacts);
     return (
       <div className="page">
@@ -77,6 +102,55 @@ export default function CrestPage() {
             </span>
           </div>
         </div>
+
+        {visibleAuto.length > 0 && (
+          <>
+            <h2 style={sectionTitle}>
+              Auto-derived from your Beacon data
+            </h2>
+            <p style={{ fontSize: 12, color: '#6b7280', margin: '-4px 0 12px' }}>
+              Live snapshots from the rest of Beacon. Promote any to lock the current numbers into your portfolio for {SCHOOL_YEAR}.
+            </p>
+            <div style={{ display: 'grid', gap: 10, marginBottom: 22 }}>
+              {visibleAuto.map((v) => (
+                <div key={v.type} className="card" style={{
+                  padding: 14,
+                  borderLeft: `4px solid ${v.enoughData ? '#8b5cf6' : '#e5e7eb'}`,
+                  background: v.enoughData ? '#faf5ff' : '#fff',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                        <strong style={{ fontSize: 14, color: '#1a2332' }}>{v.title}</strong>
+                        <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: '#8b5cf6', color: '#fff', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                          Auto-derived
+                        </span>
+                        <span style={{ fontSize: 10, color: '#6b7280' }}>{v.sourceLabel}</span>
+                      </div>
+                      <p style={{ fontSize: 12, color: '#4b5563', margin: '4px 0 0', lineHeight: 1.5 }}>
+                        {v.summary}
+                      </p>
+                    </div>
+                    {v.enoughData ? (
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap', background: '#8b5cf6', borderColor: '#8b5cf6' }}
+                        disabled={promoting === v.type}
+                        onClick={() => handlePromote(v)}
+                      >
+                        {promoting === v.type ? 'Promoting...' : 'Promote to Portfolio'}
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#9ca3af', whiteSpace: 'nowrap', padding: '6px 0' }}>
+                        Needs more data
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         <h2 style={sectionTitle}>Suggested artifact types</h2>
         <div style={{ display: 'grid', gap: 10, marginBottom: 28 }}>
@@ -203,10 +277,23 @@ export default function CrestPage() {
   // Dashboard view
   return (
     <div className="page">
-      <h1 className="page-title">CREST Award Tracking</h1>
-      <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 18, lineHeight: 1.6, maxWidth: 760 }}>
-        <strong>Counselors Reinforcing Excellence for Students in Texas (CREST)</strong> — sponsored by the Texas School Counselor Association. Build your portfolio across the year using the 5 categories of the Texas Model. Add evidence as you collect it; ship a polished application before the November 1 deadline.
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <h1 className="page-title">CREST Award Tracking</h1>
+          <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 18, lineHeight: 1.6, maxWidth: 760 }}>
+            <strong>Counselors Reinforcing Excellence for Students in Texas (CREST)</strong> — sponsored by the Texas School Counselor Association. Build your portfolio across the year using the 5 categories of the Texas Model. Add evidence as you collect it; ship a polished application before the November 1 deadline.
+          </p>
+        </div>
+        <button
+          className="btn btn-primary"
+          style={{ background: '#8b5cf6', borderColor: '#8b5cf6', whiteSpace: 'nowrap' }}
+          disabled={artifacts.length === 0}
+          onClick={() => exportCrestPortfolio({ counselor, schoolYear: SCHOOL_YEAR, artifacts })}
+          title={artifacts.length === 0 ? 'Add artifacts first' : 'Export the portfolio as PDF'}
+        >
+          Export Portfolio PDF
+        </button>
+      </div>
 
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 24,
@@ -294,12 +381,21 @@ export default function CrestPage() {
 }
 
 /* ─── Artifact add/edit modal ─── */
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024; // 5 MB
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function ArtifactModal({ artifact, onClose, counselorId, onSaved }) {
   const isNew = artifact?._new;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [evidence, setEvidence] = useState('');
   const [dateCollected, setDateCollected] = useState('');
+  const [attachment, setAttachment] = useState(null); // { name, type, size, dataUrl } | null
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -309,12 +405,43 @@ function ArtifactModal({ artifact, onClose, counselorId, onSaved }) {
       setDescription(artifact.description || '');
       setEvidence(artifact.evidence || '');
       setDateCollected(artifact.date_collected || new Date().toISOString().slice(0, 10));
+      setAttachment(artifact.attachment || null);
       setError('');
     }
   }, [artifact]);
 
   if (!artifact) return null;
   const cat = CREST_CATEGORY_BY_KEY[artifact.category];
+
+  const handleFile = (e) => {
+    setError('');
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setError(`File is ${formatBytes(file.size)}. Maximum is 5 MB. Trim or split it before attaching.`);
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachment({
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        dataUrl: reader.result,
+      });
+    };
+    reader.onerror = () => setError('Could not read the file. Try again.');
+    reader.readAsDataURL(file);
+  };
+
+  const handleDownload = () => {
+    if (!attachment?.dataUrl) return;
+    const a = document.createElement('a');
+    a.href = attachment.dataUrl;
+    a.download = attachment.name || 'attachment';
+    a.click();
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -337,6 +464,7 @@ function ArtifactModal({ artifact, onClose, counselorId, onSaved }) {
         date_collected: dateCollected,
         school_year: SCHOOL_YEAR,
         created_at: new Date().toISOString(),
+        attachment: attachment || null,
       };
       const { error: err } = await db.insert('crest_artifacts', record);
       if (err) { setError(err.message || String(err)); setSaving(false); return; }
@@ -346,6 +474,7 @@ function ArtifactModal({ artifact, onClose, counselorId, onSaved }) {
         description: description.trim() || null,
         evidence: evidence.trim() || null,
         date_collected: dateCollected,
+        attachment: attachment || null,
       });
       if (err) { setError(err.message || String(err)); setSaving(false); return; }
     }
@@ -393,6 +522,33 @@ function ArtifactModal({ artifact, onClose, counselorId, onSaved }) {
 
         <label className="form-label">Evidence / narrative</label>
         <textarea className="form-input" rows={5} value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder="Paste the artifact text or write a narrative pointing to where the evidence lives (file path, URL, drawer, etc.). The application export bundles all of these together." style={{ marginBottom: 16 }} />
+
+        <label className="form-label">Attachment (optional, max 5 MB)</label>
+        {attachment ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, marginBottom: 16 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2332', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {attachment.name}
+              </div>
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                {formatBytes(attachment.size)} | {attachment.type || 'file'}
+              </div>
+            </div>
+            <button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 10px' }} onClick={handleDownload}>
+              Download
+            </button>
+            <button type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '4px 10px', color: '#b91c1c', borderColor: '#fecaca' }} onClick={() => setAttachment(null)}>
+              Remove
+            </button>
+          </div>
+        ) : (
+          <input
+            type="file"
+            onChange={handleFile}
+            style={{ marginBottom: 16, fontSize: 13 }}
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt,.csv"
+          />
+        )}
 
         <div style={{ display: 'flex', gap: 10 }}>
           {!isNew && (
