@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
 import { autoLogTime } from '../lib/autoLogTime';
@@ -369,12 +370,17 @@ export default function SessionsPage() {
   const [showLogModal, setShowLogModal] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
 
-  // Filters
-  const [dateRange, setDateRange] = useState('this_month');
+  const [searchParams] = useSearchParams();
+
+  // Filters (seed from URL params on mount so dashboard drill-downs land filtered)
+  const [dateRange, setDateRange] = useState(() => {
+    const r = searchParams.get('range');
+    return ['this_week', 'this_month', 'custom'].includes(r) ? r : 'this_month';
+  });
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState(() => searchParams.get('type') || 'all');
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all');
   const [searchText, setSearchText] = useState('');
 
   const computeDateBounds = useCallback(() => {

@@ -362,6 +362,7 @@ export default function DashboardPage() {
 
     const domainHours = Object.entries(TIME_DOMAINS).map(([key, label]) => ({
       domain: label.replace('Individual ', 'Ind. ').replace(' Duties', ''),
+      domainKey: key,
       hours: Math.round(((domainMap[key] || 0) / 60) * 10) / 10,
       fill: key === 'non_counseling' ? '#94a3b8' : '#2A9D8F',
     }));
@@ -425,8 +426,16 @@ export default function DashboardPage() {
     // Current day index (0=Mon, 4=Fri, -1/5+ = weekend)
     const currentDayIdx = todayDate.getDay() - 1;
 
+    // ISO date for each weekday (Mon..Fri) so the day circles can drill into the schedule
+    const dayDates = [0, 1, 2, 3, 4].map((offset) => {
+      const d = new Date(weekMonday);
+      d.setDate(d.getDate() + offset);
+      return format(d, 'yyyy-MM-dd');
+    });
+
     setWeekDigest({
       dayActivity,
+      dayDates,
       sessionCount: weekSessions.length,
       studentCount: uniqueStudents.size,
       referralCount: weekReferralsClosed,
@@ -998,7 +1007,8 @@ export default function DashboardPage() {
         <Scorecard counselorId={counselor?.id} counselor={counselor} />
       </div>
 
-      {/* Quick Session Log action card */}
+      {/* Quick action row — Session log + Time log side by side */}
+      <div style={styles.actionRow}>
       <div
         onClick={() => setShowQuickSession(true)}
         style={styles.sessionCard}
@@ -1014,24 +1024,52 @@ export default function DashboardPage() {
           <polyline points="9 18 15 12 9 6" />
         </svg>
       </div>
+      <div onClick={() => setShowQuickLog(true)} style={styles.timeCard}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+          <span style={{ fontSize: 22 }}>{'⏱'}</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#1e3a8a' }}>Log time spent</div>
+            <div style={{ fontSize: 13, color: '#bfdbfe', marginTop: 2 }}>Lunch, IEP, paperwork &mdash; counts toward 80/20.</div>
+          </div>
+        </div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#bfdbfe" strokeWidth="2.5" strokeLinecap="round">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </div>
+      </div>
 
       <div style={styles.grid}>
         {/* ─── Top Left: Today at a Glance ─── */}
         <div style={{ ...styles.card, cursor: 'pointer' }} onClick={() => navigate('/schedule')}>
           <h2 style={styles.cardTitle}>Today at a Glance</h2>
           <div style={styles.statRow}>
-            <div style={styles.statBlock}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate('/schedule'); }}
+              style={styles.statBtn}
+              title="Open today's schedule"
+            >
               <span style={styles.statNum}>{stats.sessionsToday}</span>
               <span style={styles.statLabel}>Sessions Scheduled</span>
-            </div>
-            <div style={styles.statBlock}>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate('/referrals?status=open'); }}
+              style={styles.statBtn}
+              title="View pending referrals"
+            >
               <span style={{ ...styles.statNum, color: stats.pendingReferrals > 0 ? '#f59e0b' : undefined }}>{stats.pendingReferrals}</span>
               <span style={styles.statLabel}>Pending Referrals</span>
-            </div>
-            <div style={styles.statBlock}>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate('/sessions?status=Cancelled&range=this_week'); }}
+              style={styles.statBtn}
+              title="View cancelled sessions"
+            >
               <span style={{ ...styles.statNum, color: stats.missedAlerts > 0 ? '#ef4444' : undefined }}>{stats.missedAlerts}</span>
               <span style={styles.statLabel}>Cancelled Today</span>
-            </div>
+            </button>
           </div>
         </div>
 
@@ -1056,26 +1094,42 @@ export default function DashboardPage() {
         <div style={{ ...styles.card, cursor: 'pointer' }} onClick={() => navigate('/students')}>
           <h2 style={styles.cardTitle}>Caseload Snapshot</h2>
           <div style={styles.statRow}>
-            <div style={styles.statBlock}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate('/students?status=active'); }}
+              style={styles.statBtn}
+              title="View all active students"
+            >
               <span style={styles.statNum}>{stats.totalStudents}</span>
               <span style={styles.statLabel}>Active Students</span>
-            </div>
-            <div style={styles.statBlock}>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate('/groups'); }}
+              style={styles.statBtn}
+              title="View active groups"
+            >
               <span style={styles.statNum}>{stats.activeGroups}</span>
               <span style={styles.statLabel}>Active Groups</span>
-            </div>
+            </button>
           </div>
           <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
             {[
-              { label: 'Tier 1', count: stats.tier1, color: '#22c55e' },
-              { label: 'Tier 2', count: stats.tier2, color: '#f59e0b' },
-              { label: 'Tier 3', count: stats.tier3, color: '#ef4444' },
+              { label: 'Tier 1', tier: 1, count: stats.tier1, color: '#22c55e' },
+              { label: 'Tier 2', tier: 2, count: stats.tier2, color: '#f59e0b' },
+              { label: 'Tier 3', tier: 3, count: stats.tier3, color: '#ef4444' },
             ].map((t) => (
-              <div key={t.label} style={{ flex: 1, background: '#f9fafb', borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
+              <button
+                type="button"
+                key={t.label}
+                onClick={(e) => { e.stopPropagation(); navigate(`/students?tier=${t.tier}&status=active`); }}
+                style={{ flex: 1, background: '#f9fafb', borderRadius: 8, padding: '10px 8px', textAlign: 'center', border: '1px solid #f3f4f6', cursor: 'pointer' }}
+                title={`View ${t.label} students`}
+              >
                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: t.color, margin: '0 auto 6px' }} />
                 <div style={{ fontSize: 20, fontWeight: 700, color: '#1a2332' }}>{t.count}</div>
                 <div style={{ fontSize: 12, color: '#6b7280' }}>{t.label}</div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -1089,7 +1143,13 @@ export default function DashboardPage() {
                 <XAxis type="number" tick={{ fontSize: 11 }} unit="h" />
                 <YAxis dataKey="domain" type="category" tick={{ fontSize: 11 }} width={110} />
                 <Tooltip formatter={(v) => `${v} hrs`} />
-                <Bar dataKey="hours" radius={[0, 4, 4, 0]} barSize={18}>
+                <Bar
+                  dataKey="hours"
+                  radius={[0, 4, 4, 0]}
+                  barSize={18}
+                  cursor="pointer"
+                  onClick={(d) => { if (d?.domainKey) navigate(`/time-tracker?domain=${encodeURIComponent(d.domainKey)}`); }}
+                >
                   {stats.domainHours.map((d, i) => (
                     <Cell key={i} fill={d.fill} />
                   ))}
@@ -1109,14 +1169,22 @@ export default function DashboardPage() {
               const isCurrent = i === weekDigest.currentDayIdx;
               const isPast = i < weekDigest.currentDayIdx || (weekDigest.currentDayIdx < 0 && true);
               const hasActivity = weekDigest.dayActivity[i];
+              const dayDate = weekDigest.dayDates?.[i];
               return (
-                <div key={day} style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  padding: '8px 16px',
-                  borderRadius: 8,
-                  background: isCurrent ? '#f0fdfa' : 'transparent',
-                  border: isCurrent ? '1.5px solid #2A9D8F' : '1.5px solid transparent',
-                }}>
+                <button
+                  type="button"
+                  key={day}
+                  onClick={() => dayDate ? navigate(`/schedule?date=${dayDate}`) : navigate('/schedule')}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    background: isCurrent ? '#f0fdfa' : 'transparent',
+                    border: isCurrent ? '1.5px solid #2A9D8F' : '1.5px solid transparent',
+                    cursor: 'pointer',
+                  }}
+                  title={dayDate ? `Open ${day} (${dayDate})` : `Open ${day}`}
+                >
                   <span style={{ fontSize: 12, fontWeight: 600, color: isCurrent ? '#2A9D8F' : '#6b7280', marginBottom: 6 }}>{day}</span>
                   {hasActivity ? (
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -1128,12 +1196,22 @@ export default function DashboardPage() {
                       <circle cx="12" cy="12" r="11" fill="none" stroke={isPast && !isCurrent ? '#d1d5db' : '#e5e7eb'} strokeWidth="2" />
                     </svg>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
           <div style={{ textAlign: 'center', fontSize: 14, color: '#374151', fontWeight: 500 }}>
-            {weekDigest.sessionCount} session{weekDigest.sessionCount !== 1 ? 's' : ''} &middot; {weekDigest.studentCount} student{weekDigest.studentCount !== 1 ? 's' : ''} seen &middot; {weekDigest.referralCount} referral{weekDigest.referralCount !== 1 ? 's' : ''} addressed
+            <button type="button" onClick={() => navigate('/sessions?range=this_week')} style={styles.linkToken}>
+              {weekDigest.sessionCount} session{weekDigest.sessionCount !== 1 ? 's' : ''}
+            </button>
+            <span> &middot; </span>
+            <button type="button" onClick={() => navigate('/students?status=active')} style={styles.linkToken}>
+              {weekDigest.studentCount} student{weekDigest.studentCount !== 1 ? 's' : ''} seen
+            </button>
+            <span> &middot; </span>
+            <button type="button" onClick={() => navigate('/referrals?status=closed')} style={styles.linkToken}>
+              {weekDigest.referralCount} referral{weekDigest.referralCount !== 1 ? 's' : ''} addressed
+            </button>
           </div>
           {weekDigest.daysSinceActivity >= 3 && (
             <div style={{
@@ -1276,16 +1354,32 @@ export default function DashboardPage() {
 const styles = {
   page: { padding: '24px 32px', maxWidth: 1200, margin: '0 auto' },
   heading: { fontSize: 24, fontWeight: 700, color: '#1a2332', margin: '0 0 24px' },
+  actionRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: 12,
+    marginBottom: 20,
+  },
   sessionCard: {
     display: 'flex',
     alignItems: 'center',
     gap: 12,
     padding: '14px 20px',
-    marginBottom: 20,
     background: 'linear-gradient(135deg, #0d9488 0%, #2dd4bf 100%)',
     borderRadius: 12,
     cursor: 'pointer',
     boxShadow: '0 2px 8px rgba(13,148,136,0.25)',
+    transition: 'transform 0.15s, box-shadow 0.15s',
+  },
+  timeCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '14px 20px',
+    background: 'linear-gradient(135deg, #1d4ed8 0%, #60a5fa 100%)',
+    borderRadius: 12,
+    cursor: 'pointer',
+    boxShadow: '0 2px 8px rgba(29,78,216,0.25)',
     transition: 'transform 0.15s, box-shadow 0.15s',
   },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 },
@@ -1299,8 +1393,34 @@ const styles = {
   cardTitle: { fontSize: 15, fontWeight: 600, color: '#6b7280', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: '0.5px' },
   statRow: { display: 'flex', gap: 20 },
   statBlock: { display: 'flex', flexDirection: 'column' },
+  statBtn: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    background: 'transparent',
+    border: 'none',
+    padding: 6,
+    margin: -6,
+    borderRadius: 8,
+    cursor: 'pointer',
+    textAlign: 'left',
+    transition: 'background 0.12s',
+  },
   statNum: { fontSize: 32, fontWeight: 700, color: '#1a2332', lineHeight: 1.1 },
   statLabel: { fontSize: 13, color: '#6b7280', marginTop: 4 },
+  linkToken: {
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    color: '#0f766e',
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontSize: 'inherit',
+    fontFamily: 'inherit',
+    textDecoration: 'underline',
+    textDecorationStyle: 'dotted',
+    textUnderlineOffset: 3,
+  },
   ringText: {
     position: 'absolute',
     top: '50%', left: '50%',
@@ -1322,6 +1442,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     transition: 'transform 0.15s',
+    zIndex: 200,
   },
   badge: {
     display: 'inline-flex',

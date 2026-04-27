@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
 import { SESSION_STATUSES } from '../lib/constants';
@@ -361,7 +362,12 @@ function AddSessionModal({ open, onClose, counselorId }) {
 /* ---- Main Page ---- */
 export default function SchedulePage() {
   const { counselor } = useAuth();
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [searchParams] = useSearchParams();
+  const [weekStart, setWeekStart] = useState(() => {
+    const q = searchParams.get('date');
+    const seed = q && /^\d{4}-\d{2}-\d{2}$/.test(q) ? parseISO(q) : new Date();
+    return startOfWeek(seed, { weekStartsOn: 1 });
+  });
   const [sessions, setSessions] = useState([]);
   const [groups, setGroups] = useState([]);
   const [selected, setSelected] = useState(null);

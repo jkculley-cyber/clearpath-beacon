@@ -300,12 +300,13 @@ export default function AppShell() {
       {/* Sidebar */}
       <aside className={`sidebar${drawerOpen ? ' sidebar--open' : ''}`}>
         <div className="sidebar-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <img src="/icons/Beacon-AppIcon-192.png" alt="" style={{ width: 32, height: 32, borderRadius: 8 }} />
-            <span className="sidebar-logo">Beacon</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src="/icons/Beacon-AppIcon-192.png" alt="" style={{ width: 36, height: 36, borderRadius: 8, flexShrink: 0 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.1 }}>
+              <span className="sidebar-logo">Beacon</span>
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.03em', marginTop: 2 }}>Counselor Command Center</span>
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.03em' }}>Counselor Command Center</div>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', marginTop: 2 }}>Clear Path Education Group, LLC</div>
         </div>
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
@@ -549,16 +550,19 @@ const shellStyles = `
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  padding-top: 56px;
+  padding-top: 56px; /* mobile only — clears the fixed full-width topbar */
 }
 .sidebar--open { transform: translateX(0); }
 
 .sidebar-header {
-  padding: 20px 20px 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
+  min-height: 56px;
+  display: flex;
+  align-items: center;
 }
 .sidebar-logo {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 700;
   color: var(--teal);
   letter-spacing: -0.01em;
@@ -645,6 +649,7 @@ const shellStyles = `
   .topbar-hamburger { display: none; }
   .sidebar {
     transform: translateX(0);
+    padding-top: 0; /* desktop: topbar starts at left:240, no overlap to clear */
   }
   .header-stack {
     left: 240px;

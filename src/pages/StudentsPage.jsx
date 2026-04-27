@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
 import { MTSS_TIERS, STUDENT_STATUSES, CONCERN_TYPES } from '../lib/constants';
@@ -314,13 +314,17 @@ function AddStudentModal({ open, onClose, counselorId }) {
 export default function StudentsPage() {
   const { counselor } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterGrade, setFilterGrade] = useState('');
-  const [filterTier, setFilterTier] = useState('');
-  const [filterStatus, setFilterStatus] = useState('active');
-  const [filterPermissionSlip, setFilterPermissionSlip] = useState('');
+  const [filterGrade, setFilterGrade] = useState(() => searchParams.get('grade') || '');
+  const [filterTier, setFilterTier] = useState(() => searchParams.get('tier') || '');
+  const [filterStatus, setFilterStatus] = useState(() => {
+    const s = searchParams.get('status');
+    return s === null ? 'active' : s;
+  });
+  const [filterPermissionSlip, setFilterPermissionSlip] = useState(() => searchParams.get('permission') || '');
   const [showAdd, setShowAdd] = useState(false);
   const [csvFile, setCsvFile] = useState(null);
   const [showImport, setShowImport] = useState(false);

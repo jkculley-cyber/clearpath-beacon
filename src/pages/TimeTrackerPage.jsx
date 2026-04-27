@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
 import { TIME_DOMAINS } from '../lib/constants';
@@ -577,7 +578,12 @@ function EntryModal({ open, onClose, counselorId, editEntry }) {
 /* ---- Main ---- */
 export default function TimeTrackerPage() {
   const { counselor } = useAuth();
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [searchParams] = useSearchParams();
+  const initialDate = (() => {
+    const q = searchParams.get('date');
+    return q && /^\d{4}-\d{2}-\d{2}$/.test(q) ? q : new Date().toISOString().slice(0, 10);
+  })();
+  const [selectedDate, setSelectedDate] = useState(initialDate);
   const [dayEntries, setDayEntries] = useState([]);
   const [weeklyData, setWeeklyData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
