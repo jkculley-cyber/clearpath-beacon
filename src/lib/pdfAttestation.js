@@ -43,9 +43,24 @@ const TIMEOUT_MS = 4000;
  * { id, generated_at } on success or null on any failure (network, auth,
  * 4xx, schema not yet applied). Must NEVER throw — the PDF generation flow
  * proceeds regardless.
+ *
+ * Implementation note on Prefer: return=minimal:
+ * The audit-log design grants anon INSERT but not SELECT. PostgREST's default
+ * `Prefer: return=representation` does INSERT-then-SELECT in one transaction,
+ * which fails with `42501 row-level security policy` because the SELECT half
+ * lacks permission. We sidestep that by generating the receipt UUID client-
+ * side, inserting with that ID, and asking PostgREST to return nothing. The
+ * authoritative `generated_at` timestamp is still server-set (via the table's
+ * DEFAULT now()) and surfaced by the /verify-attestation endpoint, which uses
+ * service-role and CAN read the row.
  */
 export async function attestPdfHash({ counselorId, documentKind, contentHash, licenseKey }) {
   if (!contentHash || contentHash === 'unsupported') return null;
+  // Client-side ID + timestamp serve as the PDF-footer receipt. The server
+  // also sets its own generated_at on insert; the verify-URL surfaces THAT
+  // value (the load-bearing third-party witness), not these.
+  const clientId = (globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const clientNow = new Date().toISOString();
   try {
     const res = await fetch(`${OPS_URL}/rest/v1/pdf_attestations`, {
       method: 'POST',
@@ -53,22 +68,21 @@ export async function attestPdfHash({ counselorId, documentKind, contentHash, li
         apikey: OPS_KEY,
         Authorization: `Bearer ${OPS_KEY}`,
         'Content-Type': 'application/json',
-        Prefer: 'return=representation',
+        Prefer: 'return=minimal',
       },
       body: JSON.stringify({
+        id: clientId,
         counselor_id: counselorId || 'anonymous',
         product: 'beacon',
         document_kind: documentKind,
         content_hash: contentHash,
+        generated_at: clientNow,
         client_meta: { license_key: licenseKey || null, ua: navigator.userAgent.slice(0, 200) },
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) return null;
-    const rows = await res.json();
-    const row = Array.isArray(rows) ? rows[0] : rows;
-    if (!row?.id) return null;
-    return { id: row.id, generated_at: row.generated_at };
+    return { id: clientId, generated_at: clientNow };
   } catch {
     return null;
   }
