@@ -104,4 +104,10 @@ self.addEventListener('message', (event) => {
       caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
     );
   }
+  // Cache-bust banner / VersionMonitor: when a new SW is installed and the
+  // page tells us "user clicked Refresh now," skip the wait so the new
+  // bundle takes over on next navigation. Standard PWA upgrade pattern.
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

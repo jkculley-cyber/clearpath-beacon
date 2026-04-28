@@ -268,8 +268,9 @@ export default function LocalSetupPage() {
               {licenseError && (
                 <div style={{ fontSize: 12, color: '#ef4444', marginTop: 4 }}>{licenseError}</div>
               )}
-              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
-                From your purchase confirmation email. Gives full access beyond the trial.
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <span>From your purchase confirmation email.</span>
+                <ForgotLicenseLink defaultEmail={email} />
               </div>
             </div>
           ) : (
@@ -356,3 +357,133 @@ const inputStyle = {
   width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid #d1d5db',
   fontSize: 14, outline: 'none', boxSizing: 'border-box',
 };
+
+/**
+ * Forgot-license recovery modal. Posts to clearpathedgroup.com/api/recover-license
+ * with the buyer's email. The endpoint queries ops Supabase product_licenses
+ * via service-role and emails the active key(s) via Resend. Always returns
+ * generic "if your email matches, you'll get an email" — anti-enumeration.
+ *
+ * Closes SCUTA's strongest competitive wedge from CC12 round 4: the lost-
+ * license + lost-backup permanent-data-loss scenario.
+ */
+function ForgotLicenseLink({ defaultEmail }) {
+  const [open, setOpen] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState(defaultEmail || '');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+
+  // Re-sync prefill when the parent's email field changes while modal is closed
+  useEffect(() => {
+    if (!open && defaultEmail && !recoveryEmail) setRecoveryEmail(defaultEmail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultEmail, open]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSending(true);
+    setError('');
+    try {
+      const res = await fetch('https://clearpathedgroup.com/api/recover-license', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: recoveryEmail.trim().toLowerCase() }),
+      });
+      if (res.ok) {
+        setSent(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data?.error || 'Could not send recovery email. Try again or email support@clearpathedgroup.com.');
+      }
+    } catch {
+      setError('Network error. Email support@clearpathedgroup.com if this keeps happening.');
+    }
+    setSending(false);
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        style={{ background: 'none', border: 'none', color: '#0d9488', cursor: 'pointer', fontWeight: 600, fontSize: 11, padding: 0, whiteSpace: 'nowrap' }}
+      >
+        Forgot your key?
+      </button>
+
+      {open && (
+        <div
+          onClick={() => !sending && setOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1500, padding: 16 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 14, maxWidth: 480, width: '100%', padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
+          >
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1a2332', margin: '0 0 6px' }}>Recover your license key</h3>
+            {!sent ? (
+              <>
+                <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 14px', lineHeight: 1.55 }}>
+                  Enter the email you used at purchase. We'll email any active license keys associated with that address. The email will only arrive if your address matches a real purchase — no error message either way (anti-enumeration).
+                </p>
+                <form onSubmit={handleSubmit}>
+                  <label style={{ ...labelStyle, marginTop: 0 }}>Purchase email</label>
+                  <input
+                    style={inputStyle}
+                    type="email"
+                    required
+                    value={recoveryEmail}
+                    onChange={(e) => setRecoveryEmail(e.target.value)}
+                    placeholder="e.g. you@district.edu"
+                  />
+                  {error && <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 8 }}>{error}</div>}
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+                    <button
+                      type="button"
+                      onClick={() => setOpen(false)}
+                      disabled={sending}
+                      style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontWeight: 600, fontSize: 13, cursor: sending ? 'wait' : 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={sending || !recoveryEmail.trim()}
+                      style={{
+                        padding: '10px 16px', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 13,
+                        background: sending || !recoveryEmail.trim() ? '#9ca3af' : '#0d9488',
+                        color: '#fff',
+                        cursor: sending || !recoveryEmail.trim() ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {sending ? 'Sending...' : 'Send recovery email'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: 13, color: '#1a2332', margin: '0 0 14px', lineHeight: 1.55 }}>
+                  If <strong>{recoveryEmail}</strong> matches a purchase, you'll receive an email with your license key shortly. Check your inbox (and spam folder). Then come back and paste the key into the License Key field.
+                </p>
+                <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 16px', lineHeight: 1.55 }}>
+                  Didn't get an email? Email <a href="mailto:support@clearpathedgroup.com" style={{ color: '#0d9488' }}>support@clearpathedgroup.com</a> with your name and school — we'll look it up.
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setOpen(false); setSent(false); }}
+                    style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: '#0d9488', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                  >
+                    Got it
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

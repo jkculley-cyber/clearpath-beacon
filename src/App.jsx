@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import AppShell from './components/layout/AppShell';
+import VersionMonitor from './components/VersionMonitor';
 
 /* ── Page imports ── */
 import DashboardPage from './pages/DashboardPage';
@@ -53,6 +54,8 @@ export default function App() {
   const { isLocalMode } = useAuth();
 
   return (
+    <>
+      <VersionMonitor />
     <Routes>
       {/* Public routes */}
       <Route path="/welcome" element={<LandingPage />} />
@@ -93,5 +96,6 @@ export default function App() {
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
