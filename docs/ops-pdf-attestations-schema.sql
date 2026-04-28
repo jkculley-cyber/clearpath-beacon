@@ -30,6 +30,11 @@ CREATE INDEX IF NOT EXISTS idx_pdf_att_counselor ON pdf_attestations(counselor_i
 -- holder can override the DEFAULT now() and insert a row with a fabricated
 -- past timestamp. This CHECK forces every inserted timestamp to be within
 -- ~5 minutes of server time, blocking backdated forgery from any role.
+--
+-- NOT VALID: only validate NEW inserts; grandfather existing rows. The
+-- constraint exists to prevent future forgery, not to retroactively reject
+-- attestations that were legitimately registered before the constraint
+-- existed (which would always be older than 5 min from now).
 ALTER TABLE pdf_attestations
   DROP CONSTRAINT IF EXISTS pdf_attestations_generated_at_recent;
 ALTER TABLE pdf_attestations
@@ -37,7 +42,8 @@ ALTER TABLE pdf_attestations
   CHECK (
     generated_at >= (now() - interval '5 minutes')
     AND generated_at <= (now() + interval '5 minutes')
-  );
+  )
+  NOT VALID;
 
 ALTER TABLE pdf_attestations ENABLE ROW LEVEL SECURITY;
 
