@@ -155,10 +155,26 @@ function hourLabel(hours, studentName) {
 /* ─── Parent + Admin notification drafts ─── */
 
 export function draftParentNotification({ trigger, studentName, when, counselorName, schoolName }) {
-  const dt = new Date(when || Date.now());
-  const dateStr = dt.toLocaleDateString();
-  const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const opener = `Hello,\n\nI'm reaching out today about ${studentName} regarding an incident at school on ${dateStr} at approximately ${timeStr}.`;
+  // The time the counselor SUBMITTED the form is not the time the incident
+  // occurred. We deliberately avoid printing a minute-level time-of-day on
+  // the parent email — it would misrepresent the incident time when the
+  // counselor logs after the fact, and parents don't need clinical-precision
+  // timestamps in a 'please call me' note. Precise timestamps are captured
+  // in the structured PDF documentation.
+  const incidentDt = when ? new Date(when) : null;
+  const validIncidentDt = incidentDt && !Number.isNaN(incidentDt.getTime()) ? incidentDt : null;
+  const now = new Date();
+  const sameDay = validIncidentDt
+    && validIncidentDt.getFullYear() === now.getFullYear()
+    && validIncidentDt.getMonth() === now.getMonth()
+    && validIncidentDt.getDate() === now.getDate();
+  // 'today' if the incident was today (which is the common case); a date if
+  // the counselor set 'Earlier than now' and the incident was on a previous
+  // school day.
+  const whenPhrase = sameDay || !validIncidentDt
+    ? 'today'
+    : `on ${validIncidentDt.toLocaleDateString()}`;
+  const opener = `Hello,\n\nI'm reaching out about ${studentName} regarding something that came up at school ${whenPhrase}.`;
   let body = '';
   if (trigger === 'suicide') {
     body = `\n\nDuring our conversation, ${studentName} shared concerns related to safety that I want to make sure you are aware of right away. I have completed a structured safety screening and worked with ${studentName} on a safety plan. I would like to schedule a brief phone call with you today or tomorrow at the latest to share details and discuss next steps, including connection to outside mental-health support.`;
@@ -173,12 +189,23 @@ export function draftParentNotification({ trigger, studentName, when, counselorN
   return opener + body + closer;
 }
 
-export function draftAdminNotification({ trigger, studentName, counselorName }) {
+export function draftAdminNotification({ trigger, studentName, counselorName, when }) {
   const triggerLabel = TRIGGER_TYPES.find((t) => t.key === trigger)?.label || 'crisis event';
+  const incidentDt = when ? new Date(when) : null;
+  const validIncident = incidentDt && !Number.isNaN(incidentDt.getTime());
+  // Two distinct timestamps in the admin note. Documented-at = right now (when
+  // the counselor sat down to log it). Incident-occurred = when the student
+  // event actually happened (from the workflow's "occurred_at" field). Mixing
+  // them caused parents/admins to read the documentation time as the incident
+  // time. Print both, labeled.
+  const incidentLine = validIncident
+    ? `Incident occurred: ${incidentDt.toLocaleString()}\n`
+    : '';
   return `${triggerLabel.toUpperCase()} — student notification\n\n` +
     `Student: ${studentName}\n` +
     `Counselor of record: ${counselorName || ''}\n` +
-    `Date/time: ${new Date().toLocaleString()}\n\n` +
+    incidentLine +
+    `Documented: ${new Date().toLocaleString()}\n\n` +
     `Per campus protocol, a structured ${triggerLabel.toLowerCase()} workflow has been completed and documented in Beacon. Documentation PDF available on request.\n\n` +
     `Action items:\n` +
     `- Parent contact: see crisis log\n` +

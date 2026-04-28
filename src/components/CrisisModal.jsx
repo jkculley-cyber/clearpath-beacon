@@ -130,7 +130,7 @@ export default function CrisisModal({ open, onClose, counselor }) {
         counselorName: counselor?.name,
         schoolName: counselor?.school_name || counselor?.school,
       }),
-      admin_draft: draftAdminNotification({ trigger: triggerKey, studentName, counselorName: counselor?.name }),
+      admin_draft: draftAdminNotification({ trigger: triggerKey, studentName, counselorName: counselor?.name, when: answers.occurred_at }),
       follow_up_schedule: followUps.map((f) => ({ label: f.title, due_at: f.due_at })),
       created_at: createdAtIso,
     };
@@ -624,7 +624,7 @@ function ReviewStage({ workflow, answers, studentName, counselor, triggerKey, on
     schoolName: counselor?.school_name || counselor?.school,
   }), [triggerKey, studentName, answers.occurred_at, counselor]);
 
-  const adminDraft = useMemo(() => draftAdminNotification({ trigger: triggerKey, studentName, counselorName: counselor?.name }), [triggerKey, studentName, counselor]);
+  const adminDraft = useMemo(() => draftAdminNotification({ trigger: triggerKey, studentName, counselorName: counselor?.name, when: answers.occurred_at }), [triggerKey, studentName, counselor, answers.occurred_at]);
 
   const copyText = (text) => {
     navigator.clipboard?.writeText(text).catch(() => {});
