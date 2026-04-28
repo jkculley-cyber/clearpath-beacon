@@ -232,16 +232,64 @@ export default function CrisisModal({ open, onClose, counselor }) {
 }
 
 /* ─── Picker stage ─── */
+
+// Small Levenshtein implementation — used to surface near-matches the
+// substring filter would miss. Crisis-mode counselors typing "Deshaun"
+// when "DeShawn Williams" exists in the roster should see a "did you mean"
+// suggestion before they're offered the "+ Add new student" option.
+// Runs O(n*m) over typed input vs. each student name; fine for caseloads
+// under a few hundred names.
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const v0 = new Array(b.length + 1);
+  const v1 = new Array(b.length + 1);
+  for (let i = 0; i <= b.length; i++) v0[i] = i;
+  for (let i = 0; i < a.length; i++) {
+    v1[0] = i + 1;
+    for (let j = 0; j < b.length; j++) {
+      const cost = a[i] === b[j] ? 0 : 1;
+      v1[j + 1] = Math.min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost);
+    }
+    for (let j = 0; j <= b.length; j++) v0[j] = v1[j];
+  }
+  return v1[b.length];
+}
+
 function PickerStage({ studentId, setStudentId, studentSearch, setStudentSearch, filteredStudents, triggerKey, setTriggerKey, startWorkflow, counselor, students, setStudents }) {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
 
   const trimmed = (studentSearch || '').trim();
+  const trimmedLower = trimmed.toLowerCase();
   const exactMatch = students.find((s) => {
     const name = s.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s.name || '');
-    return name.toLowerCase() === trimmed.toLowerCase();
+    return name.toLowerCase() === trimmedLower;
   });
+
+  // Fuzzy "did you mean" suggestions — catch typos the substring filter misses.
+  // Threshold scales with name length so short names ("Sam" vs "Sami") aren't
+  // over-eager but longer names ("DeShawn Williams") still catch reasonable typos.
+  const fuzzyHits = trimmed.length >= 3 && !exactMatch ? students
+    .map((s) => {
+      const name = s.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s.name || '');
+      const nameLower = name.toLowerCase();
+      // Already shown via substring match? Skip it from fuzzy list.
+      if (nameLower.includes(trimmedLower)) return null;
+      // Distance to whole name OR to first-name-only (catches "Deshaun" vs "DeShawn Williams")
+      const firstLower = (s.first_name || name.split(/\s+/)[0] || '').toLowerCase();
+      const dist = Math.min(levenshtein(trimmedLower, nameLower), levenshtein(trimmedLower, firstLower));
+      const tolerance = Math.min(2, Math.floor(trimmed.length / 3));
+      if (dist <= tolerance && dist > 0) return { student: s, name, dist };
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, 3) : [];
+
   const showNewStudentOption = trimmed.length >= 2 && !studentId && !exactMatch;
+  const hasAnyMatch = filteredStudents.length > 0 || fuzzyHits.length > 0;
 
   const createNewStudent = async () => {
     if (!counselor?.id || !trimmed) return;
@@ -288,7 +336,7 @@ function PickerStage({ studentId, setStudentId, studentSearch, setStudentSearch,
           value={studentSearch}
           onChange={(e) => { setStudentSearch(e.target.value); setStudentId(''); }}
         />
-        {trimmed && !studentId && (filteredStudents.length > 0 || showNewStudentOption) && (
+        {trimmed && !studentId && (filteredStudents.length > 0 || fuzzyHits.length > 0 || showNewStudentOption) && (
           <div style={dropdown}>
             {filteredStudents.slice(0, 6).map((s) => {
               const name = s.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s.name || '');
@@ -302,18 +350,40 @@ function PickerStage({ studentId, setStudentId, studentSearch, setStudentSearch,
                 </div>
               );
             })}
+            {fuzzyHits.length > 0 && (
+              <div style={{ padding: '6px 12px', fontSize: 11, color: '#92400e', background: '#fffbeb', borderTop: filteredStudents.length > 0 ? '1px solid #fde68a' : 'none', borderBottom: '1px solid #fde68a', fontWeight: 600 }}>
+                Did you mean one of these? Click before adding a duplicate.
+              </div>
+            )}
+            {fuzzyHits.map(({ student: s, name }) => (
+              <div
+                key={`fuzzy-${s.id}`}
+                onClick={() => { setStudentId(s.id); setStudentSearch(name); }}
+                style={{ ...dropdownItem, background: '#fffbeb' }}
+              >
+                <span style={{ color: '#92400e' }}>{name}</span>
+                {s.grade && <span style={{ color: '#9ca3af', fontSize: 12 }}> Grade {s.grade}</span>}
+              </div>
+            ))}
             {showNewStudentOption && (
               <div
                 onClick={createNewStudent}
                 style={{
                   ...dropdownItem,
-                  borderTop: filteredStudents.length > 0 ? '1px solid #e5e7eb' : 'none',
-                  background: '#f0fdfa',
-                  color: '#0f766e',
-                  fontWeight: 600,
+                  borderTop: hasAnyMatch ? '1px solid #e5e7eb' : 'none',
+                  // De-emphasize when matches exist — counselor should choose
+                  // an existing student over creating a duplicate. When NO
+                  // matches exist (true walk-in), keep the option prominent.
+                  background: hasAnyMatch ? '#fff' : '#f0fdfa',
+                  color: hasAnyMatch ? '#6b7280' : '#0f766e',
+                  fontWeight: hasAnyMatch ? 500 : 700,
+                  fontSize: hasAnyMatch ? 12 : 14,
+                  padding: hasAnyMatch ? '8px 12px' : '10px 12px',
                 }}
               >
-                {creating ? 'Adding…' : <>+ Add new student: <span style={{ fontWeight: 700 }}>"{trimmed}"</span></>}
+                {creating ? 'Adding…' : hasAnyMatch
+                  ? <>None of the matches above? + Add as new: <span style={{ fontWeight: 600 }}>"{trimmed}"</span></>
+                  : <>+ Add new student: <span style={{ fontWeight: 700 }}>"{trimmed}"</span></>}
               </div>
             )}
           </div>

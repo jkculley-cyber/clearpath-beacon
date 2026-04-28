@@ -76,20 +76,23 @@ export function stampIntegrityFooter(doc, { hash, docKind = 'Beacon document', a
     doc.text(`${docKind} | Generated ${generated} | Beacon`, 14, ph - 4);
     doc.text(`Page ${i}/${pageCount}`, pageW - 14, ph - 4, { align: 'right' });
 
-    // Hash line (~12pt above bottom)
+    // Hash line
     if (hash && hash !== 'unsupported') {
       doc.text(`SHA-256: ${hash}`, 14, ph - 12);
     } else {
       doc.text('SHA-256: unavailable in this browser', 14, ph - 12);
     }
 
-    // Attestation line (~20pt above bottom) — third-party witness via the
-    // ops Supabase pdf_attestations table. The reviewer visits the verify
-    // URL with the hash to confirm an attestation row exists.
+    // Attestation line — registered in the third-party log at the time of
+    // first PDF generation. The receipt below is the CLIENT-side reference
+    // (printed at gen time on this device); the SERVER's own generated_at
+    // timestamp is the authoritative chain-of-custody anchor and is
+    // surfaced by the verify URL. The two timestamps will match within a
+    // second under normal conditions; the verify URL is the source of truth.
     if (attest?.id) {
-      const attLabel = `Attestation ${attest.id.slice(0, 8)} | logged ${attest.generated_at}`;
+      const attLabel = `Attestation receipt ${attest.id.slice(0, 8)} | client-recorded ${attest.generated_at}`;
       doc.text(attLabel, 14, ph - 20);
-      doc.text('Verify: clearpathedgroup.com/verify-attestation', pageW - 14, ph - 20, { align: 'right' });
+      doc.text('Authoritative timestamp: verify.clearpathedgroup.com', pageW - 14, ph - 20, { align: 'right' });
     } else {
       doc.text('Attestation: offline at generation time (skipped)', 14, ph - 20);
     }

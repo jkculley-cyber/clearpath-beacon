@@ -1701,9 +1701,25 @@ function BackupFolderPicker() {
   }, []);
 
   if (!supported) {
+    // Detect Safari vs Firefox vs other so we can recommend the right
+    // alternative. Firefox lags on the API; Safari refuses on principle.
+    const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '');
+    const isSafari = /Safari/.test(ua) && !/Chrome|CriOS|Edg|EdgA/.test(ua);
+    const isFirefox = /Firefox|FxiOS/.test(ua);
+    const browserName = isSafari ? 'Safari' : isFirefox ? 'Firefox' : 'this browser';
     return (
-      <div style={{ padding: 12, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
-        <strong>Off-device sync:</strong> backups land in your Downloads folder. Move the file to OneDrive / Google Drive manually, or open Beacon in Chrome / Edge to enable folder-pick + auto-save.
+      <div style={{ padding: 14, background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 18, lineHeight: 1, marginTop: 1 }}>⚠</span>
+          <div style={{ fontSize: 12, color: '#78350f', lineHeight: 1.55 }}>
+            <strong style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
+              Backup-folder feature isn't supported in {browserName}.
+            </strong>
+            Beacon's auto-save-to-OneDrive feature uses the File System Access API, which is currently only available in Chromium-based browsers (Chrome, Edge, Brave, Opera). In {browserName}, your Friday auto-backup will land in your standard <strong>Downloads folder</strong> as an encrypted <code>.bcnbkp</code> file — you'll need to move it to your OneDrive / Google Drive folder manually.
+            <br /><br />
+            <strong>Recommended:</strong> open Beacon in Chrome or Edge and pick a folder once. The OS-level OneDrive client will then sync each Friday backup off-device automatically.
+          </div>
+        </div>
       </div>
     );
   }
@@ -1786,13 +1802,13 @@ function BackupFolderPicker() {
                 border: lastSyncDisplay.stale ? '1px solid #fde68a' : 'none',
               }} title={`Last successful write to ${folderName}: ${lastSyncDisplay.abs}`}>
                 {lastSyncDisplay.stale && <span style={{ marginRight: 6 }}>⚠</span>}
-                <strong>Last off-device sync:</strong> {lastSyncDisplay.label} ({lastSyncDisplay.abs})
-                {lastSyncDisplay.stale && <span> — your sync chain may be paused. Confirm OneDrive / Drive is signed in.</span>}
+                <strong>Last successful local write:</strong> {lastSyncDisplay.label} ({lastSyncDisplay.abs}). Verify the OneDrive / Drive icon shows the file as synced — Beacon can't confirm cloud upload directly.
+                {lastSyncDisplay.stale && <span> Your write chain may be paused.</span>}
               </div>
             )}
             {!lastSyncDisplay && (
               <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8, lineHeight: 1.5 }}>
-                <strong>Last off-device sync:</strong> none yet — the first backup will write here.
+                <strong>Last successful local write:</strong> none yet — the first backup will write here. Beacon confirms the file landed in the folder; you should still verify OneDrive / Drive shows it synced.
               </div>
             )}
             <div style={{ display: 'flex', gap: 8 }}>

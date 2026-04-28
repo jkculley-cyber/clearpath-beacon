@@ -26,6 +26,19 @@ CREATE TABLE IF NOT EXISTS pdf_attestations (
 CREATE INDEX IF NOT EXISTS idx_pdf_att_hash ON pdf_attestations(content_hash);
 CREATE INDEX IF NOT EXISTS idx_pdf_att_counselor ON pdf_attestations(counselor_id, generated_at DESC);
 
+-- Lawyer Q29c (Round 4): even with anon-INSERT-only RLS, a service-role-key
+-- holder can override the DEFAULT now() and insert a row with a fabricated
+-- past timestamp. This CHECK forces every inserted timestamp to be within
+-- ~5 minutes of server time, blocking backdated forgery from any role.
+ALTER TABLE pdf_attestations
+  DROP CONSTRAINT IF EXISTS pdf_attestations_generated_at_recent;
+ALTER TABLE pdf_attestations
+  ADD CONSTRAINT pdf_attestations_generated_at_recent
+  CHECK (
+    generated_at >= (now() - interval '5 minutes')
+    AND generated_at <= (now() + interval '5 minutes')
+  );
+
 ALTER TABLE pdf_attestations ENABLE ROW LEVEL SECURITY;
 
 -- Anon may INSERT only. No SELECT, no UPDATE, no DELETE for anon.

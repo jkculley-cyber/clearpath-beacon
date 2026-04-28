@@ -76,7 +76,12 @@ export async function attestPdfHash({ counselorId, documentKind, contentHash, li
         product: 'beacon',
         document_kind: documentKind,
         content_hash: contentHash,
-        generated_at: clientNow,
+        // generated_at intentionally omitted — let the server's DEFAULT now()
+        // set it. This way a client with a bad clock can't accidentally fail
+        // the CHECK constraint, AND the timestamp is unforgeable from the
+        // client side. clientNow below is used only for the in-document
+        // receipt printed on the PDF footer; the verify URL surfaces the
+        // server's authoritative value.
         client_meta: { license_key: licenseKey || null, ua: navigator.userAgent.slice(0, 200) },
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
