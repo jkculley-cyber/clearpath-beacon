@@ -33,7 +33,7 @@ export default function LandingPage() {
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 32 }}>
           <a href="/setup" style={ctaPrimary}>Start Free 14-Day Trial &rarr;</a>
-          <a href="#" onClick={(e) => { e.preventDefault(); window.location.href = localStorage.getItem('beacon_local_counselor_id') ? '/' : '/setup'; }} style={ctaSecondary}>Already have an account? Sign in</a>
+          <a href="#" onClick={(e) => { e.preventDefault(); window.location.href = localStorage.getItem('beacon_local_counselor_id') ? '/' : '/setup?signin=1'; }} style={ctaSecondary}>Already have an account? Sign in</a>
         </div>
         <p style={{ fontSize: 13, color: '#6b7280', marginTop: 16, textAlign: 'center' }}>
           No credit card needed &middot; $79/school year after trial ($8/month) &middot; All data stays on your device
