@@ -62,10 +62,11 @@ const SUICIDE_STEPS = [
   { key: 'access',       label: 'Does the student have access to lethal means at home / school? (firearms, medications, etc.)', type: 'long' },
   { key: 'protective',   label: 'Protective factors (reasons for living the student named, support people, prior treatment, etc.)', type: 'long' },
   { key: 'risk_level',   label: 'Counselor-determined risk level',                          type: 'select', required: true, options: ['Low', 'Moderate', 'High', 'Imminent danger'] },
-  { key: 'admin_action', label: 'Action taken (admin notified, parent contacted, mobile crisis dispatched, transported, etc.)', type: 'long', required: true },
   { key: 'parent_notified', label: 'Parent/guardian notified?',                              type: 'yn_detail', required: true, detailLabel: 'When + how + who you spoke to' },
   { key: 'admin_notified',  label: 'Administrator notified?',                                type: 'yn_detail', required: true, detailLabel: 'Who + when' },
+  { key: 'other_actions', label: 'Other actions (mobile crisis dispatched, transported, law enforcement, hospital, etc.) — leave blank if none', type: 'long' },
   { key: 'safety_plan_completed', label: 'Safety plan completed with student?',              type: 'yn_detail', detailLabel: 'Summary of safety plan' },
+  { key: 'disposition',  label: 'Where did the student go after the screen? (class, home with parent, hospital, etc.)', type: 'short' },
 ];
 
 const THREAT_STEPS = [

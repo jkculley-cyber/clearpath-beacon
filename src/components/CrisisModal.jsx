@@ -183,10 +183,12 @@ export default function CrisisModal({ open, onClose, counselor }) {
             studentSearch={studentSearch}
             setStudentSearch={setStudentSearch}
             students={students}
+            setStudents={setStudents}
             filteredStudents={filteredStudents}
             triggerKey={triggerKey}
             setTriggerKey={setTriggerKey}
             startWorkflow={startWorkflow}
+            counselor={counselor}
           />
         )}
 
@@ -230,7 +232,48 @@ export default function CrisisModal({ open, onClose, counselor }) {
 }
 
 /* ─── Picker stage ─── */
-function PickerStage({ studentId, setStudentId, studentSearch, setStudentSearch, filteredStudents, triggerKey, setTriggerKey, startWorkflow }) {
+function PickerStage({ studentId, setStudentId, studentSearch, setStudentSearch, filteredStudents, triggerKey, setTriggerKey, startWorkflow, counselor, students, setStudents }) {
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+
+  const trimmed = (studentSearch || '').trim();
+  const exactMatch = students.find((s) => {
+    const name = s.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s.name || '');
+    return name.toLowerCase() === trimmed.toLowerCase();
+  });
+  const showNewStudentOption = trimmed.length >= 2 && !studentId && !exactMatch;
+
+  const createNewStudent = async () => {
+    if (!counselor?.id || !trimmed) return;
+    setCreating(true);
+    setCreateError('');
+    try {
+      const parts = trimmed.split(/\s+/);
+      const first = parts[0] || trimmed;
+      const last = parts.slice(1).join(' ') || '';
+      const record = {
+        counselor_id: counselor.id,
+        name: trimmed,
+        first_name: first,
+        last_name: last,
+        tier: 1,
+        status: 'active',
+        created_at: new Date().toISOString(),
+      };
+      const { data, error } = await db.insert('students', record);
+      if (error) throw error;
+      const newStudent = data || record;
+      // Inserted-row may not echo back depending on adapter; ensure id is set
+      if (!newStudent.id && record.id) newStudent.id = record.id;
+      setStudents((prev) => [...prev, newStudent]);
+      setStudentId(newStudent.id);
+      // Keep the typed name in the search field as the selected display
+    } catch (err) {
+      setCreateError(err?.message || 'Could not add student.');
+    }
+    setCreating(false);
+  };
+
   return (
     <>
       <p style={muted}>
@@ -241,13 +284,13 @@ function PickerStage({ studentId, setStudentId, studentSearch, setStudentSearch,
       <div style={{ position: 'relative', marginBottom: 14 }}>
         <input
           style={fieldInput}
-          placeholder="Search by name..."
+          placeholder="Type a name — search existing or add new..."
           value={studentSearch}
           onChange={(e) => { setStudentSearch(e.target.value); setStudentId(''); }}
         />
-        {studentSearch && !studentId && filteredStudents.length > 0 && (
+        {trimmed && !studentId && (filteredStudents.length > 0 || showNewStudentOption) && (
           <div style={dropdown}>
-            {filteredStudents.slice(0, 8).map((s) => {
+            {filteredStudents.slice(0, 6).map((s) => {
               const name = s.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s.name || '');
               return (
                 <div
@@ -259,7 +302,24 @@ function PickerStage({ studentId, setStudentId, studentSearch, setStudentSearch,
                 </div>
               );
             })}
+            {showNewStudentOption && (
+              <div
+                onClick={createNewStudent}
+                style={{
+                  ...dropdownItem,
+                  borderTop: filteredStudents.length > 0 ? '1px solid #e5e7eb' : 'none',
+                  background: '#f0fdfa',
+                  color: '#0f766e',
+                  fontWeight: 600,
+                }}
+              >
+                {creating ? 'Adding…' : <>+ Add new student: <span style={{ fontWeight: 700 }}>"{trimmed}"</span></>}
+              </div>
+            )}
           </div>
+        )}
+        {createError && (
+          <div style={{ marginTop: 6, fontSize: 12, color: '#b91c1c' }}>{createError}</div>
         )}
       </div>
 
