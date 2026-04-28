@@ -36,7 +36,7 @@ export default function LandingPage() {
           <a href="#" onClick={(e) => { e.preventDefault(); window.location.href = localStorage.getItem('beacon_local_counselor_id') ? '/' : '/setup?signin=1'; }} style={ctaSecondary}>Already have an account? Sign in</a>
         </div>
         <p style={{ fontSize: 13, color: '#6b7280', marginTop: 16, textAlign: 'center' }}>
-          No credit card needed &middot; $79/school year after trial ($8/month) &middot; All data stays on your device
+          No credit card needed &middot; $79/year after trial ($8/month) &middot; All data stays on your device
         </p>
       </div>
 

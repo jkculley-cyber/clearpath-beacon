@@ -63,7 +63,7 @@
 - **Default mode:** Local (on-device, no login needed)
 - **License required:** Enter key during setup or in Settings
 - **Kim's test key:** BCN-YNJRVF-KRC3 (active until 2027-06-01)
-- **Pricing:** $8/mo or $79/school year
+- **Pricing:** $8/mo or $79/year
 - **License management:** ops Supabase Table Editor → product_licenses table
 
 ---
