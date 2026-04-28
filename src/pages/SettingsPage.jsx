@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { db, exportLocalBackup, importLocalBackup } from '../lib/db';
 import { encryptBackup, decryptBackup } from '../lib/backupCrypto';
-import { saveBackupToHandle, pickAndPersistBackupFolder, getBackupFolderName, clearBackupFolder, isFsAccessSupported } from '../lib/backupFolder';
+import { saveBackupToHandle, pickBackupFolder, persistPickedBackupFolder, getBackupFolderName, clearBackupFolder, isFsAccessSupported, getLastOffDeviceSync } from '../lib/backupFolder';
 import { hasSampleData, clearSampleData } from '../lib/seedSampleData';
 import { parseIcs } from '../lib/calendarImport';
 import {
@@ -1680,10 +1680,24 @@ function BackupFolderPicker() {
   const [supported, setSupported] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [lastSync, setLastSync] = useState(null);
+  // pendingHandle holds a folder the user just picked but has not yet
+  // confirmed past the consumer-cloud guardrail. When set, we show the
+  // confirm modal; on confirm we persist; on cancel we drop it.
+  const [pendingHandle, setPendingHandle] = useState(null);
 
   useEffect(() => {
     setSupported(isFsAccessSupported());
     getBackupFolderName().then((n) => setFolderName(n));
+    setLastSync(getLastOffDeviceSync());
+  }, []);
+
+  // Refresh "last sync" timestamp on tab focus so a Friday auto-backup that
+  // ran on another tab while Settings was open shows up here.
+  useEffect(() => {
+    const onFocus = () => setLastSync(getLastOffDeviceSync());
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   if (!supported) {
@@ -1698,12 +1712,31 @@ function BackupFolderPicker() {
     setBusy(true);
     setError('');
     try {
-      const name = await pickAndPersistBackupFolder();
-      setFolderName(name);
+      const handle = await pickBackupFolder();
+      // Don't persist yet — show the consumer-cloud confirm gate first.
+      setPendingHandle(handle);
     } catch (err) {
       if (err?.name !== 'AbortError') setError(err?.message || 'Could not set folder.');
     }
     setBusy(false);
+  };
+
+  const confirmPending = async () => {
+    if (!pendingHandle) return;
+    setBusy(true);
+    try {
+      const name = await persistPickedBackupFolder(pendingHandle);
+      setFolderName(name);
+      setPendingHandle(null);
+    } catch (err) {
+      setError(err?.message || 'Could not save folder choice.');
+    }
+    setBusy(false);
+  };
+
+  const cancelPending = () => {
+    setPendingHandle(null);
+    setError('');
   };
 
   const clear = async () => {
@@ -1711,36 +1744,174 @@ function BackupFolderPicker() {
     setFolderName(null);
   };
 
+  // Format "last sync" relatively for the common case, absolute for stale.
+  // The "now" reference is captured at render — close enough for human-readable
+  // age labels; absolute timestamp also shown for precision.
+  let lastSyncDisplay = null;
+  if (lastSync) {
+    // eslint-disable-next-line react-hooks/purity
+    const ageMs = Date.now() - new Date(lastSync).getTime();
+    const ageMin = Math.floor(ageMs / 60000);
+    const ageDay = Math.floor(ageMs / 86400000);
+    let label;
+    let stale = false;
+    if (ageMin < 2) label = 'just now';
+    else if (ageMin < 60) label = `${ageMin} min ago`;
+    else if (ageMin < 1440) label = `${Math.floor(ageMin / 60)} hr ago`;
+    else if (ageDay < 14) label = `${ageDay} day${ageDay === 1 ? '' : 's'} ago`;
+    else { label = `${ageDay} days ago`; stale = true; }
+    lastSyncDisplay = { label, abs: new Date(lastSync).toLocaleString(), stale };
+  }
+
   return (
-    <div style={{ padding: 12, background: folderName ? '#f0fdfa' : '#f9fafb', border: `1px solid ${folderName ? '#99f6e4' : '#e5e7eb'}`, borderRadius: 8, marginBottom: 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2332', marginBottom: 4 }}>
-        Backup save location
-      </div>
-      {folderName ? (
-        <>
-          <div style={{ fontSize: 12, color: '#0f766e', marginBottom: 8, lineHeight: 1.5 }}>
-            Backups will save silently to <strong>{folderName}</strong>. If this is a OneDrive / Google Drive / iCloud folder, your OS will sync each backup off-device.
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+    <>
+      <div style={{ padding: 12, background: folderName ? '#f0fdfa' : '#f9fafb', border: `1px solid ${folderName ? '#99f6e4' : '#e5e7eb'}`, borderRadius: 8, marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2332', marginBottom: 4 }}>
+          Backup save location
+        </div>
+        {folderName ? (
+          <>
+            <div style={{ fontSize: 12, color: '#0f766e', marginBottom: 8, lineHeight: 1.5 }}>
+              Backups will save silently to <strong>{folderName}</strong>. If this is a district-managed OneDrive / Google Drive folder, your OS will sync each backup off-device.
+            </div>
+            {lastSyncDisplay && (
+              <div style={{
+                fontSize: 11,
+                color: lastSyncDisplay.stale ? '#b45309' : '#0f766e',
+                marginBottom: 8,
+                lineHeight: 1.5,
+                background: lastSyncDisplay.stale ? '#fef3c7' : 'transparent',
+                padding: lastSyncDisplay.stale ? '6px 10px' : 0,
+                borderRadius: 6,
+                border: lastSyncDisplay.stale ? '1px solid #fde68a' : 'none',
+              }} title={`Last successful write to ${folderName}: ${lastSyncDisplay.abs}`}>
+                {lastSyncDisplay.stale && <span style={{ marginRight: 6 }}>⚠</span>}
+                <strong>Last off-device sync:</strong> {lastSyncDisplay.label} ({lastSyncDisplay.abs})
+                {lastSyncDisplay.stale && <span> — your sync chain may be paused. Confirm OneDrive / Drive is signed in.</span>}
+              </div>
+            )}
+            {!lastSyncDisplay && (
+              <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8, lineHeight: 1.5 }}>
+                <strong>Last off-device sync:</strong> none yet — the first backup will write here.
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={choose} disabled={busy}>
+                Change folder
+              </button>
+              <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={clear} disabled={busy}>
+                Clear (use Downloads)
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px', lineHeight: 1.5 }}>
+              Pick a folder once (a district-managed OneDrive or Google Drive folder is ideal) and Beacon will save the Friday auto-backup there silently. Without this, backups go to your Downloads folder.
+            </p>
             <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={choose} disabled={busy}>
-              Change folder
+              {busy ? 'Choosing...' : 'Choose backup folder...'}
             </button>
-            <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={clear} disabled={busy}>
-              Clear (use Downloads)
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px', lineHeight: 1.5 }}>
-            Pick a folder once (try a OneDrive or Google Drive folder) and Beacon will save the Friday auto-backup there silently. Without this, backups go to your Downloads folder.
-          </p>
-          <button className="btn btn-outline" style={{ fontSize: 12 }} onClick={choose} disabled={busy}>
-            {busy ? 'Choosing...' : 'Choose backup folder...'}
-          </button>
-          {error && <div style={{ marginTop: 6, fontSize: 11, color: '#b91c1c' }}>{error}</div>}
-        </>
+            {error && <div style={{ marginTop: 6, fontSize: 11, color: '#b91c1c' }}>{error}</div>}
+          </>
+        )}
+      </div>
+
+      {pendingHandle && (
+        <CloudConfirmGate
+          folderName={pendingHandle.name}
+          onConfirm={confirmPending}
+          onCancel={cancelPending}
+          busy={busy}
+        />
       )}
+    </>
+  );
+}
+
+/**
+ * Consumer-cloud guardrail. Modal that fires between folder pick and handle
+ * persistence. Closes adversary Q28 from the CC12 round-3 audit:
+ *
+ *   "Counselor picks ~/OneDrive/Beacon-Backups/. OneDrive syncs to Microsoft.
+ *    Microsoft's enterprise terms require an addendum for FERPA. The
+ *    counselor's PERSONAL OneDrive consumer account has neither. Did the
+ *    vendor put a single line of UI in front of pick-a-folder warning her
+ *    not to point this at consumer cloud storage?"
+ *
+ * Now there's a line of UI.
+ */
+function CloudConfirmGate({ folderName, onConfirm, onCancel, busy }) {
+  const [acknowledged, setAcknowledged] = useState(false);
+  return (
+    <div
+      onClick={onCancel}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1500, padding: 16 }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: '#fff', borderRadius: 14, maxWidth: 520, width: '100%', padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 20 }}>⚠</div>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1a2332', margin: '0 0 4px' }}>Confirm this is a district-managed location</h3>
+            <p style={{ fontSize: 13, color: '#6b7280', margin: 0, lineHeight: 1.55 }}>You picked <strong style={{ color: '#1a2332' }}>{folderName}</strong>. Beacon will write your encrypted backup file here every Friday.</p>
+          </div>
+        </div>
+
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 14, marginBottom: 14, fontSize: 13, color: '#78350f', lineHeight: 1.55 }}>
+          Even though Beacon backups are AES-GCM encrypted, the file inherits whatever sync agreement is attached to this folder. Personal cloud accounts (free OneDrive, iCloud, personal Google Drive) <strong>do not</strong> include FERPA-addendum agreements your district has negotiated. Putting student data there is a compliance gap, encrypted or not.
+        </div>
+
+        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 12, color: '#374151', lineHeight: 1.6 }}>
+          <strong style={{ color: '#1a2332' }}>Acceptable folders:</strong>
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+            <li>OneDrive folder under your district's <strong>Microsoft 365 for Education</strong> tenant</li>
+            <li>Google Drive folder under your district's <strong>Google Workspace for Education</strong> tenant</li>
+            <li>A purely local folder that does <strong>not</strong> sync anywhere</li>
+          </ul>
+          <strong style={{ color: '#1a2332', display: 'block', marginTop: 8 }}>Not acceptable:</strong>
+          <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+            <li>Personal OneDrive / iCloud / Google Drive consumer accounts</li>
+            <li>Dropbox / Box / any third party without a signed DPA with your district</li>
+          </ul>
+        </div>
+
+        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', marginBottom: 16, fontSize: 13, color: '#1a2332', lineHeight: 1.55 }}>
+          <input
+            type="checkbox"
+            checked={acknowledged}
+            onChange={(e) => setAcknowledged(e.target.checked)}
+            style={{ marginTop: 3, flexShrink: 0 }}
+          />
+          <span>I confirm <strong>{folderName}</strong> is a district-managed location (or a folder that doesn't sync anywhere), and I understand that placing student data in a personal cloud account would be a compliance violation regardless of encryption.</span>
+        </label>
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            style={{ padding: '10px 18px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontWeight: 600, fontSize: 13, cursor: busy ? 'wait' : 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!acknowledged || busy}
+            style={{
+              padding: '10px 18px', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 13,
+              background: acknowledged && !busy ? '#0d9488' : '#9ca3af',
+              color: '#fff',
+              cursor: acknowledged && !busy ? 'pointer' : 'not-allowed',
+            }}
+          >
+            {busy ? 'Saving...' : 'Save folder choice'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

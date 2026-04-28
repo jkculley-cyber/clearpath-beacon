@@ -22,6 +22,16 @@ const HANDLE_DB = 'beacon-fs';
 const HANDLE_STORE = 'handles';
 const HANDLE_KEY = 'backup-folder';
 
+// Tracks the last successful silent write to the picked folder. Surfaces in
+// Settings so the counselor can confirm her OneDrive / Drive sync chain is
+// actually flowing — closes Marcia's "OneDrive paused and I'd never know" gap.
+const LAST_OFFDEVICE_SYNC_KEY = 'beacon_last_offdevice_sync';
+
+// Marks that the counselor has acknowledged the consumer-cloud-vs-district-cloud
+// guardrail for the CURRENT folder name. We re-prompt on folder change so the
+// confirmation is tied to the specific folder, not granted permanently.
+const CLOUD_ACK_KEY = 'beacon_backup_folder_cloud_ack';
+
 export function isFsAccessSupported() {
   return typeof window !== 'undefined'
     && typeof window.showDirectoryPicker === 'function';
@@ -73,10 +83,13 @@ async function deleteHandle() {
 }
 
 /**
- * Open the system folder picker, store the chosen directory handle, and
- * return its display name. Throws if the user cancels.
+ * Open the system folder picker and request readwrite permission, but DO NOT
+ * persist yet. Returns the picked handle so the UI can show a confirm gate
+ * (consumer-cloud-vs-district-cloud guardrail) before storing it.
+ *
+ * Throws on user cancel or permission denial.
  */
-export async function pickAndPersistBackupFolder() {
+export async function pickBackupFolder() {
   if (!isFsAccessSupported()) {
     throw new Error('Your browser does not support choosing a backup folder. Use Chrome, Edge, Brave, or Opera, or fall back to standard Downloads.');
   }
@@ -85,13 +98,42 @@ export async function pickAndPersistBackupFolder() {
     mode: 'readwrite',
     startIn: 'documents',
   });
-  // Confirm we actually have readwrite permission
   const perm = await handle.requestPermission({ mode: 'readwrite' });
   if (perm !== 'granted') {
     throw new Error('Read-write permission was not granted on that folder.');
   }
+  return handle;
+}
+
+/**
+ * Persist a previously-picked handle. Call this AFTER the consumer-cloud
+ * confirm gate has been satisfied. Records the cloud-acknowledgment marker
+ * so the gate doesn't re-fire for this folder.
+ */
+export async function persistPickedBackupFolder(handle) {
+  if (!handle) throw new Error('No folder handle to persist.');
   await putHandle(handle);
+  // Mark cloud-acknowledgment for this exact folder name so a folder swap
+  // re-prompts. Folder name isn't a perfect identity (two different OneDrive
+  // accounts could share the name "Beacon-Backups"), but it's the best signal
+  // FileSystemDirectoryHandle exposes without requesting elevated APIs.
+  try {
+    localStorage.setItem(CLOUD_ACK_KEY, JSON.stringify({
+      folder: handle.name,
+      acknowledged_at: new Date().toISOString(),
+    }));
+  } catch { /* private mode */ }
   return handle.name;
+}
+
+/**
+ * Backward-compat — picks AND persists with no confirm gate. Kept for any
+ * caller that doesn't need to inject the cloud-confirm modal. Prefer the
+ * pickBackupFolder + persistPickedBackupFolder pair.
+ */
+export async function pickAndPersistBackupFolder() {
+  const handle = await pickBackupFolder();
+  return persistPickedBackupFolder(handle);
 }
 
 /**
@@ -113,6 +155,15 @@ export async function getBackupFolderName() {
 
 export async function clearBackupFolder() {
   await deleteHandle();
+  // Drop the cloud acknowledgment too — next folder gets a fresh confirm.
+  try { localStorage.removeItem(CLOUD_ACK_KEY); } catch { /* noop */ }
+}
+
+/** Returns the ISO timestamp of the most recent successful silent write to
+ *  the picked folder, or null if none has succeeded yet. */
+export function getLastOffDeviceSync() {
+  try { return localStorage.getItem(LAST_OFFDEVICE_SYNC_KEY) || null; }
+  catch { return null; }
 }
 
 /**
@@ -140,6 +191,10 @@ export async function saveBackupToHandle(blob, filename) {
     const writable = await fileHandle.createWritable();
     await writable.write(blob);
     await writable.close();
+    // Record successful off-device sync so Settings can surface "last sync"
+    // and Marcia knows her OneDrive chain isn't silently broken.
+    try { localStorage.setItem(LAST_OFFDEVICE_SYNC_KEY, new Date().toISOString()); }
+    catch { /* private mode */ }
     return true;
   } catch {
     return false;
