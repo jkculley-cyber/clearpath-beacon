@@ -28,6 +28,34 @@ function colorForEventType(t) {
   return EVENT_TYPES.find((x) => x.value === t)?.color || '#475569';
 }
 
+// Visual cues for session status — applied on top of group color so the block
+// stays color-coded by group but the state is also legible at a glance.
+const STATUS_ICON = {
+  Completed: '✓',        // ✓
+  Cancelled: '✕',        // ✕
+  'Make-up Needed': '↻', // ↻
+};
+
+function sessionBlockStyle(status) {
+  if (status === 'Cancelled') {
+    return { opacity: 0.45, textDecoration: 'line-through', border: '1px dashed rgba(255,255,255,0.6)' };
+  }
+  if (status === 'Make-up Needed') {
+    return { boxShadow: '0 0 0 2px #f59e0b inset, 0 1px 3px rgba(0,0,0,0.1)' };
+  }
+  if (status === 'Completed') {
+    return { boxShadow: '0 0 0 2px rgba(255,255,255,0.55) inset, 0 1px 3px rgba(0,0,0,0.1)' };
+  }
+  return {};
+}
+
+function monthlyDotStyle(status) {
+  if (status === 'Cancelled') return { opacity: 0.3, border: '1px dashed #6b7280' };
+  if (status === 'Make-up Needed') return { boxShadow: '0 0 0 2px #f59e0b' };
+  if (status === 'Completed') return { boxShadow: '0 0 0 1.5px #fff inset' };
+  return {};
+}
+
 function getColorForGroup(groupId, groups) {
   const idx = groups.findIndex((g) => g.id === groupId);
   return GROUP_COLORS[Math.max(0, idx) % GROUP_COLORS.length];
@@ -163,7 +191,7 @@ function SessionDetailModal({ session, groups, onClose, onSave }) {
 }
 
 /* ---- Monthly View Component ---- */
-function MonthlyView({ currentMonth, sessions, events, groups, onPrevMonth, onNextMonth, onToday, onEventClick }) {
+function MonthlyView({ currentMonth, sessions, events, groups, students, onPrevMonth, onNextMonth, onToday, onEventClick }) {
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const daysInMonth = getDaysInMonth(currentMonth);
@@ -252,14 +280,20 @@ function MonthlyView({ currentMonth, sessions, events, groups, onPrevMonth, onNe
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                     {daySessions.map((sess) => {
                       const color = getColorForGroup(sess.group_id, groups);
+                      const grp = groups.find((g) => g.id === sess.group_id);
+                      const stu = (students || []).find((s) => s.id === sess.student_id);
+                      const stuName = stu?.first_name ? `${stu.first_name} ${stu.last_name || ''}`.trim() : (stu?.name || '');
+                      const label = sess.session_type === 'group' && grp ? grp.name : (stuName || 'Session');
+                      const tip = `${label} ${sess.start_time?.slice(0, 5) || ''} · ${sess.status || 'Scheduled'}`;
                       return (
                         <div
                           key={sess.id}
-                          title={`${groups.find((g) => g.id === sess.group_id)?.name || 'Session'} ${sess.start_time?.slice(0, 5) || ''}`}
+                          title={tip}
                           style={{
                             width: 10, height: 10, borderRadius: '50%',
                             background: color,
                             flexShrink: 0,
+                            ...monthlyDotStyle(sess.status),
                           }}
                         />
                       );
@@ -753,6 +787,14 @@ function AgendaView({ sessions, events, groups, students, range, onSessionClick,
             const groupColor = isEvent
               ? colorForEventType(row.raw.event_type)
               : getColorForGroup(row.raw.group_id, groups);
+            const status = row.status;
+            const isCancelled = status === 'Cancelled';
+            const statusColor =
+              status === 'Completed' ? { bg: '#22c55e20', fg: '#15803d' } :
+              status === 'Cancelled' ? { bg: '#ef444420', fg: '#b91c1c' } :
+              status === 'Make-up Needed' ? { bg: '#f59e0b20', fg: '#b45309' } :
+              status === 'Scheduled' ? { bg: '#3b82f620', fg: '#1d4ed8' } :
+              null;
             return (
               <div
                 key={row.id}
@@ -767,6 +809,7 @@ function AgendaView({ sessions, events, groups, students, range, onSessionClick,
                   alignItems: 'center',
                   background: '#fff',
                   borderLeft: `4px solid ${groupColor}`,
+                  opacity: isCancelled ? 0.55 : 1,
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#fafafa'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
@@ -775,7 +818,10 @@ function AgendaView({ sessions, events, groups, students, range, onSessionClick,
                   {row.time ? row.time.slice(0, 5) : '—'}
                 </span>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#1a2332' }}>
+                  <div style={{
+                    fontSize: 14, fontWeight: 600, color: '#1a2332',
+                    textDecoration: isCancelled ? 'line-through' : 'none',
+                  }}>
                     {row.label}
                   </div>
                   {row.notes && (
@@ -796,6 +842,15 @@ function AgendaView({ sessions, events, groups, students, range, onSessionClick,
                   }}>
                     {row.typeLabel}
                   </span>
+                  {!isEvent && statusColor && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 600,
+                      padding: '1px 7px', borderRadius: 10,
+                      background: statusColor.bg, color: statusColor.fg,
+                    }}>
+                      {status}
+                    </span>
+                  )}
                   {row.duration ? (
                     <span style={{ fontSize: 11, color: '#9ca3af' }}>{row.duration}m</span>
                   ) : null}
@@ -822,6 +877,7 @@ export default function SchedulePage() {
   const [events, setEvents] = useState([]);
   const [monthlyEvents, setMonthlyEvents] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [students, setStudents] = useState([]);
   const [selected, setSelected] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [scheduleBlocks, setScheduleBlocks] = useState([]);
@@ -845,7 +901,7 @@ export default function SchedulePage() {
     if (!counselor?.id) return;
     const from = format(weekStart, 'yyyy-MM-dd');
     const to = format(weekEnd, 'yyyy-MM-dd');
-    const [sessRes, evtRes, grpRes, blocksRes] = await Promise.all([
+    const [sessRes, evtRes, grpRes, blocksRes, stuRes] = await Promise.all([
       db.select('sessions', {
         eq: { counselor_id: counselor.id },
         gte: { session_date: from },
@@ -860,11 +916,13 @@ export default function SchedulePage() {
       }),
       db.select('groups', { eq: { counselor_id: counselor.id } }),
       db.select('campus_schedule_blocks', { eq: { counselor_id: counselor.id } }),
+      db.select('students', { eq: { counselor_id: counselor.id } }),
     ]);
     setSessions(sessRes.data || []);
     setEvents(evtRes.data || []);
     setGroups(grpRes.data || []);
     setScheduleBlocks(blocksRes.data || []);
+    setStudents(stuRes.data || []);
   }, [counselor, weekStart, weekEnd]);
 
   // Load monthly data
@@ -872,7 +930,7 @@ export default function SchedulePage() {
     if (!counselor?.id) return;
     const from = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
     const to = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
-    const [sessRes, evtRes, grpRes] = await Promise.all([
+    const [sessRes, evtRes, grpRes, stuRes] = await Promise.all([
       db.select('sessions', {
         eq: { counselor_id: counselor.id },
         gte: { session_date: from },
@@ -886,10 +944,12 @@ export default function SchedulePage() {
         order: { column: 'start_time', ascending: true },
       }),
       db.select('groups', { eq: { counselor_id: counselor.id } }),
+      db.select('students', { eq: { counselor_id: counselor.id } }),
     ]);
     setMonthlySessions(sessRes.data || []);
     setMonthlyEvents(evtRes.data || []);
     setGroups(grpRes.data || []);
+    setStudents(stuRes.data || []);
   }, [counselor, currentMonth]);
 
   // Load agenda data — wide window so search can find anything
@@ -1072,6 +1132,7 @@ export default function SchedulePage() {
           sessions={monthlySessions}
           events={monthlyEvents}
           groups={groups}
+          students={students}
           onPrevMonth={goPrevMonth}
           onNextMonth={goNextMonth}
           onToday={goMonthToday}
@@ -1208,24 +1269,40 @@ export default function SchedulePage() {
               {sessionsForDay(dayIdx).map((sess) => {
                 const pos = blockPos(sess);
                 const grp = groups.find((g) => g.id === sess.group_id);
+                const stu = students.find((s) => s.id === sess.student_id);
+                const stuName = stu?.first_name ? `${stu.first_name} ${stu.last_name || ''}`.trim() : (stu?.name || '');
+                const label = sess.session_type === 'group' && grp
+                  ? grp.name
+                  : (stuName || (sess.session_type === 'group' ? 'Group' : 'Individual'));
                 const color = getColorForGroup(sess.group_id, groups);
                 const hasConflict = sessionHasConflict(sess, dayIdx);
+                const icon = STATUS_ICON[sess.status];
                 return (
-                  <div key={sess.id} onClick={() => setSelected(sess)} style={{
-                    position: 'absolute', top: pos.top, left: 2, right: 2, height: pos.height,
-                    background: color, color: '#fff', borderRadius: 6, padding: '4px 8px',
-                    fontSize: 12, fontWeight: 600, cursor: 'pointer', overflow: 'hidden',
-                    opacity: sess.status === 'Cancelled' ? 0.5 : 1,
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                    zIndex: 1,
-                  }}>
+                  <div
+                    key={sess.id}
+                    onClick={() => setSelected(sess)}
+                    title={`${label} · ${sess.status || 'Scheduled'}`}
+                    style={{
+                      position: 'absolute', top: pos.top, left: 2, right: 2, height: pos.height,
+                      background: color, color: '#fff', borderRadius: 6, padding: '4px 8px',
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer', overflow: 'hidden',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      zIndex: 1,
+                      ...sessionBlockStyle(sess.status),
+                    }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       {hasConflict && (
                         <span title="Scheduling conflict" style={{ color: '#f97316', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
                           &#9888;
                         </span>
                       )}
-                      <span>{grp?.name || 'Session'}</span>
+                      {icon && (
+                        <span title={sess.status} style={{ flexShrink: 0, fontSize: 13, lineHeight: 1 }}>
+                          {icon}
+                        </span>
+                      )}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
                     </div>
                     {pos.height > 35 && (
                       <div style={{ fontSize: 10, fontWeight: 400, opacity: 0.9 }}>
@@ -1258,8 +1335,8 @@ export default function SchedulePage() {
           )}
           {events.length > 0 && (
             <>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Event types</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8, marginTop: 12 }}>Event types</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 12 }}>
                 {EVENT_TYPES
                   .filter((t) => events.some((e) => e.event_type === t.value))
                   .map((t) => (
@@ -1271,6 +1348,13 @@ export default function SchedulePage() {
               </div>
             </>
           )}
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Session status</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 13, color: '#374151' }}>
+            <span>Scheduled — solid</span>
+            <span>✓ Completed — white inset ring</span>
+            <span>↻ Make-up Needed — amber outline</span>
+            <span>✕ Cancelled — faded + dashed</span>
+          </div>
         </div>
       )}
 
