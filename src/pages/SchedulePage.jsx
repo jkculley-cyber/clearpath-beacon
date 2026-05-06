@@ -434,20 +434,25 @@ function AddSessionModal({ open, onClose, counselorId }) {
 
           {kind === 'event' && (
             <>
+              <label style={lbl}>Title *</label>
+              <input
+                className="form-input"
+                value={eventTitle}
+                onChange={(e) => setEventTitle(e.target.value)}
+                placeholder="e.g., Faculty meeting, Bus duty, ARD for J. Smith"
+                required
+                autoFocus
+              />
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                Shows up on your calendar — make it descriptive.
+              </div>
+
               <label style={lbl}>Event Type</label>
               <select className="form-input" value={eventType} onChange={(e) => setEventType(e.target.value)}>
                 {EVENT_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
-
-              <label style={lbl}>Title</label>
-              <input
-                className="form-input"
-                value={eventTitle}
-                onChange={(e) => setEventTitle(e.target.value)}
-                placeholder="e.g., Faculty meeting, Bus duty, ARD for J. Smith"
-              />
             </>
           )}
 
@@ -534,15 +539,15 @@ function EventDetailModal({ event, onClose, onSave }) {
       <div style={modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>Edit Event</h3>
 
+        <label style={lbl}>Title *</label>
+        <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+
         <label style={lbl}>Event Type</label>
         <select className="form-input" value={eventType} onChange={(e) => setEventType(e.target.value)}>
           {EVENT_TYPES.map((t) => (
             <option key={t.value} value={t.value}>{t.label}</option>
           ))}
         </select>
-
-        <label style={lbl}>Title</label>
-        <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} />
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
           <div>
@@ -584,6 +589,203 @@ function EventDetailModal({ event, onClose, onSave }) {
   );
 }
 
+/* ---- Agenda View Component (search + chronological list) ---- */
+function AgendaView({ sessions, events, groups, students, range, onSessionClick, onEventClick }) {
+  const [query, setQuery] = useState('');
+
+  const groupMap = {};
+  groups.forEach((g) => { groupMap[g.id] = g; });
+  const studentMap = {};
+  students.forEach((s) => { studentMap[s.id] = s; });
+
+  const sName = (s) => s
+    ? (s.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s.name || ''))
+    : '';
+
+  // Combine sessions + events into a single sortable agenda
+  const items = [];
+  for (const s of sessions || []) {
+    const stu = studentMap[s.student_id];
+    const grp = groupMap[s.group_id];
+    const label = s.session_type === 'group' && grp
+      ? grp.name
+      : (stu ? sName(stu) : 'Session');
+    items.push({
+      kind: 'session',
+      id: s.id,
+      date: s.session_date,
+      time: s.start_time || '',
+      duration: s.duration_minutes || 0,
+      label,
+      typeLabel: s.session_type === 'group' ? 'Group' : 'Individual',
+      notes: s.notes || '',
+      status: s.status || '',
+      raw: s,
+      _haystack: [label, s.session_type, s.notes, s.status].filter(Boolean).join(' ').toLowerCase(),
+    });
+  }
+  for (const e of events || []) {
+    const typeLabel = EVENT_TYPES.find((t) => t.value === e.event_type)?.label || e.event_type;
+    items.push({
+      kind: 'event',
+      id: e.id,
+      date: e.event_date,
+      time: e.start_time || '',
+      duration: e.duration_minutes || 0,
+      label: e.title || typeLabel,
+      typeLabel,
+      notes: e.notes || '',
+      status: '',
+      raw: e,
+      _haystack: [e.title, typeLabel, e.event_type, e.notes].filter(Boolean).join(' ').toLowerCase(),
+    });
+  }
+
+  // Apply date-range filter
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const past30 = format(addWeeks(new Date(), -4), 'yyyy-MM-dd');
+  const upcoming90 = format(addWeeks(new Date(), 13), 'yyyy-MM-dd');
+  const filteredByRange = items.filter((it) => {
+    if (!it.date) return false;
+    if (range === 'past') return it.date >= past30 && it.date < today;
+    if (range === 'upcoming') return it.date >= today && it.date <= upcoming90;
+    return true; // 'all'
+  });
+
+  // Apply search
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? filteredByRange.filter((it) => it._haystack.includes(q))
+    : filteredByRange;
+
+  // Sort: chronological. Upcoming = ascending, past = descending (most recent first), all = ascending.
+  filtered.sort((a, b) => {
+    const cmp = (a.date + 'T' + a.time).localeCompare(b.date + 'T' + b.time);
+    return range === 'past' ? -cmp : cmp;
+  });
+
+  // Group by date for sticky-style dividers
+  const byDate = [];
+  let currentDate = null;
+  for (const it of filtered) {
+    if (it.date !== currentDate) {
+      byDate.push({ kind: 'header', date: it.date });
+      currentDate = it.date;
+    }
+    byDate.push(it);
+  }
+
+  const handleClick = (it) => {
+    if (it.kind === 'session') onSessionClick(it.raw);
+    else onEventClick(it.raw);
+  };
+
+  return (
+    <div>
+      <div className="card" style={{ padding: 16, marginBottom: 12 }}>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search sessions, events, students, notes..."
+          autoFocus
+          style={{
+            width: '100%', padding: '10px 14px', borderRadius: 8,
+            border: '1px solid #e5e7eb', fontSize: 14, outline: 'none', boxSizing: 'border-box',
+          }}
+        />
+        {query && (
+          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
+            {filtered.length} match{filtered.length === 1 ? '' : 'es'} for "{query}"
+          </div>
+        )}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="card" style={{ padding: 32, textAlign: 'center', color: '#9ca3af' }}>
+          {query ? 'No matches.' : 'Nothing on the schedule for this range.'}
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          {byDate.map((row, i) => {
+            if (row.kind === 'header') {
+              const d = parseISO(row.date);
+              const isTodayRow = row.date === today;
+              return (
+                <div key={`h-${row.date}-${i}`} style={{
+                  padding: '8px 16px',
+                  background: isTodayRow ? '#e6f7f5' : '#f9fafb',
+                  borderBottom: '1px solid var(--border)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: isTodayRow ? '#2A9D8F' : '#6b7280',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}>
+                  {format(d, 'EEEE, MMM d, yyyy')}{isTodayRow ? ' · Today' : ''}
+                </div>
+              );
+            }
+            const isEvent = row.kind === 'event';
+            const groupColor = !isEvent
+              ? getColorForGroup(row.raw.group_id, groups)
+              : EVENT_COLOR;
+            return (
+              <div
+                key={row.id}
+                onClick={() => handleClick(row)}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '90px 1fr auto',
+                  gap: 12,
+                  padding: '12px 16px',
+                  borderBottom: '1px solid #f3f4f6',
+                  cursor: 'pointer',
+                  alignItems: 'center',
+                  background: '#fff',
+                  borderLeft: `4px solid ${groupColor}`,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#fafafa'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                  {row.time ? row.time.slice(0, 5) : '—'}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#1a2332' }}>
+                    {row.label}
+                  </div>
+                  {row.notes && (
+                    <div style={{
+                      fontSize: 12, color: '#6b7280', marginTop: 2,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {row.notes}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600,
+                    padding: '2px 8px', borderRadius: 10,
+                    background: isEvent ? '#475569' : '#e5e7eb',
+                    color: isEvent ? '#fff' : '#374151',
+                  }}>
+                    {row.typeLabel}
+                  </span>
+                  {row.duration ? (
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{row.duration}m</span>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---- Main Page ---- */
 export default function SchedulePage() {
   const { counselor } = useAuth();
@@ -603,9 +805,15 @@ export default function SchedulePage() {
   const [showAddSession, setShowAddSession] = useState(false);
 
   // Feature #10 — Monthly view state
-  const [viewMode, setViewMode] = useState('weekly'); // 'weekly' | 'monthly'
+  const [viewMode, setViewMode] = useState('weekly'); // 'weekly' | 'monthly' | 'agenda'
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [monthlySessions, setMonthlySessions] = useState([]);
+
+  // Agenda view state
+  const [agendaSessions, setAgendaSessions] = useState([]);
+  const [agendaEvents, setAgendaEvents] = useState([]);
+  const [agendaStudents, setAgendaStudents] = useState([]);
+  const [agendaRange, setAgendaRange] = useState('upcoming'); // 'past' | 'upcoming' | 'all'
 
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
 
@@ -661,13 +869,32 @@ export default function SchedulePage() {
     setGroups(grpRes.data || []);
   }, [counselor, currentMonth]);
 
+  // Load agenda data — wide window so search can find anything
+  const loadAgendaData = useCallback(async () => {
+    if (!counselor?.id) return;
+    const [sessRes, evtRes, grpRes, stuRes] = await Promise.all([
+      db.select('sessions', {
+        eq: { counselor_id: counselor.id },
+        order: { column: 'session_date', ascending: false },
+      }),
+      db.select('schedule_events', {
+        eq: { counselor_id: counselor.id },
+        order: { column: 'event_date', ascending: false },
+      }),
+      db.select('groups', { eq: { counselor_id: counselor.id } }),
+      db.select('students', { eq: { counselor_id: counselor.id } }),
+    ]);
+    setAgendaSessions(sessRes.data || []);
+    setAgendaEvents(evtRes.data || []);
+    setGroups(grpRes.data || []);
+    setAgendaStudents(stuRes.data || []);
+  }, [counselor]);
+
   useEffect(() => {
-    if (viewMode === 'weekly') {
-      loadData();
-    } else {
-      loadMonthlyData();
-    }
-  }, [viewMode, loadData, loadMonthlyData]);
+    if (viewMode === 'weekly') loadData();
+    else if (viewMode === 'monthly') loadMonthlyData();
+    else if (viewMode === 'agenda') loadAgendaData();
+  }, [viewMode, loadData, loadMonthlyData, loadAgendaData]);
 
   const goToday = () => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const goPrev = () => setWeekStart((w) => addWeeks(w, -1));
@@ -715,15 +942,94 @@ export default function SchedulePage() {
     return { top: (sH - 8) * 60 + sM, height: Math.max((eH - sH) * 60 + (eM - sM), 25) };
   };
 
-  const toggleView = () => {
-    if (viewMode === 'weekly') {
-      setCurrentMonth(startOfMonth(weekStart));
-      setViewMode('monthly');
-    } else {
+  const switchView = (mode) => {
+    if (mode === viewMode) return;
+    if (mode === 'weekly' && viewMode === 'monthly') {
       setWeekStart(startOfWeek(currentMonth, { weekStartsOn: 1 }));
-      setViewMode('weekly');
+    } else if (mode === 'monthly' && viewMode === 'weekly') {
+      setCurrentMonth(startOfMonth(weekStart));
     }
+    setViewMode(mode);
   };
+
+  const ViewSwitcher = () => (
+    <div style={{ display: 'inline-flex', borderRadius: 8, border: '1px solid #d1d5db', overflow: 'hidden' }}>
+      {[['weekly', 'Weekly'], ['monthly', 'Monthly'], ['agenda', 'Agenda']].map(([m, label]) => (
+        <button
+          key={m}
+          type="button"
+          onClick={() => switchView(m)}
+          style={{
+            padding: '6px 14px', border: 'none', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600,
+            background: viewMode === m ? '#2A9D8F' : '#fff',
+            color: viewMode === m ? '#fff' : '#6b7280',
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  /* ---- Agenda View ---- */
+  if (viewMode === 'agenda') {
+    return (
+      <div className="page">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+          <h1 className="page-title" style={{ margin: 0 }}>Schedule</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <select
+              value={agendaRange}
+              onChange={(e) => setAgendaRange(e.target.value)}
+              style={{
+                padding: '6px 10px', borderRadius: 8, border: '1px solid #d1d5db',
+                fontSize: 13, color: '#374151', background: '#fff',
+              }}
+            >
+              <option value="upcoming">Upcoming (next 90 days)</option>
+              <option value="past">Past 30 days</option>
+              <option value="all">All time</option>
+            </select>
+            <ViewSwitcher />
+            <button
+              onClick={() => setShowAddSession(true)}
+              style={{ padding: '6px 16px', fontSize: 13, fontWeight: 600, color: '#fff', background: '#2A9D8F', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+            >
+              + Add Session
+            </button>
+          </div>
+        </div>
+
+        <AgendaView
+          sessions={agendaSessions}
+          events={agendaEvents}
+          groups={groups}
+          students={agendaStudents}
+          range={agendaRange}
+          onSessionClick={setSelected}
+          onEventClick={setSelectedEvent}
+        />
+
+        <SessionDetailModal
+          session={selected}
+          groups={groups}
+          onClose={() => setSelected(null)}
+          onSave={() => { setSelected(null); loadAgendaData(); }}
+        />
+        <EventDetailModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          onSave={() => { setSelectedEvent(null); loadAgendaData(); }}
+        />
+        <AddSessionModal
+          open={showAddSession}
+          onClose={(saved) => { setShowAddSession(false); if (saved) loadAgendaData(); }}
+          counselorId={counselor?.id}
+        />
+      </div>
+    );
+  }
 
   /* ---- Monthly View ---- */
   if (viewMode === 'monthly') {
@@ -736,9 +1042,7 @@ export default function SchedulePage() {
           >
             + Add Session
           </button>
-          <button className="btn btn-outline" onClick={toggleView} style={{ fontSize: 13, padding: '6px 14px' }}>
-            Weekly View
-          </button>
+          <ViewSwitcher />
         </div>
         <MonthlyView
           currentMonth={currentMonth}
@@ -776,9 +1080,9 @@ export default function SchedulePage() {
           <span style={{ fontSize: 15, fontWeight: 600, color: '#1a2332', marginLeft: 8 }}>
             {format(weekStart, 'MMM d')} &ndash; {format(weekEnd, 'MMM d, yyyy')}
           </span>
-          <button className="btn btn-outline" onClick={toggleView} style={{ marginLeft: 8, fontSize: 13, padding: '6px 14px' }}>
-            Monthly View
-          </button>
+          <span style={{ marginLeft: 8 }}>
+            <ViewSwitcher />
+          </span>
           <button
             onClick={() => setShowAddSession(true)}
             style={{ marginLeft: 4, padding: '6px 16px', fontSize: 13, fontWeight: 600, color: '#fff', background: '#2A9D8F', border: 'none', borderRadius: 8, cursor: 'pointer' }}
