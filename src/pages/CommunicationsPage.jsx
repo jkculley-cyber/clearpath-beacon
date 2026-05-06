@@ -7,6 +7,12 @@ import {
   escalationLevel, maybeCreateFollowUp, generateDueProcessPdf,
 } from '../lib/parentContacts';
 
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const nowTimeStr = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
 export default function CommunicationsPage() {
   const { counselor } = useAuth();
   const [comms, setComms] = useState([]);
@@ -18,6 +24,8 @@ export default function CommunicationsPage() {
   const [studentId, setStudentId] = useState('');
   const [studentSearch, setStudentSearch] = useState('');
   const [contactType, setContactType] = useState('Phone call');
+  const [contactDate, setContactDate] = useState(todayStr);
+  const [contactTime, setContactTime] = useState(nowTimeStr);
   const [duration, setDuration] = useState('15');
   const [notes, setNotes] = useState('');
   const [language, setLanguage] = useState('en');
@@ -28,6 +36,9 @@ export default function CommunicationsPage() {
   // Template
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [templateName, setTemplateName] = useState('');
+
+  // Edit existing contact
+  const [editingContact, setEditingContact] = useState(null);
 
   // Filters
   const [filterType, setFilterType] = useState('');
@@ -86,7 +97,8 @@ export default function CommunicationsPage() {
       language,
       outcome,
       tracking_number: trackingNumber || null,
-      contact_date: new Date().toISOString().slice(0, 10),
+      contact_date: contactDate || todayStr(),
+      contact_time: contactTime || null,
     });
     // Auto-create follow-up if outcome is unanswered
     if (inserted) {
@@ -104,6 +116,21 @@ export default function CommunicationsPage() {
     setStudentSearch('');
     setTrackingNumber('');
     setOutcome('answered');
+    setContactDate(todayStr());
+    setContactTime(nowTimeStr());
+    loadData();
+  };
+
+  const handleSaveEdit = async (id, updates) => {
+    await db.update('communications', id, updates);
+    setEditingContact(null);
+    loadData();
+  };
+
+  const handleDeleteContact = async (id) => {
+    if (!confirm('Delete this contact log entry? This cannot be undone.')) return;
+    await db.del('communications', id);
+    setEditingContact(null);
     loadData();
   };
 
@@ -179,6 +206,17 @@ export default function CommunicationsPage() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label className="form-label">Date</label>
+                  <input className="form-input" type="date" value={contactDate} onChange={(e) => setContactDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label">Time</label>
+                  <input className="form-input" type="time" value={contactTime} onChange={(e) => setContactTime(e.target.value)} />
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 10 }}>
@@ -338,12 +376,20 @@ export default function CommunicationsPage() {
             ) : (
               <div style={{ maxHeight: 600, overflowY: 'auto' }}>
                 {filteredComms.map((c) => (
-                  <div key={c.id} style={{ padding: '10px 0', borderBottom: '1px solid #f3f4f6' }}>
+                  <div
+                    key={c.id}
+                    onClick={() => setEditingContact(c)}
+                    style={{ padding: '10px 0', borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }}
+                    title="Click to edit"
+                  >
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                       <span style={{ fontWeight: 600, color: '#1a2332', fontSize: 14 }}>
                         {c.students ? sName(c.students) : 'Unknown'}
                       </span>
-                      <span style={{ fontSize: 12, color: '#9ca3af' }}>{c.contact_date || c.created_at?.slice(0, 10)}</span>
+                      <span style={{ fontSize: 12, color: '#9ca3af' }}>
+                        {c.contact_date || c.created_at?.slice(0, 10)}
+                        {c.contact_time ? ` · ${c.contact_time.slice(0, 5)}` : ''}
+                      </span>
                     </div>
                     <div style={{ fontSize: 13, color: '#6b7280' }}>
                       {c.contact_type}
@@ -369,6 +415,17 @@ export default function CommunicationsPage() {
         </div>
       </div>
 
+      {/* Edit Contact Modal */}
+      {editingContact && (
+        <EditContactModal
+          contact={editingContact}
+          studentName={editingContact.students ? sName(editingContact.students) : 'Unknown'}
+          onClose={() => setEditingContact(null)}
+          onSave={(updates) => handleSaveEdit(editingContact.id, updates)}
+          onDelete={() => handleDeleteContact(editingContact.id)}
+        />
+      )}
+
       {/* Save Template Modal */}
       {showTemplateModal && (
         <div style={overlayStyle} onClick={() => setShowTemplateModal(false)}>
@@ -384,6 +441,119 @@ export default function CommunicationsPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function EditContactModal({ contact, studentName, onClose, onSave, onDelete }) {
+  const [contactType, setContactType] = useState(contact.contact_type || 'Phone call');
+  const [contactDate, setContactDate] = useState(contact.contact_date || todayStr());
+  const [contactTime, setContactTime] = useState((contact.contact_time || '').slice(0, 5));
+  const [duration, setDuration] = useState(contact.duration_minutes ?? 15);
+  const [language, setLanguage] = useState(contact.language || 'en');
+  const [outcome, setOutcome] = useState(contact.outcome || 'answered');
+  const [trackingNumber, setTrackingNumber] = useState(contact.tracking_number || '');
+  const [notes, setNotes] = useState(contact.notes || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave({
+      contact_type: contactType,
+      contact_date: contactDate || todayStr(),
+      contact_time: contactTime || null,
+      duration_minutes: duration === '' ? null : parseInt(duration, 10),
+      language,
+      outcome,
+      tracking_number: trackingNumber || null,
+      notes: notes || null,
+    });
+    setSaving(false);
+  };
+
+  return (
+    <div style={overlayStyle} onClick={onClose}>
+      <div style={{ ...modalStyle, width: 460, maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 4px' }}>Edit Contact</h3>
+        <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>{studentName}</p>
+        <form onSubmit={handleSave}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div>
+              <label className="form-label">Date</label>
+              <input className="form-input" type="date" value={contactDate} onChange={(e) => setContactDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="form-label">Time</label>
+              <input className="form-input" type="time" value={contactTime} onChange={(e) => setContactTime(e.target.value)} />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div>
+              <label className="form-label">Contact Type</label>
+              <select className="form-input" value={contactType} onChange={(e) => setContactType(e.target.value)}>
+                {CONTACT_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Duration (min)</label>
+              <input className="form-input" type="number" min="1" value={duration} onChange={(e) => setDuration(e.target.value)} />
+            </div>
+          </div>
+
+          <label className="form-label">Language</label>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {[['en', 'English'], ['es', 'Spanish']].map(([code, label]) => (
+              <button key={code} type="button" onClick={() => setLanguage(code)} style={{
+                flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                border: `2px solid ${language === code ? '#2A9D8F' : '#d1d5db'}`,
+                background: language === code ? '#e6f7f5' : '#fff',
+                color: language === code ? '#2A9D8F' : '#6b7280',
+              }}>{label}</button>
+            ))}
+          </div>
+
+          <label className="form-label">Outcome</label>
+          <select className="form-input" value={outcome} onChange={(e) => setOutcome(e.target.value)} style={{ marginBottom: 12 }}>
+            {CONTACT_OUTCOMES.map((o) => (
+              <option key={o} value={o}>{OUTCOME_LABELS[o]}</option>
+            ))}
+          </select>
+
+          {(contactType === 'Certified mail' || outcome === 'certified-mail-sent') && (
+            <>
+              <label className="form-label">USPS tracking number</label>
+              <input
+                className="form-input"
+                value={trackingNumber}
+                onChange={(e) => setTrackingNumber(e.target.value)}
+                style={{ marginBottom: 12 }}
+              />
+            </>
+          )}
+
+          <label className="form-label">Notes</label>
+          <textarea className="form-input" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ marginBottom: 16 }} />
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="button" className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
+            <button
+              type="button"
+              onClick={onDelete}
+              style={{
+                flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #fecaca',
+                background: '#fff', color: '#b91c1c', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Delete
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={saving} style={{ flex: 1 }}>
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

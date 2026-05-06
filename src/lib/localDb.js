@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'beacon_local';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 const STORES = [
   'counselor',         // single record — counselor profile
@@ -31,6 +31,7 @@ const STORES = [
   'parent_contacts',   // timestamped parent contact log (calls, voicemail, certified mail) for due-process defense
   'follow_ups',        // scheduled reminders (24h/72h/1wk follow-ups, escalation cues)
   'session_note_templates', // SOAP-format note templates with prompted fields
+  'schedule_events',   // one-off non-counseling events on the schedule (meetings, duty, training, etc.)
   'settings',          // key-value config
 ];
 
@@ -197,6 +198,14 @@ export function openDB() {
         const snt = db.createObjectStore('session_note_templates', { keyPath: 'id' });
         snt.createIndex('counselor_id', 'counselor_id', { unique: false });
         snt.createIndex('category', 'category', { unique: false });
+      }
+
+      // schedule_events — one-off non-counseling events (meetings, duty, training, etc.)
+      if (!db.objectStoreNames.contains('schedule_events')) {
+        const se = db.createObjectStore('schedule_events', { keyPath: 'id' });
+        se.createIndex('counselor_id', 'counselor_id', { unique: false });
+        se.createIndex('event_date', 'event_date', { unique: false });
+        se.createIndex('event_type', 'event_type', { unique: false });
       }
 
       // settings (key-value)

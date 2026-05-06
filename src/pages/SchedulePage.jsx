@@ -13,6 +13,18 @@ const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const MONTH_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const GROUP_COLORS = ['#2A9D8F', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
+const EVENT_TYPES = [
+  { value: 'meeting', label: 'Meeting' },
+  { value: 'duty', label: 'Duty' },
+  { value: 'planning', label: 'Planning' },
+  { value: 'training', label: 'Training / PD' },
+  { value: 'ard', label: 'ARD' },
+  { value: '504', label: '504' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'other', label: 'Other' },
+];
+const EVENT_COLOR = '#475569'; // slate — distinct from group colors
+
 function getColorForGroup(groupId, groups) {
   const idx = groups.findIndex((g) => g.id === groupId);
   return GROUP_COLORS[Math.max(0, idx) % GROUP_COLORS.length];
@@ -33,29 +45,50 @@ function timesOverlap(startA, endA, startB, endB) {
 function SessionDetailModal({ session, groups, onClose, onSave }) {
   const [status, setStatus] = useState('Scheduled');
   const [notes, setNotes] = useState('');
+  const [sessionDate, setSessionDate] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [duration, setDuration] = useState(30);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (session) {
       setStatus(session.status || 'Scheduled');
       setNotes(session.notes || '');
+      setSessionDate(session.session_date || '');
+      setStartTime((session.start_time || '').slice(0, 5));
+      setDuration(session.duration_minutes ?? 30);
     }
   }, [session]);
 
   if (!session) return null;
   const group = groups.find((g) => g.id === session.group_id);
 
+  const computeEnd = (start, dur) => {
+    if (!start) return null;
+    const [h, m] = start.split(':').map(Number);
+    const total = h * 60 + m + Number(dur || 0);
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  };
+
   const handleSave = async () => {
     setSaving(true);
-    await db.update('sessions', session.id, { status, notes });
+    const end = computeEnd(startTime, duration);
+    await db.update('sessions', session.id, {
+      status,
+      notes,
+      session_date: sessionDate || session.session_date,
+      start_time: startTime || null,
+      end_time: end,
+      duration_minutes: Number(duration),
+    });
 
-    // Feature #1 — Auto-log time on session complete
     if (status === 'Completed') {
       await autoLogTime({
         counselorId: session.counselor_id,
         sessionId: session.id,
-        date: session.session_date,
-        durationMinutes: session.duration_minutes || 30,
+        date: sessionDate || session.session_date,
+        durationMinutes: Number(duration) || 30,
         description: group ? `Group counseling: ${group.name}` : 'Individual counseling session',
       });
     }
@@ -64,15 +97,34 @@ function SessionDetailModal({ session, groups, onClose, onSave }) {
     onSave();
   };
 
+  const handleDelete = async () => {
+    if (!confirm('Delete this session? This cannot be undone.')) return;
+    setDeleting(true);
+    await db.del('sessions', session.id);
+    setDeleting(false);
+    onSave();
+  };
+
   return (
     <div style={overlay} onClick={onClose}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 4px' }}>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>
           {group?.name || 'Session'}
         </h3>
-        <div style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>
-          {format(parseISO(session.session_date), 'EEEE, MMMM d')} &middot;{' '}
-          {session.start_time?.slice(0, 5)} - {session.end_time?.slice(0, 5)}
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+          <div>
+            <label style={lbl}>Date</label>
+            <input className="form-input" type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} />
+          </div>
+          <div>
+            <label style={lbl}>Start Time</label>
+            <input className="form-input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+          </div>
+          <div>
+            <label style={lbl}>Duration (min)</label>
+            <input className="form-input" type="number" min="5" max="480" value={duration} onChange={(e) => setDuration(parseInt(e.target.value, 10) || 0)} />
+          </div>
         </div>
 
         <label style={lbl}>Status</label>
@@ -87,6 +139,17 @@ function SessionDetailModal({ session, groups, onClose, onSave }) {
 
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
           <button className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>Close</button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            style={{
+              flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #fecaca',
+              background: '#fff', color: '#b91c1c', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            {deleting ? '...' : 'Delete'}
+          </button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ flex: 1 }}>
             {saving ? 'Saving...' : 'Save'}
           </button>
@@ -97,7 +160,7 @@ function SessionDetailModal({ session, groups, onClose, onSave }) {
 }
 
 /* ---- Monthly View Component ---- */
-function MonthlyView({ currentMonth, sessions, groups, onPrevMonth, onNextMonth, onToday }) {
+function MonthlyView({ currentMonth, sessions, events, groups, onPrevMonth, onNextMonth, onToday, onEventClick }) {
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const daysInMonth = getDaysInMonth(currentMonth);
@@ -127,6 +190,13 @@ function MonthlyView({ currentMonth, sessions, groups, onPrevMonth, onNextMonth,
   (sessions || []).forEach((s) => {
     if (!sessionsByDate[s.session_date]) sessionsByDate[s.session_date] = [];
     sessionsByDate[s.session_date].push(s);
+  });
+
+  // Map events by date string
+  const eventsByDate = {};
+  (events || []).forEach((e) => {
+    if (!eventsByDate[e.event_date]) eventsByDate[e.event_date] = [];
+    eventsByDate[e.event_date].push(e);
   });
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -165,6 +235,7 @@ function MonthlyView({ currentMonth, sessions, groups, onPrevMonth, onNextMonth,
               }
               const dateStr = format(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day), 'yyyy-MM-dd');
               const daySessions = sessionsByDate[dateStr] || [];
+              const dayEvents = eventsByDate[dateStr] || [];
               const isTod = dateStr === todayStr;
               return (
                 <div key={di} style={{
@@ -190,6 +261,19 @@ function MonthlyView({ currentMonth, sessions, groups, onPrevMonth, onNextMonth,
                         />
                       );
                     })}
+                    {dayEvents.map((evt) => (
+                      <div
+                        key={evt.id}
+                        onClick={(e) => { e.stopPropagation(); onEventClick && onEventClick(evt); }}
+                        title={`${evt.title} ${evt.start_time?.slice(0, 5) || ''}`}
+                        style={{
+                          width: 10, height: 10, borderRadius: 2,
+                          background: EVENT_COLOR,
+                          flexShrink: 0,
+                          cursor: onEventClick ? 'pointer' : 'default',
+                        }}
+                      />
+                    ))}
                   </div>
                 </div>
               );
@@ -219,11 +303,13 @@ function MonthlyView({ currentMonth, sessions, groups, onPrevMonth, onNextMonth,
   );
 }
 
-/* ---- Add Session Modal ---- */
+/* ---- Add Session / Event Modal ---- */
 function AddSessionModal({ open, onClose, counselorId }) {
-  const [sessionType, setSessionType] = useState('individual');
+  const [kind, setKind] = useState('individual'); // individual | group | event
   const [studentId, setStudentId] = useState('');
   const [groupId, setGroupId] = useState('');
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventType, setEventType] = useState('meeting');
   const [sessionDate, setSessionDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [startTime, setStartTime] = useState('09:00');
   const [duration, setDuration] = useState(30);
@@ -234,10 +320,11 @@ function AddSessionModal({ open, onClose, counselorId }) {
 
   useEffect(() => {
     if (!open || !counselorId) return;
-    // Reset form fields so last session's values don't bleed into a fresh entry.
-    setSessionType('individual');
+    setKind('individual');
     setStudentId('');
     setGroupId('');
+    setEventTitle('');
+    setEventType('meeting');
     setSessionDate(format(new Date(), 'yyyy-MM-dd'));
     setStartTime('09:00');
     setDuration(30);
@@ -266,52 +353,60 @@ function AddSessionModal({ open, onClose, counselorId }) {
     e.preventDefault();
     setSaving(true);
     const endTime = computeEndTime(startTime, duration);
-    const record = {
-      counselor_id: counselorId,
-      session_date: sessionDate,
-      start_time: startTime,
-      end_time: endTime,
-      duration_minutes: duration,
-      status: 'Scheduled',
-      notes: notes || null,
-    };
-    if (sessionType === 'individual') {
-      record.student_id = studentId || null;
-      record.group_id = null;
+
+    let err;
+    if (kind === 'event') {
+      const record = {
+        counselor_id: counselorId,
+        title: eventTitle.trim() || EVENT_TYPES.find((t) => t.value === eventType)?.label || 'Event',
+        event_type: eventType,
+        event_date: sessionDate,
+        start_time: startTime,
+        end_time: endTime,
+        duration_minutes: duration,
+        notes: notes || null,
+      };
+      ({ error: err } = await db.insert('schedule_events', record));
     } else {
-      record.student_id = null;
-      record.group_id = groupId || null;
+      const record = {
+        counselor_id: counselorId,
+        session_date: sessionDate,
+        start_time: startTime,
+        end_time: endTime,
+        duration_minutes: duration,
+        status: 'Scheduled',
+        notes: notes || null,
+        session_type: kind,
+        student_id: kind === 'individual' ? (studentId || null) : null,
+        group_id: kind === 'group' ? (groupId || null) : null,
+      };
+      ({ error: err } = await db.insert('sessions', record));
     }
-    const { error: err } = await db.insert('sessions', record);
+
     if (err) {
       alert(err.message || String(err));
       setSaving(false);
       return;
     }
     setSaving(false);
-    // Reset form
-    setSessionType('individual');
-    setStudentId('');
-    setGroupId('');
-    setSessionDate(format(new Date(), 'yyyy-MM-dd'));
-    setStartTime('09:00');
-    setDuration(30);
-    setNotes('');
     onClose(true);
   };
 
   return (
     <div style={overlay} onClick={() => onClose(false)}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>Add Session</h3>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>
+          Add to Schedule
+        </h3>
         <form onSubmit={handleSave}>
           <label style={lbl}>Type</label>
-          <select className="form-input" value={sessionType} onChange={(e) => setSessionType(e.target.value)}>
-            <option value="individual">Individual</option>
-            <option value="group">Group</option>
+          <select className="form-input" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="individual">Individual session</option>
+            <option value="group">Group session</option>
+            <option value="event">Other event (meeting, duty, etc.)</option>
           </select>
 
-          {sessionType === 'individual' ? (
+          {kind === 'individual' && (
             <>
               <label style={lbl}>Student</label>
               <select className="form-input" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
@@ -323,7 +418,9 @@ function AddSessionModal({ open, onClose, counselorId }) {
                 ))}
               </select>
             </>
-          ) : (
+          )}
+
+          {kind === 'group' && (
             <>
               <label style={lbl}>Group</label>
               <select className="form-input" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
@@ -335,6 +432,25 @@ function AddSessionModal({ open, onClose, counselorId }) {
             </>
           )}
 
+          {kind === 'event' && (
+            <>
+              <label style={lbl}>Event Type</label>
+              <select className="form-input" value={eventType} onChange={(e) => setEventType(e.target.value)}>
+                {EVENT_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+
+              <label style={lbl}>Title</label>
+              <input
+                className="form-input"
+                value={eventTitle}
+                onChange={(e) => setEventTitle(e.target.value)}
+                placeholder="e.g., Faculty meeting, Bus duty, ARD for J. Smith"
+              />
+            </>
+          )}
+
           <label style={lbl}>Date</label>
           <input className="form-input" type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} required />
 
@@ -342,7 +458,7 @@ function AddSessionModal({ open, onClose, counselorId }) {
           <input className="form-input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
 
           <label style={lbl}>Duration (minutes)</label>
-          <input className="form-input" type="number" min="5" max="120" value={duration} onChange={(e) => setDuration(parseInt(e.target.value, 10) || 30)} required />
+          <input className="form-input" type="number" min="5" max="480" value={duration} onChange={(e) => setDuration(parseInt(e.target.value, 10) || 30)} required />
 
           <label style={lbl}>Notes</label>
           <textarea className="form-input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
@@ -350,10 +466,119 @@ function AddSessionModal({ open, onClose, counselorId }) {
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button type="button" className="btn btn-outline" onClick={() => onClose(false)} style={{ flex: 1 }}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={saving} style={{ flex: 1 }}>
-              {saving ? 'Saving...' : 'Add Session'}
+              {saving ? 'Saving...' : 'Add to Schedule'}
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Event Detail Modal (non-counseling events) ---- */
+function EventDetailModal({ event, onClose, onSave }) {
+  const [title, setTitle] = useState('');
+  const [eventType, setEventType] = useState('meeting');
+  const [eventDate, setEventDate] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [duration, setDuration] = useState(30);
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (event) {
+      setTitle(event.title || '');
+      setEventType(event.event_type || 'meeting');
+      setEventDate(event.event_date || '');
+      setStartTime((event.start_time || '').slice(0, 5));
+      setDuration(event.duration_minutes ?? 30);
+      setNotes(event.notes || '');
+    }
+  }, [event]);
+
+  if (!event) return null;
+
+  const computeEnd = (start, dur) => {
+    if (!start) return null;
+    const [h, m] = start.split(':').map(Number);
+    const total = h * 60 + m + Number(dur || 0);
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    await db.update('schedule_events', event.id, {
+      title: title.trim() || 'Event',
+      event_type: eventType,
+      event_date: eventDate || event.event_date,
+      start_time: startTime || null,
+      end_time: computeEnd(startTime, duration),
+      duration_minutes: Number(duration),
+      notes: notes || null,
+    });
+    setSaving(false);
+    onSave();
+  };
+
+  const handleDelete = async () => {
+    if (!confirm('Delete this event? This cannot be undone.')) return;
+    setDeleting(true);
+    await db.del('schedule_events', event.id);
+    setDeleting(false);
+    onSave();
+  };
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={modal} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>Edit Event</h3>
+
+        <label style={lbl}>Event Type</label>
+        <select className="form-input" value={eventType} onChange={(e) => setEventType(e.target.value)}>
+          {EVENT_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+
+        <label style={lbl}>Title</label>
+        <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+          <div>
+            <label style={lbl}>Date</label>
+            <input className="form-input" type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+          </div>
+          <div>
+            <label style={lbl}>Start Time</label>
+            <input className="form-input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+          </div>
+          <div>
+            <label style={lbl}>Duration (min)</label>
+            <input className="form-input" type="number" min="5" max="480" value={duration} onChange={(e) => setDuration(parseInt(e.target.value, 10) || 0)} />
+          </div>
+        </div>
+
+        <label style={lbl}>Notes</label>
+        <textarea className="form-input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          <button className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>Close</button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            style={{
+              flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #fecaca',
+              background: '#fff', color: '#b91c1c', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            {deleting ? '...' : 'Delete'}
+          </button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ flex: 1 }}>
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -369,8 +594,11 @@ export default function SchedulePage() {
     return startOfWeek(seed, { weekStartsOn: 1 });
   });
   const [sessions, setSessions] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [monthlyEvents, setMonthlyEvents] = useState([]);
   const [groups, setGroups] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
   const [scheduleBlocks, setScheduleBlocks] = useState([]);
   const [showAddSession, setShowAddSession] = useState(false);
 
@@ -381,22 +609,29 @@ export default function SchedulePage() {
 
   const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
 
-  // Load weekly data (sessions + groups + schedule blocks)
+  // Load weekly data (sessions + events + groups + schedule blocks)
   const loadData = useCallback(async () => {
     if (!counselor?.id) return;
     const from = format(weekStart, 'yyyy-MM-dd');
     const to = format(weekEnd, 'yyyy-MM-dd');
-    const [sessRes, grpRes, blocksRes] = await Promise.all([
+    const [sessRes, evtRes, grpRes, blocksRes] = await Promise.all([
       db.select('sessions', {
         eq: { counselor_id: counselor.id },
         gte: { session_date: from },
         lte: { session_date: to },
         order: { column: 'start_time', ascending: true },
       }),
+      db.select('schedule_events', {
+        eq: { counselor_id: counselor.id },
+        gte: { event_date: from },
+        lte: { event_date: to },
+        order: { column: 'start_time', ascending: true },
+      }),
       db.select('groups', { eq: { counselor_id: counselor.id } }),
       db.select('campus_schedule_blocks', { eq: { counselor_id: counselor.id } }),
     ]);
     setSessions(sessRes.data || []);
+    setEvents(evtRes.data || []);
     setGroups(grpRes.data || []);
     setScheduleBlocks(blocksRes.data || []);
   }, [counselor, weekStart, weekEnd]);
@@ -406,16 +641,23 @@ export default function SchedulePage() {
     if (!counselor?.id) return;
     const from = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
     const to = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
-    const [sessRes, grpRes] = await Promise.all([
+    const [sessRes, evtRes, grpRes] = await Promise.all([
       db.select('sessions', {
         eq: { counselor_id: counselor.id },
         gte: { session_date: from },
         lte: { session_date: to },
         order: { column: 'start_time', ascending: true },
       }),
+      db.select('schedule_events', {
+        eq: { counselor_id: counselor.id },
+        gte: { event_date: from },
+        lte: { event_date: to },
+        order: { column: 'start_time', ascending: true },
+      }),
       db.select('groups', { eq: { counselor_id: counselor.id } }),
     ]);
     setMonthlySessions(sessRes.data || []);
+    setMonthlyEvents(evtRes.data || []);
     setGroups(grpRes.data || []);
   }, [counselor, currentMonth]);
 
@@ -440,6 +682,13 @@ export default function SchedulePage() {
     d.setDate(d.getDate() + dayIndex);
     const ds = format(d, 'yyyy-MM-dd');
     return sessions.filter((s) => s.session_date === ds);
+  };
+
+  const eventsForDay = (dayIndex) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + dayIndex);
+    const ds = format(d, 'yyyy-MM-dd');
+    return events.filter((e) => e.event_date === ds);
   };
 
   // Feature #5 — Get schedule blocks for a given day-of-week
@@ -494,10 +743,17 @@ export default function SchedulePage() {
         <MonthlyView
           currentMonth={currentMonth}
           sessions={monthlySessions}
+          events={monthlyEvents}
           groups={groups}
           onPrevMonth={goPrevMonth}
           onNextMonth={goNextMonth}
           onToday={goMonthToday}
+          onEventClick={setSelectedEvent}
+        />
+        <EventDetailModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          onSave={() => { setSelectedEvent(null); loadMonthlyData(); }}
         />
         <AddSessionModal
           open={showAddSession}
@@ -586,6 +842,40 @@ export default function SchedulePage() {
                 );
               })}
 
+              {/* Non-counseling events */}
+              {eventsForDay(dayIdx).map((evt) => {
+                const pos = blockPos({ start_time: evt.start_time, end_time: evt.end_time || (evt.start_time && evt.duration_minutes
+                  ? (() => {
+                      const [h, m] = evt.start_time.split(':').map(Number);
+                      const t = h * 60 + m + (evt.duration_minutes || 0);
+                      return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+                    })()
+                  : null) });
+                return (
+                  <div
+                    key={evt.id}
+                    onClick={() => setSelectedEvent(evt)}
+                    title={`${evt.title} (${evt.event_type})`}
+                    style={{
+                      position: 'absolute', top: pos.top, left: 2, right: 2, height: pos.height,
+                      background: EVENT_COLOR, color: '#fff', borderRadius: 6, padding: '4px 8px',
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer', overflow: 'hidden',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      borderLeft: '3px solid #1e293b',
+                      zIndex: 1,
+                    }}
+                  >
+                    <div>{evt.title}</div>
+                    {pos.height > 35 && (
+                      <div style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>
+                        {evt.start_time?.slice(0, 5)}
+                        {evt.end_time ? ` - ${evt.end_time.slice(0, 5)}` : ''}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
               {/* Session blocks */}
               {sessionsForDay(dayIdx).map((sess) => {
                 const pos = blockPos(sess);
@@ -627,6 +917,12 @@ export default function SchedulePage() {
         groups={groups}
         onClose={() => setSelected(null)}
         onSave={() => { setSelected(null); loadData(); }}
+      />
+
+      <EventDetailModal
+        event={selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        onSave={() => { setSelectedEvent(null); loadData(); }}
       />
 
       <AddSessionModal

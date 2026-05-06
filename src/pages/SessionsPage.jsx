@@ -33,13 +33,15 @@ const TYPE_OPTIONS = [
   { value: 'group', label: 'Group' },
 ];
 
-/* ─── Quick Log Modal ─── */
-function QuickLogModal({ open, onClose, counselorId, counselorName, students, groups, onSaved }) {
+/* ─── Quick Log Modal (also used for edit) ─── */
+function QuickLogModal({ open, onClose, counselorId, counselorName, students, groups, onSaved, editingSession, onDelete }) {
+  const isEditing = !!editingSession;
   const [sessionType, setSessionType] = useState('individual');
   const [studentId, setStudentId] = useState('');
   const [groupId, setGroupId] = useState('');
   const [studentSearch, setStudentSearch] = useState('');
   const [sessionDate, setSessionDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [startTime, setStartTime] = useState('');
   const [duration, setDuration] = useState(30);
   const [domain, setDomain] = useState('responsive');
   const [notes, setNotes] = useState('');
@@ -49,20 +51,35 @@ function QuickLogModal({ open, onClose, counselorId, counselorName, students, gr
   const [tmplOpen, setTmplOpen] = useState(false);
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (editingSession) {
+      const s = editingSession;
+      setSessionType(s.session_type || (s.group_id ? 'group' : 'individual'));
+      setStudentId(s.student_id || '');
+      setGroupId(s.group_id || '');
+      const stu = students.find((x) => x.id === s.student_id);
+      setStudentSearch(stu ? stu.name : '');
+      setSessionDate(s.session_date || format(new Date(), 'yyyy-MM-dd'));
+      setStartTime((s.start_time || '').slice(0, 5));
+      setDuration(s.duration_minutes ?? 30);
+      setDomain(s.domain || 'responsive');
+      setNotes(s.notes || '');
+      setStatus(s.status || 'Completed');
+    } else {
       setSessionType('individual');
       setStudentId('');
       setGroupId('');
       setStudentSearch('');
       setSessionDate(format(new Date(), 'yyyy-MM-dd'));
+      setStartTime('');
       setDuration(30);
       setDomain('responsive');
       setNotes('');
       setStatus('Completed');
-      setError('');
-      setTmplOpen(false);
     }
-  }, [open]);
+    setError('');
+    setTmplOpen(false);
+  }, [open, editingSession, students]);
 
   if (!open) return null;
 
@@ -99,27 +116,39 @@ function QuickLogModal({ open, onClose, counselorId, counselorName, students, gr
       student_id: sessionType === 'individual' ? studentId : null,
       group_id: sessionType === 'group' ? groupId : null,
       session_date: sessionDate,
+      start_time: startTime || null,
       duration_minutes: Number(duration),
       domain,
       notes: notes.trim() || null,
       status,
     };
 
-    const { data, error: insertErr } = await db.insert('sessions', record);
-
-    if (insertErr) {
-      setError(insertErr.message || 'Failed to save session.');
-      setSaving(false);
-      return;
+    let saved;
+    if (isEditing) {
+      const { data, error: updateErr } = await db.update('sessions', editingSession.id, record);
+      if (updateErr) {
+        setError(updateErr.message || 'Failed to update session.');
+        setSaving(false);
+        return;
+      }
+      saved = data || { id: editingSession.id };
+    } else {
+      const { data, error: insertErr } = await db.insert('sessions', record);
+      if (insertErr) {
+        setError(insertErr.message || 'Failed to save session.');
+        setSaving(false);
+        return;
+      }
+      saved = data;
     }
 
-    // Auto-log time for completed sessions
-    if (status === 'Completed' && data) {
+    // Auto-log time for completed sessions (autoLogTime is idempotent by source_id)
+    if (status === 'Completed' && saved) {
       const selectedGroup = groups.find((g) => g.id === groupId);
       const selectedStudent = students.find((s) => s.id === studentId);
       await autoLogTime({
         counselorId,
-        sessionId: data.id,
+        sessionId: saved.id,
         date: sessionDate,
         durationMinutes: Number(duration),
         description:
@@ -136,7 +165,9 @@ function QuickLogModal({ open, onClose, counselorId, counselorName, students, gr
   return (
     <div style={overlay} onClick={onClose}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>Log Session</h3>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>
+          {isEditing ? 'Edit Session' : 'Log Session'}
+        </h3>
         {error && <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 12 }}>{error}</div>}
         <form onSubmit={handleSave}>
           {/* Session Type Toggle */}
@@ -219,7 +250,7 @@ function QuickLogModal({ open, onClose, counselorId, counselorName, students, gr
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
               <label style={lbl}>Date *</label>
               <input
@@ -230,7 +261,16 @@ function QuickLogModal({ open, onClose, counselorId, counselorName, students, gr
               />
             </div>
             <div>
-              <label style={lbl}>Duration (minutes) *</label>
+              <label style={lbl}>Start Time</label>
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={lbl}>Duration (min) *</label>
               <input
                 type="number"
                 min="1"
@@ -299,6 +339,18 @@ function QuickLogModal({ open, onClose, counselorId, counselorName, students, gr
             >
               Cancel
             </button>
+            {isEditing && onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #fecaca',
+                  background: '#fff', color: '#b91c1c', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Delete
+              </button>
+            )}
             <button
               type="submit"
               disabled={saving}
@@ -308,7 +360,7 @@ function QuickLogModal({ open, onClose, counselorId, counselorName, students, gr
                 cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1,
               }}
             >
-              {saving ? 'Saving...' : 'Save Session'}
+              {saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Session'}
             </button>
           </div>
         </form>
@@ -368,6 +420,7 @@ export default function SessionsPage() {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showLogModal, setShowLogModal] = useState(false);
+  const [editingSession, setEditingSession] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
 
   const [searchParams] = useSearchParams();
@@ -708,7 +761,7 @@ export default function SessionsPage() {
                         </div>
                       </div>
                     </div>
-                    <div>
+                    <div style={{ marginBottom: 12 }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase' }}>Full Notes</span>
                       <div style={{
                         fontSize: 14, color: '#374151', marginTop: 4,
@@ -717,6 +770,15 @@ export default function SessionsPage() {
                         {s.notes || 'No notes recorded.'}
                       </div>
                     </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditingSession(s); }}
+                      style={{
+                        padding: '6px 14px', borderRadius: 6, border: '1px solid ' + TEAL,
+                        background: '#fff', color: TEAL, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      Edit Session
+                    </button>
                   </div>
                 )}
               </div>
@@ -725,15 +787,22 @@ export default function SessionsPage() {
         </div>
       )}
 
-      {/* Quick Log Modal */}
+      {/* Quick Log Modal (also used for edit) */}
       <QuickLogModal
-        open={showLogModal}
-        onClose={() => setShowLogModal(false)}
+        open={showLogModal || !!editingSession}
+        onClose={() => { setShowLogModal(false); setEditingSession(null); }}
         counselorId={counselor?.id}
         counselorName={counselor?.name}
         students={students}
         groups={groups}
-        onSaved={() => { setShowLogModal(false); loadData(); }}
+        editingSession={editingSession}
+        onDelete={editingSession ? async () => {
+          if (!confirm('Delete this session? This cannot be undone.')) return;
+          await db.del('sessions', editingSession.id);
+          setEditingSession(null);
+          loadData();
+        } : null}
+        onSaved={() => { setShowLogModal(false); setEditingSession(null); loadData(); }}
       />
     </div>
   );
