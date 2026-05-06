@@ -14,16 +14,19 @@ const MONTH_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const GROUP_COLORS = ['#2A9D8F', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 const EVENT_TYPES = [
-  { value: 'meeting', label: 'Meeting' },
-  { value: 'duty', label: 'Duty' },
-  { value: 'planning', label: 'Planning' },
-  { value: 'training', label: 'Training / PD' },
-  { value: 'ard', label: 'ARD' },
-  { value: '504', label: '504' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'other', label: 'Other' },
+  { value: 'meeting',  label: 'Meeting',       color: '#475569' }, // slate
+  { value: 'duty',     label: 'Duty',          color: '#d97706' }, // amber
+  { value: 'planning', label: 'Planning',      color: '#0284c7' }, // sky
+  { value: 'training', label: 'Training / PD', color: '#7c3aed' }, // violet
+  { value: 'ard',      label: 'ARD',           color: '#b91c1c' }, // red
+  { value: '504',      label: '504',           color: '#15803d' }, // green
+  { value: 'admin',    label: 'Admin',         color: '#4b5563' }, // gray
+  { value: 'other',    label: 'Other',         color: '#525252' }, // neutral
 ];
-const EVENT_COLOR = '#475569'; // slate — distinct from group colors
+
+function colorForEventType(t) {
+  return EVENT_TYPES.find((x) => x.value === t)?.color || '#475569';
+}
 
 function getColorForGroup(groupId, groups) {
   const idx = groups.findIndex((g) => g.id === groupId);
@@ -268,7 +271,7 @@ function MonthlyView({ currentMonth, sessions, events, groups, onPrevMonth, onNe
                         title={`${evt.title} ${evt.start_time?.slice(0, 5) || ''}`}
                         style={{
                           width: 10, height: 10, borderRadius: 2,
-                          background: EVENT_COLOR,
+                          background: colorForEventType(evt.event_type),
                           flexShrink: 0,
                           cursor: onEventClick ? 'pointer' : 'default',
                         }}
@@ -283,20 +286,40 @@ function MonthlyView({ currentMonth, sessions, events, groups, onPrevMonth, onNe
       </div>
 
       {/* Legend */}
-      {groups.length > 0 && (
+      {(groups.length > 0 || (events && events.length > 0)) && (
         <div className="card" style={{ marginTop: 16, padding: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Group Legend</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-            {groups.map((g) => {
-              const color = getColorForGroup(g.id, groups);
-              return (
-                <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                  <span style={{ color: '#374151' }}>{g.name}</span>
-                </div>
-              );
-            })}
-          </div>
+          {groups.length > 0 && (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Groups (circles)</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 12 }}>
+                {groups.map((g) => {
+                  const color = getColorForGroup(g.id, groups);
+                  return (
+                    <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                      <span style={{ color: '#374151' }}>{g.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {events && events.length > 0 && (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Events (squares)</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                {EVENT_TYPES
+                  .filter((t) => events.some((e) => e.event_type === t.value))
+                  .map((t) => (
+                    <div key={t.value} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: 2, background: t.color, flexShrink: 0 }} />
+                      <span style={{ color: '#374151' }}>{t.label}</span>
+                    </div>
+                  ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -727,9 +750,9 @@ function AgendaView({ sessions, events, groups, students, range, onSessionClick,
               );
             }
             const isEvent = row.kind === 'event';
-            const groupColor = !isEvent
-              ? getColorForGroup(row.raw.group_id, groups)
-              : EVENT_COLOR;
+            const groupColor = isEvent
+              ? colorForEventType(row.raw.event_type)
+              : getColorForGroup(row.raw.group_id, groups);
             return (
               <div
                 key={row.id}
@@ -768,7 +791,7 @@ function AgendaView({ sessions, events, groups, students, range, onSessionClick,
                   <span style={{
                     fontSize: 11, fontWeight: 600,
                     padding: '2px 8px', borderRadius: 10,
-                    background: isEvent ? '#475569' : '#e5e7eb',
+                    background: isEvent ? colorForEventType(row.raw.event_type) : '#e5e7eb',
                     color: isEvent ? '#fff' : '#374151',
                   }}>
                     {row.typeLabel}
@@ -1155,6 +1178,7 @@ export default function SchedulePage() {
                       return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
                     })()
                   : null) });
+                const evtColor = colorForEventType(evt.event_type);
                 return (
                   <div
                     key={evt.id}
@@ -1162,10 +1186,10 @@ export default function SchedulePage() {
                     title={`${evt.title} (${evt.event_type})`}
                     style={{
                       position: 'absolute', top: pos.top, left: 2, right: 2, height: pos.height,
-                      background: EVENT_COLOR, color: '#fff', borderRadius: 6, padding: '4px 8px',
+                      background: evtColor, color: '#fff', borderRadius: 6, padding: '4px 8px',
                       fontSize: 12, fontWeight: 600, cursor: 'pointer', overflow: 'hidden',
                       boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                      borderLeft: '3px solid #1e293b',
+                      borderLeft: '3px solid rgba(0,0,0,0.35)',
                       zIndex: 1,
                     }}
                   >
@@ -1215,6 +1239,40 @@ export default function SchedulePage() {
           ))}
         </div>
       </div>
+
+      {/* Weekly Legend */}
+      {(groups.length > 0 || events.length > 0) && (
+        <div className="card" style={{ marginTop: 16, padding: 16 }}>
+          {groups.length > 0 && (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Groups</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: events.length ? 12 : 0 }}>
+                {groups.map((g) => (
+                  <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                    <div style={{ width: 12, height: 12, borderRadius: 3, background: getColorForGroup(g.id, groups), flexShrink: 0 }} />
+                    <span style={{ color: '#374151' }}>{g.name}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {events.length > 0 && (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Event types</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+                {EVENT_TYPES
+                  .filter((t) => events.some((e) => e.event_type === t.value))
+                  .map((t) => (
+                    <div key={t.value} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                      <div style={{ width: 12, height: 12, borderRadius: 3, background: t.color, flexShrink: 0, borderLeft: '3px solid rgba(0,0,0,0.35)' }} />
+                      <span style={{ color: '#374151' }}>{t.label}</span>
+                    </div>
+                  ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <SessionDetailModal
         session={selected}
