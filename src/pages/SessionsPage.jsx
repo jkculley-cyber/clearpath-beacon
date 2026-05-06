@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
-import { autoLogTime } from '../lib/autoLogTime';
+import { autoLogTime, removeAutoLoggedTime } from '../lib/autoLogTime';
 import { SESSION_STATUSES } from '../lib/constants';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks } from 'date-fns';
 import SessionNoteTemplateModal from '../components/SessionNoteTemplateModal';
@@ -142,20 +142,25 @@ function QuickLogModal({ open, onClose, counselorId, counselorName, students, gr
       saved = data;
     }
 
-    // Auto-log time for completed sessions (autoLogTime is idempotent by source_id)
-    if (status === 'Completed' && saved) {
-      const selectedGroup = groups.find((g) => g.id === groupId);
-      const selectedStudent = students.find((s) => s.id === studentId);
-      await autoLogTime({
-        counselorId,
-        sessionId: saved.id,
-        date: sessionDate,
-        durationMinutes: Number(duration),
-        description:
-          sessionType === 'group'
-            ? `Group counseling: ${selectedGroup?.name || 'Group session'}`
-            : `Individual counseling: ${sName(selectedStudent)}`,
-      });
+    // Auto-log time for completed sessions (autoLogTime is idempotent by source_id).
+    // If status moved away from Completed (e.g. Completed → Cancelled), remove the prior auto-entry.
+    if (saved) {
+      if (status === 'Completed') {
+        const selectedGroup = groups.find((g) => g.id === groupId);
+        const selectedStudent = students.find((s) => s.id === studentId);
+        await autoLogTime({
+          counselorId,
+          sessionId: saved.id,
+          date: sessionDate,
+          durationMinutes: Number(duration),
+          description:
+            sessionType === 'group'
+              ? `Group counseling: ${selectedGroup?.name || 'Group session'}`
+              : `Individual counseling: ${sName(selectedStudent)}`,
+        });
+      } else if (isEditing) {
+        await removeAutoLoggedTime(saved.id);
+      }
     }
 
     setSaving(false);
@@ -798,6 +803,7 @@ export default function SessionsPage() {
         editingSession={editingSession}
         onDelete={editingSession ? async () => {
           if (!confirm('Delete this session? This cannot be undone.')) return;
+          await removeAutoLoggedTime(editingSession.id);
           await db.del('sessions', editingSession.id);
           setEditingSession(null);
           loadData();

@@ -3,9 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
 import { SESSION_STATUSES } from '../lib/constants';
-import { startOfWeek, endOfWeek, addWeeks, format, parseISO, isToday } from 'date-fns';
+import { startOfWeek, endOfWeek, addWeeks, addDays, format, parseISO, isToday } from 'date-fns';
 import { startOfMonth, endOfMonth, addMonths, getDay, getDaysInMonth } from 'date-fns';
-import { autoLogTime } from '../lib/autoLogTime';
+import { autoLogTime, removeAutoLoggedTime } from '../lib/autoLogTime';
 
 const HOURS = Array.from({ length: 8 }, (_, i) => i + 8);
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -122,6 +122,9 @@ function SessionDetailModal({ session, groups, onClose, onSave }) {
         durationMinutes: Number(duration) || 30,
         description: group ? `Group counseling: ${group.name}` : 'Individual counseling session',
       });
+    } else {
+      // Status moved away from Completed — clear any prior auto-logged time entry.
+      await removeAutoLoggedTime(session.id);
     }
 
     setSaving(false);
@@ -131,6 +134,7 @@ function SessionDetailModal({ session, groups, onClose, onSave }) {
   const handleDelete = async () => {
     if (!confirm('Delete this session? This cannot be undone.')) return;
     setDeleting(true);
+    await removeAutoLoggedTime(session.id);
     await db.del('sessions', session.id);
     setDeleting(false);
     onSave();
@@ -371,6 +375,8 @@ function AddSessionModal({ open, onClose, counselorId }) {
   const [startTime, setStartTime] = useState('09:00');
   const [duration, setDuration] = useState(30);
   const [notes, setNotes] = useState('');
+  const [recurrence, setRecurrence] = useState('never'); // never | weekly
+  const [recurrenceUntil, setRecurrenceUntil] = useState(() => format(addWeeks(new Date(), 12), 'yyyy-MM-dd'));
   const [students, setStudents] = useState([]);
   const [groupList, setGroupList] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -386,6 +392,8 @@ function AddSessionModal({ open, onClose, counselorId }) {
     setStartTime('09:00');
     setDuration(30);
     setNotes('');
+    setRecurrence('never');
+    setRecurrenceUntil(format(addWeeks(new Date(), 12), 'yyyy-MM-dd'));
     setSaving(false);
     Promise.all([
       db.select('students', { eq: { counselor_id: counselorId, status: 'active' }, order: { column: 'first_name', ascending: true } }),
@@ -413,17 +421,35 @@ function AddSessionModal({ open, onClose, counselorId }) {
 
     let err;
     if (kind === 'event') {
-      const record = {
+      const baseRecord = {
         counselor_id: counselorId,
         title: eventTitle.trim() || EVENT_TYPES.find((t) => t.value === eventType)?.label || 'Event',
         event_type: eventType,
-        event_date: sessionDate,
         start_time: startTime,
         end_time: endTime,
         duration_minutes: duration,
         notes: notes || null,
       };
-      ({ error: err } = await db.insert('schedule_events', record));
+
+      if (recurrence === 'weekly' && recurrenceUntil && recurrenceUntil >= sessionDate) {
+        // Materialize one row per weekly occurrence, all sharing a series_id.
+        const seriesId = (crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random()}`;
+        let cursor = parseISO(sessionDate);
+        const untilDate = parseISO(recurrenceUntil);
+        let inserted = 0;
+        while (cursor <= untilDate && inserted < 200) {
+          const { error: insErr } = await db.insert('schedule_events', {
+            ...baseRecord,
+            event_date: format(cursor, 'yyyy-MM-dd'),
+            series_id: seriesId,
+          });
+          if (insErr) { err = insErr; break; }
+          cursor = addDays(cursor, 7);
+          inserted++;
+        }
+      } else {
+        ({ error: err } = await db.insert('schedule_events', { ...baseRecord, event_date: sessionDate }));
+      }
     } else {
       const record = {
         counselor_id: counselorId,
@@ -522,6 +548,31 @@ function AddSessionModal({ open, onClose, counselorId }) {
           <label style={lbl}>Duration (minutes)</label>
           <input className="form-input" type="number" min="5" max="480" value={duration} onChange={(e) => setDuration(parseInt(e.target.value, 10) || 30)} required />
 
+          {kind === 'event' && (
+            <>
+              <label style={lbl}>Repeats</label>
+              <select className="form-input" value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
+                <option value="never">Once</option>
+                <option value="weekly">Weekly</option>
+              </select>
+              {recurrence === 'weekly' && (
+                <>
+                  <label style={lbl}>Until</label>
+                  <input
+                    className="form-input"
+                    type="date"
+                    value={recurrenceUntil}
+                    min={sessionDate}
+                    onChange={(e) => setRecurrenceUntil(e.target.value)}
+                  />
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                    Repeats every {format(parseISO(sessionDate), 'EEEE')} through {recurrenceUntil}.
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
           <label style={lbl}>Notes</label>
           <textarea className="form-input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
 
@@ -584,9 +635,33 @@ function EventDetailModal({ event, onClose, onSave }) {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Delete this event? This cannot be undone.')) return;
+    if (!event.series_id) {
+      if (!confirm('Delete this event? This cannot be undone.')) return;
+      setDeleting(true);
+      await db.del('schedule_events', event.id);
+      setDeleting(false);
+      onSave();
+      return;
+    }
+
+    // Recurring series — three choices.
+    const choice = (window.prompt(
+      'This is part of a weekly series. Type:\n  1 = delete this occurrence only\n  2 = delete this + all future\n  3 = delete the entire series',
+      '1',
+    ) || '').trim();
+    if (!choice) return;
+    if (!['1', '2', '3'].includes(choice)) return;
+
     setDeleting(true);
-    await db.del('schedule_events', event.id);
+    if (choice === '1') {
+      await db.del('schedule_events', event.id);
+    } else {
+      const { data: siblings } = await db.select('schedule_events', { eq: { series_id: event.series_id } });
+      const targets = (siblings || []).filter((s) => choice === '3' || s.event_date >= event.event_date);
+      for (const s of targets) {
+        await db.del('schedule_events', s.id);
+      }
+    }
     setDeleting(false);
     onSave();
   };
@@ -595,6 +670,16 @@ function EventDetailModal({ event, onClose, onSave }) {
     <div style={overlay} onClick={onClose}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
         <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>Edit Event</h3>
+
+        {event.series_id && (
+          <div style={{
+            padding: '6px 10px', marginBottom: 12, borderRadius: 6,
+            background: '#eef2ff', border: '1px solid #c7d2fe',
+            fontSize: 12, color: '#3730a3', fontWeight: 500,
+          }}>
+            Part of a weekly series. Edits here apply only to this occurrence.
+          </div>
+        )}
 
         <label style={lbl}>Title *</label>
         <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
