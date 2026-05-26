@@ -14,6 +14,12 @@ const sName = (s) =>
     ? `${s.first_name} ${s.last_name || ''}`.trim()
     : s?.name || 'Unknown';
 
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const nowTimeStr = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
 /* ---- Shared Styles ---- */
 const overlay = {
   position: 'fixed',
@@ -156,12 +162,31 @@ function LogSessionModal({ open, onClose, student, counselorId }) {
   );
 }
 
-function LogContactModal({ open, onClose, student, counselorId }) {
+function LogContactModal({ open, onClose, student, counselorId, editContact }) {
   const [contactType, setContactType] = useState('Phone call');
+  const [contactDate, setContactDate] = useState(todayStr);
+  const [contactTime, setContactTime] = useState(nowTimeStr);
   const [duration, setDuration] = useState('15');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (editContact) {
+      setContactType(editContact.contact_type || 'Phone call');
+      setContactDate(editContact.contact_date || todayStr());
+      setContactTime((editContact.contact_time || '').slice(0, 5) || nowTimeStr());
+      setDuration(String(editContact.duration_minutes ?? 15));
+      setNotes(editContact.notes || '');
+    } else {
+      setContactType('Phone call');
+      setContactDate(todayStr());
+      setContactTime(nowTimeStr());
+      setDuration('15');
+      setNotes('');
+    }
+    setError('');
+  }, [editContact, open]);
 
   if (!open) return null;
 
@@ -169,14 +194,37 @@ function LogContactModal({ open, onClose, student, counselorId }) {
     e.preventDefault();
     setError('');
     setSaving(true);
-    const { error: err } = await db.insert('communications', {
-      counselor_id: counselorId,
-      student_id: student.id,
+    const payload = {
       contact_type: contactType,
+      contact_date: contactDate || todayStr(),
+      contact_time: contactTime || null,
       duration_minutes: parseInt(duration, 10),
       notes,
-      contact_date: new Date().toISOString().slice(0, 10),
-    });
+    };
+    let err;
+    if (editContact) {
+      ({ error: err } = await db.update('communications', editContact.id, payload));
+    } else {
+      ({ error: err } = await db.insert('communications', {
+        counselor_id: counselorId,
+        student_id: student.id,
+        ...payload,
+      }));
+    }
+    if (err) {
+      setError(err.message || String(err));
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+    onClose(true);
+  };
+
+  const handleDelete = async () => {
+    if (!editContact) return;
+    if (!confirm('Delete this contact log entry? This cannot be undone.')) return;
+    setSaving(true);
+    const { error: err } = await db.del('communications', editContact.id);
     if (err) {
       setError(err.message || String(err));
       setSaving(false);
@@ -189,13 +237,33 @@ function LogContactModal({ open, onClose, student, counselorId }) {
   return (
     <div style={overlay} onClick={() => onClose(false)}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
-        <h3 style={modalTitle}>Log Contact</h3>
+        <h3 style={modalTitle}>{editContact ? 'Edit Contact' : 'Log Contact'}</h3>
         {error && (
           <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 12 }}>
             {error}
           </div>
         )}
         <form onSubmit={handleSave}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div>
+              <label className="form-label">Date</label>
+              <input
+                className="form-input"
+                type="date"
+                value={contactDate}
+                onChange={(e) => setContactDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="form-label">Time</label>
+              <input
+                className="form-input"
+                type="time"
+                value={contactTime}
+                onChange={(e) => setContactTime(e.target.value)}
+              />
+            </div>
+          </div>
           <label className="form-label">Contact Type</label>
           <select
             className="form-input"
@@ -233,13 +301,26 @@ function LogContactModal({ open, onClose, student, counselorId }) {
             >
               Cancel
             </button>
+            {editContact && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={saving}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #fecaca',
+                  background: '#fff', color: '#b91c1c', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Delete
+              </button>
+            )}
             <button
               type="submit"
               className="btn btn-primary"
               disabled={saving}
               style={{ flex: 1 }}
             >
-              {saving ? 'Saving...' : 'Log Contact'}
+              {saving ? 'Saving...' : (editContact ? 'Save Changes' : 'Log Contact')}
             </button>
           </div>
         </form>
@@ -594,6 +675,7 @@ export default function StudentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showLogSession, setShowLogSession] = useState(false);
   const [showLogContact, setShowLogContact] = useState(false);
+  const [editContact, setEditContact] = useState(null);
   const [showNote, setShowNote] = useState(false);
   const [editNote, setEditNote] = useState(null);
   const [showEditStudent, setShowEditStudent] = useState(false);
@@ -853,7 +935,10 @@ export default function StudentDetailPage() {
         </button>
         <button
           className="btn btn-outline"
-          onClick={() => setShowLogContact(true)}
+          onClick={() => {
+            setEditContact(null);
+            setShowLogContact(true);
+          }}
         >
           Log Contact
         </button>
@@ -1280,7 +1365,16 @@ export default function StudentDetailPage() {
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
               {comms.map((c) => (
-                <div key={c.id} className="card">
+                <div
+                  key={c.id}
+                  className="card"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => {
+                    setEditContact(c);
+                    setShowLogContact(true);
+                  }}
+                  title="Click to edit"
+                >
                   <div
                     style={{
                       display: 'flex',
@@ -1299,8 +1393,9 @@ export default function StudentDetailPage() {
                         color: 'var(--text-muted)',
                       }}
                     >
-                      {c.contact_date} &middot; {c.duration_minutes}{' '}
-                      min
+                      {c.contact_date}
+                      {c.contact_time ? ` · ${c.contact_time.slice(0, 5)}` : ''}
+                      {' · '}{c.duration_minutes} min
                     </span>
                   </div>
                   {c.notes && (
@@ -1432,10 +1527,12 @@ export default function StudentDetailPage() {
         open={showLogContact}
         onClose={(s) => {
           setShowLogContact(false);
+          setEditContact(null);
           if (s) loadAll();
         }}
         student={student}
         counselorId={counselor?.id}
+        editContact={editContact}
       />
       <NoteModal
         open={showNote}
