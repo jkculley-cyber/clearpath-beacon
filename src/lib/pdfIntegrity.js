@@ -92,7 +92,7 @@ export function stampIntegrityFooter(doc, { hash, docKind = 'Beacon document', a
     if (attest?.id) {
       const attLabel = `Attestation receipt ${attest.id.slice(0, 8)} | client-recorded ${attest.generated_at}`;
       doc.text(attLabel, 14, ph - 20);
-      doc.text('Authoritative timestamp: verify.clearpathedgroup.com', pageW - 14, ph - 20, { align: 'right' });
+      doc.text('Verify at: clearpathedgroup.com/verify-attestation', pageW - 14, ph - 20, { align: 'right' });
     } else {
       doc.text('Attestation: offline at generation time (skipped)', 14, ph - 20);
     }

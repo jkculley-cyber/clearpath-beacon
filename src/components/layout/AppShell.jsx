@@ -140,36 +140,37 @@ export default function AppShell() {
     };
   }, [counselor?.id]);
 
-  // Friday auto-backup: encrypted, written to the counselor's chosen folder
-  // (e.g. OneDrive-synced) when available, falling back to Downloads. Plain
-  // JSON only when no license key is set (trial users); after license entry,
-  // every backup is AES-GCM encrypted with a key derived from license+email.
+  // Auto-backup on launch: encrypted, written to the counselor's chosen folder
+  // (e.g. OneDrive-synced) when available, falling back to a download. Runs on
+  // ANY day the app is opened when the last backup is stale — not Friday-only,
+  // so a counselor who is out on Friday still gets protected. Trial users (no
+  // license key) are NOT auto-backed-up in plaintext: encrypted auto-backup
+  // begins once a license key is entered. We never write student PII in clear.
   useEffect(() => {
     if (!counselor?.id) return;
     const todayIso = new Date().toISOString().slice(0, 10);
     const lastAutoTry = localStorage.getItem('beacon_last_auto_backup_try');
     if (lastAutoTry === todayIso) return; // already attempted today
-    const now = new Date();
-    if (now.getDay() !== 5 || now.getHours() < 12) return; // Fridays after noon only
     const lastBackup = localStorage.getItem('beacon_last_backup');
     const ageDays = lastBackup
       ? (Date.now() - new Date(lastBackup).getTime()) / 86400000
       : 999;
-    if (ageDays < 6) return;
+    if (ageDays < 2) return; // back up at most every other day
     localStorage.setItem('beacon_last_auto_backup_try', todayIso);
     (async () => {
       try {
-        const data = await exportLocalBackup();
         const licenseKey = getLicenseKey?.();
-        let blob;
-        let filename;
-        if (licenseKey && counselor?.email) {
-          blob = await encryptBackup(data, { licenseKey, email: counselor.email });
-          filename = `beacon-backup-${todayIso}.bcnbkp`;
-        } else {
-          blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-          filename = `beacon-backup-${todayIso}.json`;
+        // Never auto-write student PII in plaintext. Encrypted auto-backup
+        // requires a license key + email; until then, flag the UI to prompt.
+        if (!licenseKey || !counselor?.email) {
+          localStorage.setItem('beacon_backup_needs_license', '1');
+          console.warn('Auto-backup skipped: encrypted backup requires a license key. Plaintext auto-backup is disabled to protect student PII.');
+          return;
         }
+        localStorage.removeItem('beacon_backup_needs_license');
+        const data = await exportLocalBackup();
+        const blob = await encryptBackup(data, { licenseKey, email: counselor.email });
+        const filename = `beacon-backup-${todayIso}.bcnbkp`;
         const savedToFolder = await saveBackupToHandle(blob, filename);
         if (!savedToFolder) {
           const url = URL.createObjectURL(blob);
