@@ -39,13 +39,29 @@ async function isTrialActive() {
 // Persisted in localStorage so it survives reloads
 const STORAGE_MODE_KEY = 'beacon_storage_mode';
 
+// B4 (CC30 naysayer audit): cloud mode is hard-disabled at the build level until
+// (a) district plumbing ships AND (b) cloud RLS on the Beacon Supabase project
+// (cghhabcbgyoqwqjzunfo) is confirmed tenant-isolated. Until then Beacon is
+// local-only, so a counselor cannot flip to a cloud backend whose isolation is
+// unverified. getStorageMode() is the single chokepoint every data path and the
+// auth context read through, so coercing it to 'local' neutralizes every cloud
+// entry point — including any stale 'cloud' value already in localStorage.
+// To re-enable: confirm cloud RLS, then set CLOUD_MODE_ENABLED = true.
+const CLOUD_MODE_ENABLED = false;
+
+export function isCloudModeEnabled() {
+  return CLOUD_MODE_ENABLED;
+}
+
 export function getStorageMode() {
+  if (!CLOUD_MODE_ENABLED) return 'local';
   return localStorage.getItem(STORAGE_MODE_KEY) || 'local';
 }
 
 export function setStorageMode(mode) {
   if (mode !== 'local' && mode !== 'cloud') throw new Error('Invalid storage mode');
-  localStorage.setItem(STORAGE_MODE_KEY, mode);
+  // Cloud disabled at build level — never persist 'cloud'.
+  localStorage.setItem(STORAGE_MODE_KEY, CLOUD_MODE_ENABLED ? mode : 'local');
 }
 
 export function isLocalMode() {

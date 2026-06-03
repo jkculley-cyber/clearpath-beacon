@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { seedSampleData } from '../lib/seedSampleData';
 import { decryptBackup } from '../lib/backupCrypto';
-import { importLocalBackup } from '../lib/db';
+import { importLocalBackup, isCloudModeEnabled } from '../lib/db';
 
 // Pre-fill the license field when the page is opened from clearpathedgroup.com/activate
 // with the key in the URL (e.g. /setup?key=BCN-XXXXXX-XXXX). Counselor doesn't retype.
@@ -335,18 +335,22 @@ export default function LocalSetupPage() {
           </div>
         )}
 
-        <div style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: '#9ca3af' }}>
-          Have a district account?{' '}
-          <button
-            onClick={() => {
-              localStorage.setItem('beacon_storage_mode', 'cloud');
-              window.location.reload();
-            }}
-            style={{ background: 'none', border: 'none', color: '#2A9D8F', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}
-          >
-            Sign in with cloud mode
-          </button>
-        </div>
+        {/* B4 (CC30 naysayer audit): cloud sign-in hidden until cloud RLS is confirmed
+            and district plumbing ships. Auto-restores when CLOUD_MODE_ENABLED flips. */}
+        {isCloudModeEnabled() && (
+          <div style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: '#9ca3af' }}>
+            Have a district account?{' '}
+            <button
+              onClick={() => {
+                localStorage.setItem('beacon_storage_mode', 'cloud');
+                window.location.reload();
+              }}
+              style={{ background: 'none', border: 'none', color: '#2A9D8F', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}
+            >
+              Sign in with cloud mode
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
