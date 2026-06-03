@@ -497,7 +497,7 @@ function ComplianceRing({ percentage, size = 200, strokeWidth = 18 }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (Math.min(percentage, 100) / 100) * circumference;
-  const color = percentage >= 82 ? '#22c55e' : percentage >= 78 ? '#f59e0b' : '#ef4444';
+  const color = percentage >= 80 ? '#22c55e' : percentage >= 75 ? '#f59e0b' : '#ef4444';
 
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -755,11 +755,11 @@ export default function TimeTrackerPage() {
       </div>
 
       {/* Alert banner */}
-      {ytdPct < 82 && (
+      {ytdPct < 80 && (
         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ color: '#ef4444', fontWeight: 700, fontSize: 18 }}>!</span>
           <span style={{ color: '#b91c1c', fontSize: 14 }}>
-            Your YTD counseling percentage is <strong>{ytdPct}%</strong>, below the 80/20 compliance threshold of 82%.
+            Your YTD counseling percentage is <strong>{ytdPct}%</strong>, below the SB 179 (TEC §33.006) 80% direct-services threshold.
           </span>
         </div>
       )}
@@ -853,7 +853,7 @@ export default function TimeTrackerPage() {
           </h3>
           <ComplianceRing percentage={ytdPct} />
           <p style={{ fontSize: 13, color: '#6b7280', marginTop: 12 }}>
-            {ytdPct >= 82 ? 'You are in compliance.' : 'Below threshold. Increase counseling activities.'}
+            {ytdPct >= 80 ? 'You are in compliance.' : 'Below threshold. Increase counseling activities.'}
           </p>
         </div>
       </div>
