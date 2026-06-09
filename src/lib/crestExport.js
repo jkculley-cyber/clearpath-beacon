@@ -15,6 +15,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { CREST_CATEGORIES, categoryProgress, overallProgress, getNextCrestDeadline } from './crestData';
+import { renderAdditionalInfo } from './pdfShared';
 
 const TEAL = [42, 157, 143];
 const PURPLE = [139, 92, 246];
@@ -281,7 +282,7 @@ function buildCategoryPage(doc, cat, catArtifacts) {
   }
 }
 
-export function exportCrestPortfolio({ counselor, schoolYear, artifacts }) {
+export function exportCrestPortfolio({ counselor, schoolYear, artifacts, additionalInfo = '' }) {
   const doc = new jsPDF();
   const autoCount = artifacts.filter((a) => a.auto_derived).length;
 
@@ -292,6 +293,12 @@ export function exportCrestPortfolio({ counselor, schoolYear, artifacts }) {
       .filter((a) => a.category === cat.key)
       .sort((a, b) => (a.date_collected || '').localeCompare(b.date_collected || ''));
     buildCategoryPage(doc, cat, catArtifacts);
+  }
+
+  // Counselor-added narrative (optional) — its own page, numbered with the rest.
+  if ((additionalInfo || '').trim()) {
+    doc.addPage();
+    renderAdditionalInfo(doc, 30, additionalInfo, { color: PURPLE, sanitize: toAscii });
   }
 
   // Number every page

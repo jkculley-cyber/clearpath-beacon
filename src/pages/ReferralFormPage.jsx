@@ -360,7 +360,7 @@ export default function ReferralFormPage() {
               <span>Safety Concerns</span>
             </div>
             <p style={{ fontSize: 12, color: '#7f1d1d', margin: '0 0 10px', lineHeight: 1.5 }}>
-              <strong>If a student is in immediate danger, call 911 first.</strong> Then submit this referral so the counselor has a record.
+              <strong>If you have a safety concern, reach a counselor or administrator right away</strong> so they can help assess the situation and respond. If a student is in <strong>immediate danger, call 911 first</strong>, then notify a counselor or administrator. Submitting this referral also creates a record.
             </p>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#7f1d1d', marginBottom: 8, cursor: 'pointer', lineHeight: 1.5 }}>
               <input type="checkbox" checked={harmToSelf} onChange={(e) => setHarmToSelf(e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />

@@ -6,6 +6,7 @@ import { db } from '../lib/db';
 import { SESSION_STATUSES, ASCA_DOMAINS, PROGRESS_LEVELS, PROGRESS_COLORS } from '../lib/constants';
 import { autoLogTime } from '../lib/autoLogTime';
 import { generateGroupProgressPDF } from '../lib/pdfExports';
+import ExportNotesModal from '../components/ExportNotesModal';
 
 const TABS = ['Members', 'Sessions', 'Objectives', 'Lesson Plan'];
 
@@ -505,6 +506,7 @@ export default function GroupDetailPage() {
   const [showLogSession, setShowLogSession] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [showRateProgress, setShowRateProgress] = useState(null); // session id or null
+  const [showExport, setShowExport] = useState(false);
   const [showAIPlan, setShowAIPlan] = useState(false);
 
   const objectives = deriveObjectives(group);
@@ -585,7 +587,7 @@ export default function GroupDetailPage() {
 
   const handleExportPDF = () => {
     if (!group) return;
-    generateGroupProgressPDF(group, members, sessions);
+    setShowExport(true);
   };
 
   if (loading) return <div className="page"><p style={{ color: 'var(--text-muted)' }}>Loading...</p></div>;
@@ -593,6 +595,13 @@ export default function GroupDetailPage() {
 
   return (
     <div className="page">
+      {showExport && (
+        <ExportNotesModal
+          title="Export Group Progress PDF"
+          onClose={() => setShowExport(false)}
+          onConfirm={(info) => generateGroupProgressPDF(group, members, sessions, info)}
+        />
+      )}
       {/* ---- Header ---- */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
