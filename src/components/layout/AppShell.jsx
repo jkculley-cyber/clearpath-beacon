@@ -3,7 +3,7 @@ import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { db, exportLocalBackup } from '../../lib/db';
 import { encryptBackup } from '../../lib/backupCrypto';
-import { saveBackupToHandle } from '../../lib/backupFolder';
+import { saveBackupToHandle, getBackupFolderName, isFsAccessSupported } from '../../lib/backupFolder';
 import { isReferralAlert } from '../../lib/referralAlerts';
 import { startNotificationPoll, stopNotificationPoll, getNotificationPrefs } from '../../lib/notifications';
 import CrisisLaunchButton from '../CrisisLaunchButton';
@@ -55,6 +55,19 @@ export default function AppShell() {
   });
   const [backingUp, setBackingUp] = useState(false);
   const [showRestoreGuide, setShowRestoreGuide] = useState(false);
+  // Off-device backup folder: null = not yet checked, '' / name = checked.
+  // Drives the "set up a folder" prompt and is what makes automatic backup reliable.
+  const [backupFolder, setBackupFolder] = useState(null);
+  // Lifetime totals — also feeds the "has data worth protecting" backup gate below.
+  const [sidebarSessionCount, setSidebarSessionCount] = useState(null);
+  const [sidebarStudentCount, setSidebarStudentCount] = useState(null);
+  const fsSupported = isFsAccessSupported();
+  useEffect(() => {
+    let cancelled = false;
+    getBackupFolderName().then((n) => { if (!cancelled) setBackupFolder(n || ''); });
+    return () => { cancelled = true; };
+  }, [counselor?.id]);
+
   const backupAge = useMemo(() => {
     if (!counselor) return null;
     const last = localStorage.getItem('beacon_last_backup');
@@ -62,9 +75,55 @@ export default function AppShell() {
     return Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
   }, [counselor]);
   const backupUrgency = backupAge >= 30 || backupAge >= 999 ? 'critical' : backupAge >= 14 ? 'warning' : backupAge >= 7 ? 'nudge' : null;
-  // Suppress backup banner for first 48 hours after signup — don't scare new users
+  // Suppress staleness banner for first 48 hours after signup — don't scare new users
   const isNewUser = counselor?.trial_started_at && (Date.now() - new Date(counselor.trial_started_at).getTime()) < 48 * 60 * 60 * 1000;
-  const showBackupBanner = backupUrgency && !backupDismissed && !isNewUser;
+
+  // Why automatic off-device backup isn't running yet, if it isn't:
+  //  'trial'     — no license key, so encrypted auto-backup can't run (CC30: never auto-write plaintext PII).
+  //                Auto-backup begins once the counselor activates. Until then, only manual backups protect them.
+  //  'no_folder' — licensed, but no off-device folder picked, so the only reliable silent target is missing.
+  // Only nudge once there's data worth losing; a brand-new empty install has nothing at risk yet.
+  const hasData = (sidebarStudentCount ?? 0) > 0 || (sidebarSessionCount ?? 0) > 0;
+  const hasLicense = !!(getLicenseKey?.());
+  const autoBackupBlocked = !counselor
+    ? null
+    : !hasLicense
+    ? 'trial'
+    : (fsSupported && backupFolder === '' ? 'no_folder' : null);
+
+  // Single source of truth for the backup banner. Protection prompts (auto-backup
+  // is off) take priority over plain staleness — they're more actionable and they
+  // cover the trial window the staleness banner used to miss entirely.
+  let backupView = null;
+  if (hasData && autoBackupBlocked === 'trial') {
+    const hasFolder = !!backupFolder;
+    backupView = {
+      cls: 'warning',
+      text: hasFolder
+        ? '🛡️ During your trial, Beacon backs up when you click “Back Up Now” — automatic backups switch on once you activate. Back up now so your work is safe.'
+        : '🛡️ Automatic backups turn on when you activate Beacon. During your trial your work lives only on this device — set a backup folder and back it up now so nothing is lost.',
+      folderCta: fsSupported && !hasFolder,
+    };
+  } else if (hasData && autoBackupBlocked === 'no_folder') {
+    backupView = {
+      cls: 'nudge',
+      text: '🛡️ Pick a backup folder (e.g. your OneDrive or Google Drive folder) so Beacon can back up automatically. Right now your data is only backed up when you click.',
+      folderCta: true,
+    };
+  } else if (backupUrgency && !isNewUser) {
+    backupView = {
+      cls: backupUrgency,
+      text: backupAge >= 999
+        ? '⚠️ You have never backed up. Your students, sessions, and compliance data exist ONLY on this device. If your browser data is cleared, everything is permanently lost.'
+        : backupUrgency === 'critical'
+        ? `🚨 Your last backup was ${backupAge} days ago. Your data is at serious risk. Back up now — it takes 3 seconds.`
+        : backupUrgency === 'warning'
+        ? `⚠️ Your last backup was ${backupAge} days ago. Weekly backups protect months of work. One click and you're safe.`
+        : `🛡️ Your last backup was ${backupAge} days ago. A quick backup keeps your data safe.`,
+      folderCta: false,
+    };
+  }
+  const showBackupBanner = !!backupView && !backupDismissed;
 
   function dismissBackupUntilTomorrow() {
     const tomorrow = new Date();
@@ -108,10 +167,8 @@ export default function AppShell() {
     setBackingUp(false);
   }
 
-  // Sidebar value counter — lifetime totals
-  const [sidebarSessionCount, setSidebarSessionCount] = useState(null);
-  const [sidebarStudentCount, setSidebarStudentCount] = useState(null);
-
+  // Sidebar value counter — lifetime totals. Also feeds the backup "has data
+  // worth protecting" check above, so it's loaded for every counselor.
   useEffect(() => {
     if (!counselor?.id) return;
     (async () => {
@@ -140,12 +197,17 @@ export default function AppShell() {
     };
   }, [counselor?.id]);
 
-  // Auto-backup on launch: encrypted, written to the counselor's chosen folder
-  // (e.g. OneDrive-synced) when available, falling back to a download. Runs on
-  // ANY day the app is opened when the last backup is stale — not Friday-only,
-  // so a counselor who is out on Friday still gets protected. Trial users (no
-  // license key) are NOT auto-backed-up in plaintext: encrypted auto-backup
-  // begins once a license key is entered. We never write student PII in clear.
+  // Auto-backup on launch: encrypted, written SILENTLY to the counselor's chosen
+  // folder (e.g. OneDrive-synced). Runs on ANY day the app is opened when the last
+  // backup is stale — not Friday-only, so a counselor out on Friday still gets
+  // protected. Two cases where it cannot run silently are handled by the backup
+  // banner (autoBackupBlocked above), NOT here:
+  //   • Trial users (no license key) — encrypted auto-backup can't run, and we
+  //     never auto-write student PII in plaintext (CC30). The banner drives a
+  //     manual backup + folder setup until they activate.
+  //   • No backup folder picked — a programmatic download here has no user
+  //     gesture, so browsers may block it and it surprises the user with a random
+  //     file. We skip it and let the banner prompt folder setup instead.
   useEffect(() => {
     if (!counselor?.id) return;
     const todayIso = new Date().toISOString().slice(0, 10);
@@ -160,27 +222,18 @@ export default function AppShell() {
     (async () => {
       try {
         const licenseKey = getLicenseKey?.();
-        // Never auto-write student PII in plaintext. Encrypted auto-backup
-        // requires a license key + email; until then, flag the UI to prompt.
-        if (!licenseKey || !counselor?.email) {
-          localStorage.setItem('beacon_backup_needs_license', '1');
-          console.warn('Auto-backup skipped: encrypted backup requires a license key. Plaintext auto-backup is disabled to protect student PII.');
-          return;
-        }
-        localStorage.removeItem('beacon_backup_needs_license');
+        // No license → can't encrypt; banner handles the trial case.
+        if (!licenseKey || !counselor?.email) return;
         const data = await exportLocalBackup();
         const blob = await encryptBackup(data, { licenseKey, email: counselor.email });
         const filename = `beacon-backup-${todayIso}.bcnbkp`;
         const savedToFolder = await saveBackupToHandle(blob, filename);
-        if (!savedToFolder) {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          a.click();
-          URL.revokeObjectURL(url);
+        // No folder (or permission lapsed) → don't force an unreliable, gesture-less
+        // download; the banner prompts the counselor to pick a folder. Only record a
+        // successful backup when it actually landed off-device.
+        if (savedToFolder) {
+          localStorage.setItem('beacon_last_backup', new Date().toISOString());
         }
-        localStorage.setItem('beacon_last_backup', new Date().toISOString());
       } catch (err) {
         console.warn('Auto-backup failed:', err);
       }
@@ -275,18 +328,15 @@ export default function AppShell() {
         </div>
       )}
       {showBackupBanner && (
-        <div className={`backup-banner backup-${backupUrgency}`}>
+        <div className={`backup-banner backup-${backupView.cls}`}>
           <div className="backup-banner-content">
-            <span className="backup-banner-text">
-              {backupAge >= 999
-                ? '⚠️ You have never backed up. Your students, sessions, and compliance data exist ONLY on this device. If your browser data is cleared, everything is permanently lost.'
-                : backupUrgency === 'critical'
-                ? `🚨 Your last backup was ${backupAge} days ago. Your data is at serious risk. Back up now — it takes 3 seconds.`
-                : backupUrgency === 'warning'
-                ? `⚠️ Your last backup was ${backupAge} days ago. Weekly backups protect months of work. One click and you're safe.`
-                : `🛡️ Your last backup was ${backupAge} days ago. A quick backup keeps your data safe.`}
-            </span>
+            <span className="backup-banner-text">{backupView.text}</span>
             <span className="backup-banner-actions">
+              {backupView.folderCta && (
+                <button className="backup-banner-btn" onClick={() => navigate('/settings')}>
+                  📁 Set up backup folder
+                </button>
+              )}
               <button className="backup-banner-btn" onClick={handleQuickBackup} disabled={backingUp}>
                 {backingUp ? 'Saving…' : '⬇ Back Up Now'}
               </button>

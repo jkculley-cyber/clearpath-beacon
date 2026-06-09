@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../lib/db';
+import { getBackupFolderName, isFsAccessSupported } from '../lib/backupFolder';
 
 const STEPS = [
   { key: 'student', label: 'Add your first student', path: '/students', icon: '👤', tip: 'Start with 3-5 students you see most often.' },
   { key: 'group', label: 'Create a counseling group', path: '/groups', icon: '👥', tip: 'Friendship, grief, anger management — whatever you run.' },
   { key: 'session', label: 'Log your first session', path: '/students', icon: '📝', tip: 'Open a student → Log Session. Takes 30 seconds.' },
   { key: 'time', label: 'Log a time entry', path: '/time-tracker', icon: '⏱', tip: 'This powers your 80/20 compliance gauge.' },
-  { key: 'backup', label: 'Set up a backup reminder', path: '/settings', icon: '💾', tip: 'Your data lives on this device — protect it.' },
+  { key: 'backup', label: 'Set up an off-device backup folder', path: '/settings', icon: '💾', tip: 'Your data lives on this device. Pick a OneDrive/Drive folder so it backs up automatically.' },
 ];
 
 const STORAGE_KEY = 'beacon_onboarding_dismissed';
@@ -22,21 +23,24 @@ export default function OnboardingChecklist({ counselorId }) {
     if (!counselorId || dismissed) { setLoading(false); return; }
 
     (async () => {
-      const [students, groups, sessions, timeEntries] = await Promise.all([
+      const [students, groups, sessions, timeEntries, backupFolder] = await Promise.all([
         db.count('students', { counselor_id: counselorId }),
         db.count('groups', { counselor_id: counselorId }),
         db.select('sessions', { eq: { counselor_id: counselorId }, limit: 1 }),
         db.select('time_entries', { eq: { counselor_id: counselorId }, limit: 1 }),
+        getBackupFolderName(),
       ]);
-
-      const lastBackup = localStorage.getItem('beacon_last_backup');
 
       setCompleted({
         student: (students.count || 0) > 0,
         group: (groups.count || 0) > 0,
         session: (sessions.data || []).length > 0,
         time: (timeEntries.data || []).length > 0,
-        backup: !!lastBackup,
+        // "Done" means an off-device folder is configured — the thing that makes
+        // backups durable — not merely that a one-time backup file was produced.
+        // Firefox/Safari can't use the folder API, so there a completed manual
+        // backup is the best available durable path and counts instead.
+        backup: !!backupFolder || (!isFsAccessSupported() && !!localStorage.getItem('beacon_last_backup')),
       });
       setLoading(false);
     })();
