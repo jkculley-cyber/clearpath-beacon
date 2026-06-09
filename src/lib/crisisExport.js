@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { hashPayload, stampIntegrityFooter } from './pdfIntegrity';
 import { attestPdfHash } from './pdfAttestation';
 import { getLicenseKey } from './license';
+import { renderAdditionalInfo } from './pdfShared';
 
 const TEAL = [42, 157, 143];
 const RED = [220, 38, 38];
@@ -69,6 +70,9 @@ export async function generateCrisisPdf({ event, counselor, student }) {
     retroactive_minutes: event.retroactive_minutes || 0,
     answers: event.answers,
     follow_up_schedule: event.follow_up_schedule,
+    // Only include the addendum key when present, so events without one hash
+    // exactly as they did before this field existed (backward-compatible).
+    ...(event.counselor_addendum ? { counselor_addendum: event.counselor_addendum } : {}),
   });
 
   // Header bar — red for immediate-attention triggers, teal otherwise
@@ -189,8 +193,16 @@ export async function generateCrisisPdf({ event, counselor, student }) {
     fy = doc.lastAutoTable.finalY;
   }
 
-  // Signature block
-  let sy = Math.min(fy + 16, 252);
+  // Counselor-added addendum (optional) — part of the timestamped record and
+  // covered by the integrity hash above.
+  if ((event.counselor_addendum || '').trim()) {
+    fy = renderAdditionalInfo(doc, fy + 12, event.counselor_addendum, { color: SLATE, sanitize: toAscii, bottom: 250 });
+  }
+
+  // Signature block — flows after the addendum; new page if it would collide
+  // with the footers.
+  let sy = fy + 16;
+  if (sy > doc.internal.pageSize.getHeight() - 35) { doc.addPage(); sy = 40; }
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.setTextColor(...SLATE);
