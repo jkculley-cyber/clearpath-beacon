@@ -7,6 +7,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { autoLogTime } from '../lib/autoLogTime';
 import { generateProgressPDF, generateMTSSReport } from '../lib/pdfExports';
 import ExportNotesModal from '../components/ExportNotesModal';
+import CrisisRecordsSection from '../components/CrisisRecordsSection';
 
 const TABS = ['Services', 'Progress', 'Communications', 'Notes'];
 
@@ -682,10 +683,11 @@ export default function StudentDetailPage() {
   const [showEditStudent, setShowEditStudent] = useState(false);
   const [showRateProgress, setShowRateProgress] = useState(false);
   const [exportKind, setExportKind] = useState(null); // 'progress' | 'mtss' | null
+  const [crisisEvents, setCrisisEvents] = useState([]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    const [stuRes, grpRes, sessRes, commRes, noteRes, progRes] = await Promise.all([
+    const [stuRes, grpRes, sessRes, commRes, noteRes, progRes, crisisRes] = await Promise.all([
       db.selectById('students', id),
       db.select('group_members', { eq: { student_id: id } }),
       db.select('sessions', {
@@ -703,6 +705,10 @@ export default function StudentDetailPage() {
       db.select('progress_ratings', {
         eq: { student_id: id },
         order: { column: 'created_at', ascending: true },
+      }),
+      db.select('crisis_events', {
+        eq: { student_id: id },
+        order: { column: 'created_at', ascending: false },
       }),
     ]);
     setStudent(stuRes.data);
@@ -726,6 +732,7 @@ export default function StudentDetailPage() {
     setComms(commRes.data || []);
     setNotes(noteRes.data || []);
     setProgress(progRes.data || []);
+    setCrisisEvents(crisisRes.data || []);
     setLoading(false);
   }, [id]);
 
@@ -993,7 +1000,7 @@ export default function StudentDetailPage() {
           marginBottom: 20,
         }}
       >
-        {TABS.map((t) => (
+        {(crisisEvents.length > 0 ? [...TABS, 'Crisis'] : TABS).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -1522,6 +1529,15 @@ export default function StudentDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {tab === 'Crisis' && (
+        <CrisisRecordsSection
+          student={student}
+          counselor={counselor}
+          events={crisisEvents}
+          onChanged={loadAll}
+        />
       )}
 
       {/* Modals */}

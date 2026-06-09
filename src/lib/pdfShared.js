@@ -37,6 +37,7 @@ function normalizePunct(s) {
  * @param {number} [opts.right] - right edge (default 196)
  * @param {number} [opts.bottom] - bottom limit before a page break (default 278)
  * @param {(s:string)=>string} [opts.sanitize] - extra sanitizer (e.g. toAscii for CREST)
+ * @param {string} [opts.heading] - section heading (default "Additional Information")
  * @returns {number} Y position after the rendered section
  */
 export function renderAdditionalInfo(doc, startY, text, opts = {}) {
@@ -49,6 +50,7 @@ export function renderAdditionalInfo(doc, startY, text, opts = {}) {
     right = 196,
     bottom = 278,
     sanitize = (s) => s,
+    heading = 'Additional Information',
   } = opts;
 
   const body = sanitize(normalizePunct(clean));
@@ -59,7 +61,7 @@ export function renderAdditionalInfo(doc, startY, text, opts = {}) {
 
   doc.setFontSize(14);
   doc.setTextColor(...color);
-  doc.text('Additional Information', left, y);
+  doc.text(sanitize(heading), left, y);
   y += 7;
 
   doc.setFontSize(10);

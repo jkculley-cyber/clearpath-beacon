@@ -70,9 +70,12 @@ export async function generateCrisisPdf({ event, counselor, student }) {
     retroactive_minutes: event.retroactive_minutes || 0,
     answers: event.answers,
     follow_up_schedule: event.follow_up_schedule,
-    // Only include the addendum key when present, so events without one hash
-    // exactly as they did before this field existed (backward-compatible).
+    // Only include these keys when present, so events without them hash exactly
+    // as they did before the fields existed (backward-compatible). Later-added
+    // addenda change the hash on purpose: each is a new, separately attested
+    // version of the document; the original answers above are never altered.
     ...(event.counselor_addendum ? { counselor_addendum: event.counselor_addendum } : {}),
+    ...(Array.isArray(event.addenda) && event.addenda.length ? { addenda: event.addenda } : {}),
   });
 
   // Header bar — red for immediate-attention triggers, teal otherwise
@@ -193,10 +196,19 @@ export async function generateCrisisPdf({ event, counselor, student }) {
     fy = doc.lastAutoTable.finalY;
   }
 
-  // Counselor-added addendum (optional) — part of the timestamped record and
-  // covered by the integrity hash above.
+  // Counselor-added information (optional) — part of the timestamped record and
+  // covered by the integrity hash above. The creation-time note renders first;
+  // each later addendum renders under its own dated heading (append-only — the
+  // original answers are never edited).
   if ((event.counselor_addendum || '').trim()) {
     fy = renderAdditionalInfo(doc, fy + 12, event.counselor_addendum, { color: SLATE, sanitize: toAscii, bottom: 250 });
+  }
+  const addenda = Array.isArray(event.addenda) ? event.addenda.filter((a) => (a?.text || '').trim()) : [];
+  for (const ad of addenda) {
+    let stamp = '';
+    try { if (ad.added_at) stamp = format(new Date(ad.added_at), 'PPp'); } catch { stamp = ''; }
+    const heading = stamp ? `Addendum - added ${stamp}` : 'Addendum';
+    fy = renderAdditionalInfo(doc, fy + 10, ad.text, { color: SLATE, sanitize: toAscii, bottom: 250, heading });
   }
 
   // Signature block — flows after the addendum; new page if it would collide
