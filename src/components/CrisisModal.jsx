@@ -25,6 +25,7 @@ export default function CrisisModal({ open, onClose, counselor }) {
   const [triggerKey, setTriggerKey] = useState(null);
   const [answers, setAnswers] = useState({});
   const [stepIdx, setStepIdx] = useState(0);
+  const [addendum, setAddendum] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedEvent, setSavedEvent] = useState(null);
 
@@ -38,6 +39,7 @@ export default function CrisisModal({ open, onClose, counselor }) {
       setTriggerKey(null);
       setAnswers({});
       setStepIdx(0);
+      setAddendum('');
       setSaving(false);
       setSavedEvent(null);
       // Load students
@@ -132,6 +134,7 @@ export default function CrisisModal({ open, onClose, counselor }) {
       }),
       admin_draft: draftAdminNotification({ trigger: triggerKey, studentName, counselorName: counselor?.name, when: answers.occurred_at }),
       follow_up_schedule: followUps.map((f) => ({ label: f.title, due_at: f.due_at })),
+      counselor_addendum: addendum.trim(),
       created_at: createdAtIso,
     };
     const { error } = await db.insert('crisis_events', eventRecord);
@@ -212,6 +215,8 @@ export default function CrisisModal({ open, onClose, counselor }) {
             studentName={studentName}
             counselor={counselor}
             triggerKey={triggerKey}
+            addendum={addendum}
+            setAddendum={setAddendum}
             onBack={() => setStage('workflow')}
             onSave={handleSave}
             saving={saving}
@@ -419,7 +424,7 @@ function PickerStage({ studentId, setStudentId, studentSearch, setStudentSearch,
 
       {triggerKey === 'abuse' && (
         <div style={dfpsCallout}>
-          <strong>If the student is in immediate danger, call 911 first.</strong>
+          <strong>Assess the student's safety and bring in an administrator as needed.</strong> If the student is in <strong>immediate danger, call 911 right away</strong>.
           <br />
           <strong>DFPS abuse hotline:</strong> 1-800-252-5400 (24/7)
           <br />
@@ -429,7 +434,7 @@ function PickerStage({ studentId, setStudentId, studentSearch, setStudentSearch,
 
       {triggerKey === 'suicide' && (
         <div style={dfpsCallout}>
-          <strong>If the student is in immediate danger, call 911 first.</strong>
+          <strong>Stay with the student and assess their safety; bring in an administrator as needed.</strong> If the student is in <strong>immediate danger, call 911 right away</strong>.
           <br />
           <strong>988 Suicide and Crisis Lifeline:</strong> call or text 988 (24/7)
         </div>
@@ -685,7 +690,7 @@ function inputToIso(s) {
 }
 
 /* ─── Review stage ─── */
-function ReviewStage({ workflow, answers, studentName, counselor, triggerKey, onBack, onSave, saving }) {
+function ReviewStage({ workflow, answers, studentName, counselor, triggerKey, addendum, setAddendum, onBack, onSave, saving }) {
   const parentDraft = useMemo(() => draftParentNotification({
     trigger: triggerKey,
     studentName,
@@ -727,6 +732,18 @@ function ReviewStage({ workflow, answers, studentName, counselor, triggerKey, on
         <button onClick={() => copyText(adminDraft)} style={copyBtn}>Copy</button>
       </h4>
       <pre style={draftBox}>{adminDraft}</pre>
+
+      <h4 style={subhead}>Additional information <span style={{ fontWeight: 400, color: '#9ca3af', textTransform: 'none', letterSpacing: 0 }}>(optional)</span></h4>
+      <p style={{ ...muted, marginTop: 0, marginBottom: 8 }}>
+        Anything else you want in the record — context, who was notified, actions taken. This is saved with the event and printed on the PDF. It becomes part of the timestamped record, so add it now rather than editing later.
+      </p>
+      <textarea
+        value={addendum}
+        onChange={(e) => setAddendum(e.target.value)}
+        rows={4}
+        placeholder="e.g. Administrator (name) notified in person at 10:15a. Parent reached by phone. Student escorted to nurse."
+        style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 12px', fontSize: 13, lineHeight: 1.5, fontFamily: 'inherit', resize: 'vertical', marginBottom: 4 }}
+      />
 
       <div style={{ ...btnRow, justifyContent: 'space-between', marginTop: 18 }}>
         <button onClick={onBack} style={secondaryBtn}>← Edit answers</button>
