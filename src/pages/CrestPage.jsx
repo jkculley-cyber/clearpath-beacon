@@ -24,6 +24,7 @@ import {
 } from '../lib/crestData';
 import { deriveAllArtifacts, buildSnapshotRecord } from '../lib/crestAutoDerive';
 import { exportCrestPortfolio } from '../lib/crestExport';
+import ExportNotesModal from '../components/ExportNotesModal';
 
 const SCHOOL_YEAR = (() => {
   const now = new Date();
@@ -39,6 +40,7 @@ export default function CrestPage() {
   const [autoDerived, setAutoDerived] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editArtifact, setEditArtifact] = useState(null); // null | { ...record } | { _new: true, category }
+  const [showExport, setShowExport] = useState(false);
   const [promoting, setPromoting] = useState(null); // type key being promoted
 
   const loadArtifacts = useCallback(async () => {
@@ -288,12 +290,20 @@ export default function CrestPage() {
           className="btn btn-primary"
           style={{ background: '#8b5cf6', borderColor: '#8b5cf6', whiteSpace: 'nowrap' }}
           disabled={artifacts.length === 0}
-          onClick={() => exportCrestPortfolio({ counselor, schoolYear: SCHOOL_YEAR, artifacts })}
+          onClick={() => setShowExport(true)}
           title={artifacts.length === 0 ? 'Add artifacts first' : 'Export the portfolio as PDF'}
         >
           Export Portfolio PDF
         </button>
       </div>
+      {showExport && (
+        <ExportNotesModal
+          title="Export CREST Portfolio PDF"
+          placeholder="Add a cover note or narrative for your TSCA submission…"
+          onClose={() => setShowExport(false)}
+          onConfirm={(info) => exportCrestPortfolio({ counselor, schoolYear: SCHOOL_YEAR, artifacts, additionalInfo: info })}
+        />
+      )}
 
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 24,

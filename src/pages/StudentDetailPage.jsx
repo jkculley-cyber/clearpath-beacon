@@ -6,6 +6,7 @@ import { CONTACT_TYPES, PROGRESS_COLORS, PROGRESS_LEVELS, MTSS_TIERS, STUDENT_ST
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { autoLogTime } from '../lib/autoLogTime';
 import { generateProgressPDF, generateMTSSReport } from '../lib/pdfExports';
+import ExportNotesModal from '../components/ExportNotesModal';
 
 const TABS = ['Services', 'Progress', 'Communications', 'Notes'];
 
@@ -680,6 +681,7 @@ export default function StudentDetailPage() {
   const [editNote, setEditNote] = useState(null);
   const [showEditStudent, setShowEditStudent] = useState(false);
   const [showRateProgress, setShowRateProgress] = useState(false);
+  const [exportKind, setExportKind] = useState(null); // 'progress' | 'mtss' | null
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -959,19 +961,28 @@ export default function StudentDetailPage() {
         </button>
         <button
           className="btn btn-outline"
-          onClick={() => generateProgressPDF(student, groups, sessions)}
+          onClick={() => setExportKind('progress')}
         >
           Export Progress PDF
         </button>
         <button
           className="btn btn-outline"
-          onClick={() =>
-            generateMTSSReport(student, groups, sessions, comms)
-          }
+          onClick={() => setExportKind('mtss')}
         >
           Export MTSS Report
         </button>
       </div>
+
+      {exportKind && (
+        <ExportNotesModal
+          title={exportKind === 'progress' ? 'Export Progress PDF' : 'Export MTSS Report'}
+          onClose={() => setExportKind(null)}
+          onConfirm={(info) => {
+            if (exportKind === 'progress') generateProgressPDF(student, groups, sessions, info);
+            else generateMTSSReport(student, groups, sessions, comms, info);
+          }}
+        />
+      )}
 
       {/* Tab bar */}
       <div

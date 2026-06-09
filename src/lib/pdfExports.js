@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { renderAdditionalInfo } from './pdfShared';
 
 const TEAL = [42, 157, 143];
 
@@ -27,7 +28,7 @@ function studentName(s) {
 }
 
 /* ─── Student Progress Report (Feature #4) ─── */
-export function generateProgressPDF(student, groups, sessions) {
+export function generateProgressPDF(student, groups, sessions, additionalInfo = '') {
   const doc = new jsPDF();
   const name = studentName(student);
   header(doc, 'Student Progress Report', name,
@@ -68,14 +69,17 @@ export function generateProgressPDF(student, groups, sessions) {
       margin: { left: 14 },
       columnStyles: { 4: { cellWidth: 45 } },
     });
+    y = doc.lastAutoTable.finalY + 10;
   }
+
+  renderAdditionalInfo(doc, y, additionalInfo);
 
   footer(doc);
   doc.save(`progress-report-${name.replace(/\s+/g, '-')}.pdf`);
 }
 
 /* ─── MTSS Documentation Export (Feature #11) ─── */
-export function generateMTSSReport(student, groups, sessions, comms) {
+export function generateMTSSReport(student, groups, sessions, comms, additionalInfo = '') {
   const doc = new jsPDF();
   const name = studentName(student);
   const tierLabel = { 1: 'Tier 1 \u2014 Universal', 2: 'Tier 2 \u2014 Targeted', 3: 'Tier 3 \u2014 Intensive' };
@@ -144,11 +148,15 @@ export function generateMTSSReport(student, groups, sessions, comms) {
       margin: { left: 14 },
       columnStyles: { 3: { cellWidth: 55 } },
     });
+    y = doc.lastAutoTable.finalY + 10;
   } else {
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
     doc.text('No parent contacts logged.', 14, y + 4);
+    y += 14;
   }
+
+  renderAdditionalInfo(doc, y, additionalInfo);
 
   footer(doc);
   doc.setFontSize(8);
@@ -159,7 +167,7 @@ export function generateMTSSReport(student, groups, sessions, comms) {
 }
 
 /* ─── Group Progress Report (Feature #4) ─── */
-export function generateGroupProgressPDF(group, members, sessions) {
+export function generateGroupProgressPDF(group, members, sessions, additionalInfo = '') {
   const doc = new jsPDF();
   header(doc, 'Group Progress Report', group.name,
     `Grades: ${group.grade_band || '--'} | Focus: ${group.focus_area || '--'} | ${group.rotation_type === 'weekly_abc' ? 'Weekly A/B/C' : 'Bi-weekly'}`);
@@ -221,7 +229,10 @@ export function generateGroupProgressPDF(group, members, sessions) {
       margin: { left: 14 },
       columnStyles: { 3: { cellWidth: 45 } },
     });
+    y = doc.lastAutoTable.finalY + 10;
   }
+
+  renderAdditionalInfo(doc, y, additionalInfo);
 
   footer(doc);
   doc.save(`group-report-${group.name.replace(/\s+/g, '-')}.pdf`);
