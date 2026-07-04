@@ -176,8 +176,9 @@ export default function LocalSetupPage() {
   /**
    * "Continue on another device" — the counselor points this device at the
    * same OneDrive/Google Drive folder her old device backs up into. We find
-   * the newest beacon-backup-* file, restore it, AND persist the folder
-   * handle so this device keeps backing up to the same place going forward.
+   * the newest beacon-backup-* file, restore it, and (behind the
+   * district-managed acknowledgment) persist the folder handle so this
+   * device keeps backing up to the same place going forward.
    * Poor-man's multi-device sync with zero cloud infrastructure.
    */
   const onRestoreFromFolder = async () => {
@@ -192,9 +193,23 @@ export default function LocalSetupPage() {
         setRestoring(false);
         return;
       }
-      // Keep future auto-backups flowing to the same folder from this device.
-      // Persist BEFORE restore so even a decrypt failure leaves the folder wired.
-      try { await persistPickedBackupFolder(handle); } catch { /* non-blocking */ }
+      // Restoring (reading) from the folder is always fine. WRITING future
+      // auto-backups to it inherits whatever cloud account syncs it — so the
+      // handle is persisted only behind the same district-managed
+      // acknowledgment the Settings folder picker enforces. Decline = restore
+      // still happens; the counselor can wire a folder later in Settings
+      // (where the full guardrail modal lives).
+      const ackDistrictManaged = window.confirm(
+        'Keep backing up to this folder from this device?\n\n'
+        + 'Only choose OK if this folder is district-managed (district OneDrive / Google Workspace) '
+        + 'or does not sync to any cloud. Personal cloud accounts (free OneDrive, iCloud, personal '
+        + 'Google Drive) do not include the FERPA agreements your district negotiated — placing '
+        + 'student data there is a compliance gap, encrypted or not.\n\n'
+        + 'Choosing Cancel still restores your data; it just won\'t auto-back-up to this folder.'
+      );
+      if (ackDistrictManaged) {
+        try { await persistPickedBackupFolder(handle); } catch { /* non-blocking */ }
+      }
       await handleRestoreFile(newest.file);
     } catch (err) {
       // User cancelled the picker (AbortError) — not an error worth showing

@@ -844,7 +844,7 @@ function generateBoardSlideDeckPdf() {
     'Cross-campus visibility with this dashboard',
     'Documentation completeness tracking - defensible in TEA reviews and due-process',
     'Texas-NDPA on file with the vendor - pre-cleared by district legal',
-    'Setup includes data migration assistance from existing tools (CountSel, spreadsheets, etc.)',
+    'Setup includes data migration assistance from existing tools (spreadsheets, legacy time trackers, etc.)',
     'No volume discount needed - same per-counselor price for individuals and districts',
   ];
   benefits.forEach((b, i) => {
