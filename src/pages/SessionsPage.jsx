@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
 import { autoLogTime, removeAutoLoggedTime } from '../lib/autoLogTime';
+import { downloadCsv } from '../lib/csvExport';
 import { SESSION_STATUSES } from '../lib/constants';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks } from 'date-fns';
 import SessionNoteTemplateModal from '../components/SessionNoteTemplateModal';
@@ -532,6 +533,23 @@ export default function SessionsPage() {
     return 'Unknown';
   };
 
+  // Export exactly what the current filters show — front-office friendly
+  const handleExportCsv = () => {
+    downloadCsv(
+      `beacon-sessions-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Date', 'Type', 'Student / Group', 'Start', 'Duration (min)', 'Status', 'Notes'],
+      filtered.map((s) => [
+        s.session_date,
+        s.session_type === 'group' ? 'Group' : 'Individual',
+        getSessionLabel(s),
+        s.start_time || '',
+        s.duration_minutes ?? '',
+        s.status || '',
+        s.notes || '',
+      ])
+    );
+  };
+
   return (
     <div style={{ padding: 0 }} className="page">
       {/* Header */}
@@ -542,6 +560,15 @@ export default function SessionsPage() {
             {filtered.length} session{filtered.length !== 1 ? 's' : ''} shown
           </span>
         </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button
+          className="btn btn-outline"
+          onClick={handleExportCsv}
+          disabled={filtered.length === 0}
+          style={{ fontSize: 13 }}
+        >
+          Export CSV
+        </button>
         <button
           onClick={() => setShowLogModal(true)}
           style={{
@@ -552,6 +579,7 @@ export default function SessionsPage() {
         >
           + Log Session
         </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
