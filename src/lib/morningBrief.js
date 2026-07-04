@@ -11,10 +11,12 @@
 
 import { db } from './db';
 import { getNextCrestDeadline, overallProgress } from './crestData';
+import { getLicenseKey, getLicenseDaysLeft } from './license';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 
 const COUNSELING_DOMAINS = ['guidance', 'planning', 'responsive'];
 const SB179_TARGET_PCT = 80;
+const TRIAL_DAYS = 14;
 
 const SETTINGS_KEY = 'morning_brief_dismissed';
 
@@ -124,6 +126,32 @@ export async function buildMorningBrief(counselorId, now = new Date()) {
   const crestPct = overallProgress(crestRes.data || []).pct;
 
   const deadlines = [];
+
+  // Trial / license runway — surface it here BEFORE the hard banners kick in
+  // (trial banner starts at 4 days, soft gate at 0). The brief starts the
+  // conversation at day 7 so expiry is never a surprise.
+  const { data: counselorRow } = await db.selectById('counselor', counselorId);
+  if (!getLicenseKey() && counselorRow?.subscription_status === 'trial' && counselorRow?.trial_started_at) {
+    const trialEnd = new Date(counselorRow.trial_started_at);
+    trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
+    const trialDaysLeft = Math.max(0, Math.ceil((trialEnd - now) / 86400000));
+    if (trialDaysLeft > 0 && trialDaysLeft <= 7) {
+      deadlines.push({
+        label: 'Free trial ends — activate a license in Settings to keep logging',
+        daysUntil: trialDaysLeft,
+        severity: trialDaysLeft <= 3 ? 'red' : 'amber',
+      });
+    }
+  }
+  const licenseDaysLeft = getLicenseDaysLeft();
+  if (licenseDaysLeft !== null && licenseDaysLeft > 0 && licenseDaysLeft <= 30) {
+    deadlines.push({
+      label: 'Beacon license renewal (your key stays the same)',
+      daysUntil: licenseDaysLeft,
+      severity: licenseDaysLeft <= 7 ? 'red' : licenseDaysLeft <= 14 ? 'amber' : 'info',
+    });
+  }
+
   if (deadline.daysUntil <= 60) {
     deadlines.push({
       label: `CREST submission (currently ${crestPct}% complete)`,

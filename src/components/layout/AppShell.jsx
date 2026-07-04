@@ -30,7 +30,7 @@ const NAV_ITEMS = [
 
 /* ─── Component ─── */
 export default function AppShell() {
-  const { counselor, signOut, isSoftGated, trialDaysLeft, getLicenseKey } = useAuth();
+  const { counselor, signOut, isSoftGated, trialDaysLeft, licenseDaysLeft, getLicenseKey } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -47,6 +47,28 @@ export default function AppShell() {
     counselor?.subscription_status !== 'extended';
 
   const schoolName = counselor?.school_name || counselor?.campus || 'Beacon';
+
+  // License renewal reminder — a paying counselor should never lapse straight
+  // into the soft gate without warning. Shows from 30 days out; dismissible
+  // until tomorrow above 7 days, sticky at 7 and under.
+  const [renewalDismissed, setRenewalDismissed] = useState(() => {
+    const until = localStorage.getItem('beacon_renewal_dismissed_until');
+    return until && new Date(until) > new Date();
+  });
+  const showRenewalBanner =
+    licenseDaysLeft !== null &&
+    licenseDaysLeft > 0 &&
+    licenseDaysLeft <= 30 &&
+    (licenseDaysLeft <= 7 || !renewalDismissed);
+  const renewalTone = licenseDaysLeft !== null && licenseDaysLeft <= 7 ? 'red' : licenseDaysLeft <= 14 ? 'amber' : 'info';
+
+  function dismissRenewalUntilTomorrow() {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    localStorage.setItem('beacon_renewal_dismissed_until', tomorrow.toISOString());
+    setRenewalDismissed(true);
+  }
 
   // Backup reminder — tiered urgency, dismissible until next day
   const [backupDismissed, setBackupDismissed] = useState(() => {
@@ -277,7 +299,7 @@ export default function AppShell() {
     return () => ro.disconnect();
   }, []);
 
-  const hasBanner = showTrialBanner || isSoftGated || showBackupBanner || alertCount > 0;
+  const hasBanner = showTrialBanner || showRenewalBanner || isSoftGated || showBackupBanner || alertCount > 0;
 
   return (
     <div className={`shell${hasBanner ? ' has-banner' : ''}`}>
@@ -317,6 +339,23 @@ export default function AppShell() {
           <a href="https://clearpathedgroup.com/store.html#card-beacon" target="_blank" rel="noopener noreferrer" style={{ color: '#fff', fontWeight: 700, textDecoration: 'underline' }}>
             Subscribe — $8/mo
           </a>
+        </div>
+      )}
+      {showRenewalBanner && (
+        <div className={`renewal-banner renewal-${renewalTone}`}>
+          {licenseDaysLeft === 1
+            ? 'Your Beacon license expires tomorrow.'
+            : `Your Beacon license expires in ${licenseDaysLeft} days.`}
+          {' '}Renew now so nothing interrupts your documentation — your key stays the same.
+          {' '}
+          <a href="https://clearpathedgroup.com/store.html#card-beacon" target="_blank" rel="noopener noreferrer" style={{ fontWeight: 700, textDecoration: 'underline', color: 'inherit' }}>
+            Renew — $79/yr
+          </a>
+          {licenseDaysLeft > 7 && (
+            <button className="renewal-banner-dismiss" onClick={dismissRenewalUntilTomorrow}>
+              Remind me tomorrow
+            </button>
+          )}
         </div>
       )}
       {isSoftGated && (
@@ -585,6 +624,25 @@ const shellStyles = `
   padding: 8px 16px;
   font-size: 0.8125rem;
   font-weight: 600;
+}
+.renewal-banner {
+  text-align: center;
+  padding: 8px 16px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.renewal-info  { background: #e0f2f1; color: #0f766e; border-bottom: 1px solid #99f6e4; }
+.renewal-amber { background: #f59e0b; color: #1a2332; }
+.renewal-red   { background: #ef4444; color: #fff; }
+.renewal-banner-dismiss {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: underline;
+  opacity: 0.7;
+  margin-left: 12px;
 }
 .backup-banner {
   padding: 10px 20px;
