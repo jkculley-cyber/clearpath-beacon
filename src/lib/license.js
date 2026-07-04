@@ -31,6 +31,18 @@ export function getCachedLicense() {
   return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
 }
 
+/**
+ * Days until the cached license expires, or null when there is no active
+ * license with a known expiry. Can be 0/negative once expired — callers
+ * decide what to show (the soft gate owns the expired state).
+ */
+export function getLicenseDaysLeft() {
+  const cached = getCachedLicense();
+  if (!cached?.key || cached.status !== 'active' || !cached.expires_at) return null;
+  const ms = new Date(cached.expires_at).getTime() - Date.now();
+  return Math.ceil(ms / 86400000);
+}
+
 export async function checkLicense() {
   const cached = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
 

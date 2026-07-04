@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback } 
 import { supabase } from '../lib/supabase';
 import { isLocalMode, getStorageMode, setStorageMode, seedLocalLessons, seedLocalTemplates } from '../lib/db';
 import * as local from '../lib/localDb';
-import { checkLicense, getLicenseKey, setLicenseKey, clearLicense, getCachedLicense } from '../lib/license';
+import { checkLicense, getLicenseKey, setLicenseKey, clearLicense, getCachedLicense, getLicenseDaysLeft } from '../lib/license';
 
 const AuthContext = createContext(null);
 
@@ -239,6 +239,14 @@ export function AuthProvider({ children }) {
     [counselor, storageMode, licenseState]
   );
 
+  // Days until the active license expires (null when unlicensed / unknown).
+  // Drives the renewal banner + Morning Brief renewal deadline so a paying
+  // counselor never lapses straight into the soft gate without warning.
+  const licenseDaysLeft = useMemo(() => {
+    if (!licenseState.valid) return null;
+    return getLicenseDaysLeft();
+  }, [licenseState]);
+
   // License key management
   const saveLicenseKey = useCallback(async (key) => {
     setLicenseKey(key);
@@ -258,6 +266,7 @@ export function AuthProvider({ children }) {
     loading,
     isSoftGated,
     trialDaysLeft,
+    licenseDaysLeft,
     storageMode,
     isLocalMode: storageMode === 'local',
     licenseState,
@@ -270,7 +279,7 @@ export function AuthProvider({ children }) {
     removeLicense,
     getLicenseKey,
     getCachedLicense,
-  }), [session, counselor, loading, isSoftGated, trialDaysLeft, storageMode, licenseState, signIn, signOut, refreshCounselor, switchStorageMode, setupLocalProfile, saveLicenseKey, removeLicense]);
+  }), [session, counselor, loading, isSoftGated, trialDaysLeft, licenseDaysLeft, storageMode, licenseState, signIn, signOut, refreshCounselor, switchStorageMode, setupLocalProfile, saveLicenseKey, removeLicense]);
 
   return (
     <AuthContext.Provider value={value}>

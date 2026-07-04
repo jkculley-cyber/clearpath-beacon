@@ -36,7 +36,7 @@ const DAYS_OF_WEEK = [
 const DAY_LABEL = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday' };
 
 export default function SettingsPage() {
-  const { counselor, refreshCounselor, isLocalMode, switchStorageMode, licenseState, saveLicenseKey, getLicenseKey } = useAuth();
+  const { counselor, refreshCounselor, isLocalMode, switchStorageMode, licenseState, saveLicenseKey, getLicenseKey, getCachedLicense, licenseDaysLeft } = useAuth();
   const [confirmState, setConfirmState] = useState({ open: false, title: '', message: '', confirmLabel: '', onConfirm: null });
   const closeConfirm = () => setConfirmState((s) => ({ ...s, open: false }));
   const [licKey, setLicKey] = useState('');
@@ -926,11 +926,54 @@ export default function SettingsPage() {
             {getLicenseKey() && (
               <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
                 Current key: <code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>{getLicenseKey()}</code>
+                {licenseState.valid && getCachedLicense()?.expires_at && (
+                  <> · expires {new Date(getCachedLicense().expires_at).toLocaleDateString()}</>
+                )}
               </p>
+            )}
+            {licenseState.valid && licenseDaysLeft !== null && licenseDaysLeft > 0 && licenseDaysLeft <= 60 && (
+              <div style={{
+                marginBottom: 14, padding: '12px 16px', borderRadius: 10,
+                background: licenseDaysLeft <= 14 ? '#fffbeb' : '#f0fdfa',
+                border: `1px solid ${licenseDaysLeft <= 14 ? '#fde68a' : '#99f6e4'}`,
+                fontSize: 13, color: licenseDaysLeft <= 14 ? '#92400e' : '#0f766e', lineHeight: 1.6,
+              }}>
+                <strong>Renewal:</strong> your license expires in {licenseDaysLeft} day{licenseDaysLeft === 1 ? '' : 's'}.
+                Renew on the{' '}
+                <a href="https://clearpathedgroup.com/store.html#card-beacon" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 700 }}>
+                  store page
+                </a>
+                {' '}($79/yr) — your key stays the same, so there is nothing to re-enter and no interruption to your data.
+              </div>
+            )}
+            {!licenseState.valid && (
+              <div style={{
+                marginBottom: 14, padding: '14px 16px', borderRadius: 10,
+                background: 'linear-gradient(135deg, #f0fdfa 0%, #fff 70%)',
+                border: '1px solid #99f6e4',
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f766e', marginBottom: 6 }}>
+                  Get your Beacon license — $79/year or $8/month
+                </div>
+                <ol style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, margin: '0 0 10px', paddingLeft: 20 }}>
+                  <li>Open the store and pick a plan (annual or monthly).</li>
+                  <li>Pay via Zelle — the store page shows exactly where to send it.</li>
+                  <li>Your license key (BCN-…) arrives by email, usually the same day.</li>
+                  <li>Paste the key below and click Activate. Everything you logged during the trial stays exactly where it is.</li>
+                </ol>
+                <a
+                  href="https://clearpathedgroup.com/store.html#card-beacon"
+                  target="_blank" rel="noopener noreferrer"
+                  className="btn btn-primary"
+                  style={{ display: 'inline-block', fontSize: 13, textDecoration: 'none', background: '#2A9D8F', borderColor: '#2A9D8F' }}
+                >
+                  Open the Store →
+                </a>
+              </div>
             )}
             {!licenseState.valid && !getLicenseKey() && (
               <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
-                Enter a license key to unlock full access after your trial ends.
+                Already purchased? Enter your license key below to unlock full access.
               </p>
             )}
             {!licenseState.valid && getLicenseKey() && (
