@@ -12,6 +12,8 @@ import {
   isNotificationsSupported, startNotificationPoll,
 } from '../lib/notifications';
 import { downloadCalendarIcs } from '../lib/calendarExport';
+import { schoolYearWindow, computeYearSummary, saveYearSummary } from '../lib/yearSummary';
+import { generateHandoffPdf } from '../lib/handoffExport';
 import { TIME_DOMAINS } from '../lib/constants';
 import ConfirmDestructive from '../components/ConfirmDestructive';
 import jsPDF from 'jspdf';
@@ -560,6 +562,46 @@ export default function SettingsPage() {
     let graduated = 0;
     let archived = 0;
 
+    // ── Year-end safety net, BEFORE any mutation ──
+    // 1. Snapshot the year's headline numbers (feeds the Reports YoY view).
+    //    Settings store is license-exempt, so this works for gated users too.
+    // 2. Download an archive backup — encrypted when licensed, plain JSON on
+    //    trial (same policy as manual backup; this runs on a click gesture).
+    let snapshotOk = false;
+    try {
+      const window_ = schoolYearWindow(counselor);
+      const summary = await computeYearSummary(counselor.id, window_);
+      await saveYearSummary(summary);
+      snapshotOk = true;
+    } catch (err) {
+      console.warn('Year snapshot failed (transition continues):', err);
+    }
+    try {
+      const data = await exportLocalBackup();
+      const licenseKey = getLicenseKey?.();
+      const dateSlug = new Date().toISOString().slice(0, 10);
+      let blob, filename;
+      if (licenseKey && counselor?.email) {
+        blob = await encryptBackup(data, { licenseKey, email: counselor.email });
+        filename = `beacon-eoy-archive-${dateSlug}.bcnbkp`;
+      } else {
+        blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        filename = `beacon-eoy-archive-${dateSlug}.json`;
+      }
+      const savedToFolder = await saveBackupToHandle(blob, filename);
+      if (!savedToFolder) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      localStorage.setItem('beacon_last_backup', new Date().toISOString());
+    } catch (err) {
+      console.warn('EOY archive backup failed (transition continues):', err);
+    }
+
     // Promote / graduate each student
     for (const s of transitionPreview.students) {
       const grade = (s.grade || '').toString().trim();
@@ -586,7 +628,39 @@ export default function SettingsPage() {
     }
 
     setTransitioning(false);
-    setTransitionResult({ promoted, graduated, archived });
+    setTransitionResult({ promoted, graduated, archived, snapshotOk });
+  };
+
+  // Successor-counselor handoff package: caseload table + year headline
+  // numbers + restore instructions. Pairs with an encrypted backup for the
+  // actual data transfer.
+  const [handoffGenerating, setHandoffGenerating] = useState(false);
+  const handleGenerateHandoff = async () => {
+    if (!counselor?.id) return;
+    setHandoffGenerating(true);
+    try {
+      const window_ = schoolYearWindow(counselor);
+      const [summary, studentsRes, sessionsRes, referralsRes, followUpsRes, goalsRes] = await Promise.all([
+        computeYearSummary(counselor.id, window_),
+        db.select('students', { eq: { counselor_id: counselor.id } }),
+        db.select('sessions', { eq: { counselor_id: counselor.id } }),
+        db.select('referrals', { eq: { counselor_id: counselor.id } }),
+        db.select('follow_ups', { eq: { counselor_id: counselor.id } }),
+        db.select('student_goals', { eq: { counselor_id: counselor.id } }).catch(() => ({ data: [] })),
+      ]);
+      await generateHandoffPdf({
+        counselor,
+        students: studentsRes.data || [],
+        sessions: sessionsRes.data || [],
+        referrals: referralsRes.data || [],
+        followUps: followUpsRes.data || [],
+        goals: goalsRes.data || [],
+        summary,
+      });
+    } catch (err) {
+      alert(`Could not generate handoff package: ${err?.message || err}`);
+    }
+    setHandoffGenerating(false);
   };
 
   return (
@@ -987,7 +1061,16 @@ export default function SettingsPage() {
           <h2 style={sectionTitle}>School Year Transition</h2>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
             Archive this year's data and promote students to the next grade. Your history is preserved.
+            Handing the caseload to another counselor? Generate the handoff package — a caseload-summary PDF for your successor (pair it with a backup from Data Storage below).
           </p>
+          <button
+            className="btn btn-outline"
+            style={{ fontWeight: 600, fontSize: 14, padding: '10px 20px', marginRight: 10 }}
+            onClick={handleGenerateHandoff}
+            disabled={handoffGenerating}
+          >
+            {handoffGenerating ? 'Generating…' : 'Handoff Package (PDF)'}
+          </button>
           <button
             className="btn btn-primary"
             style={{ background: '#2A9D8F', borderColor: '#2A9D8F', fontWeight: 600, fontSize: 14, padding: '10px 24px' }}
@@ -1009,6 +1092,11 @@ export default function SettingsPage() {
                     <p style={{ color: '#f59e0b', fontWeight: 600, marginBottom: 6 }}>{transitionResult.graduated} 5th grader{transitionResult.graduated !== 1 ? 's' : ''} graduated.</p>
                     {transitionResult.archived > 0 && (
                       <p style={{ color: '#6b7280', fontSize: 13 }}>{transitionResult.archived} completed group{transitionResult.archived !== 1 ? 's' : ''} archived.</p>
+                    )}
+                    {transitionResult.snapshotOk && (
+                      <p style={{ color: '#0f766e', fontSize: 13 }}>
+                        📊 Year snapshot saved — see <strong>Reports → Year over Year</strong>. An archive backup was also written before any changes.
+                      </p>
                     )}
                   </div>
                   <button className="btn btn-primary" onClick={() => { setShowTransition(false); setTransitionResult(null); }} style={{ width: '100%' }}>Done</button>
@@ -1041,6 +1129,13 @@ export default function SettingsPage() {
                     <input type="checkbox" checked={resetSessions} onChange={(e) => setResetSessions(e.target.checked)} />
                     Reset session counts (sessions have dates, so historical data is preserved)
                   </label>
+
+                  <div style={{
+                    marginBottom: 14, padding: '10px 12px', borderRadius: 8, fontSize: 12,
+                    background: '#f0fdfa', border: '1px solid #99f6e4', color: '#0f766e', lineHeight: 1.5,
+                  }}>
+                    🛡️ Before changing anything, Beacon saves a <strong>year snapshot</strong> (for the Reports year-over-year view) and writes an <strong>archive backup</strong> of everything as it is right now.
+                  </div>
 
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button className="btn btn-outline" onClick={() => setShowTransition(false)} disabled={transitioning} style={{ flex: 1 }}>Cancel</button>
