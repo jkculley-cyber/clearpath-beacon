@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'beacon_local';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 const STORES = [
   'counselor',         // single record — counselor profile
@@ -32,6 +32,7 @@ const STORES = [
   'follow_ups',        // scheduled reminders (24h/72h/1wk follow-ups, escalation cues)
   'session_note_templates', // SOAP-format note templates with prompted fields
   'schedule_events',   // one-off non-counseling events on the schedule (meetings, duty, training, etc.)
+  'record_history',    // change log for student/session edits + deletes (v7)
   'settings',          // key-value config
 ];
 
@@ -206,6 +207,16 @@ export function openDB() {
         se.createIndex('counselor_id', 'counselor_id', { unique: false });
         se.createIndex('event_date', 'event_date', { unique: false });
         se.createIndex('event_type', 'event_type', { unique: false });
+      }
+
+      // record_history (v7) — who-changed-what log for student + session records.
+      // Extends the trust story (tamper-evident PDFs) into the working records:
+      // edits no longer silently overwrite; deletes keep a snapshot.
+      if (!db.objectStoreNames.contains('record_history')) {
+        const rh = db.createObjectStore('record_history', { keyPath: 'id' });
+        rh.createIndex('record_id', 'record_id', { unique: false });
+        rh.createIndex('table_name', 'table_name', { unique: false });
+        rh.createIndex('counselor_id', 'counselor_id', { unique: false });
       }
 
       // settings (key-value)

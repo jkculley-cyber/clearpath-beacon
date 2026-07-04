@@ -71,6 +71,32 @@ export function isLocalMode() {
 // Tables exempt from license soft gate (seeding, setup, internal)
 const LICENSE_EXEMPT_TABLES = ['lesson_library', 'communication_templates', 'settings', 'counselor'];
 
+// Tables whose edits/deletes get a change-log entry in record_history.
+// History writes are best-effort (never block or fail the main operation)
+// and bypass the license gate — the log is a protective feature, so it runs
+// for trial and gated users too. Fields below are bookkeeping noise, not
+// counselor-made changes.
+const HISTORY_TABLES = ['students', 'sessions'];
+const HISTORY_SKIP_FIELDS = new Set(['updated_at', 'created_at', 'id']);
+
+async function recordHistory(entry) {
+  try {
+    await local.insert('record_history', { at: new Date().toISOString(), ...entry });
+  } catch { /* history must never break the write it describes */ }
+}
+
+function diffFields(before, changes) {
+  const out = [];
+  for (const [field, to] of Object.entries(changes || {})) {
+    if (HISTORY_SKIP_FIELDS.has(field)) continue;
+    const from = before?.[field];
+    // Normalize so 2 vs "2" or null vs undefined don't log phantom edits
+    if (String(from ?? '') === String(to ?? '')) continue;
+    out.push({ field, from: from ?? null, to: to ?? null });
+  }
+  return out;
+}
+
 // ─── Unified Data API ───
 
 export const db = {
@@ -225,7 +251,23 @@ export const db = {
             if (!trialOk) return { data: null, error: new Error('Your free trial has ended. Enter a license key in Settings to continue.') };
           }
         }
+        let before = null;
+        if (HISTORY_TABLES.includes(table)) {
+          before = await local.getById(table, id);
+        }
         const row = await local.update(table, id, changes);
+        if (before) {
+          const changed = diffFields(before, changes);
+          if (changed.length > 0) {
+            await recordHistory({
+              table_name: table,
+              record_id: id,
+              counselor_id: before.counselor_id || null,
+              action: 'update',
+              changes: changed,
+            });
+          }
+        }
         return { data: row, error: null };
       }
       return await supabase.from(table).update(changes).eq('id', id).select().single();
@@ -249,7 +291,20 @@ export const db = {
             if (!trialOk) return { error: new Error('Your free trial has ended. Enter a license key in Settings to continue.') };
           }
         }
+        let snapshot = null;
+        if (HISTORY_TABLES.includes(table)) {
+          snapshot = await local.getById(table, id);
+        }
         await local.del(table, id);
+        if (snapshot) {
+          await recordHistory({
+            table_name: table,
+            record_id: id,
+            counselor_id: snapshot.counselor_id || null,
+            action: 'delete',
+            snapshot,
+          });
+        }
         return { error: null };
       }
       return await supabase.from(table).delete().eq('id', id);

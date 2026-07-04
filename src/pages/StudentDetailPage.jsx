@@ -8,6 +8,7 @@ import { autoLogTime } from '../lib/autoLogTime';
 import { generateProgressPDF, generateMTSSReport } from '../lib/pdfExports';
 import ExportNotesModal from '../components/ExportNotesModal';
 import CrisisRecordsSection from '../components/CrisisRecordsSection';
+import RecordHistorySection from '../components/RecordHistorySection';
 
 const TABS = ['Services', 'Progress', 'Communications', 'Notes'];
 
@@ -684,6 +685,7 @@ export default function StudentDetailPage() {
   const [showRateProgress, setShowRateProgress] = useState(false);
   const [exportKind, setExportKind] = useState(null); // 'progress' | 'mtss' | null
   const [crisisEvents, setCrisisEvents] = useState([]);
+  const [historyEntries, setHistoryEntries] = useState([]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -733,6 +735,28 @@ export default function StudentDetailPage() {
     setNotes(noteRes.data || []);
     setProgress(progRes.data || []);
     setCrisisEvents(crisisRes.data || []);
+
+    // Change history for this student: edits to the student record itself,
+    // plus edits/deletes of their sessions. Deleted sessions are matched via
+    // the snapshot each delete entry carries (the live sessions list no
+    // longer knows them).
+    try {
+      const { data: allHistory } = await db.select('record_history', {});
+      const sessionIds = new Set((sessRes.data || []).map((s) => s.id));
+      for (const h of allHistory || []) {
+        if (h.table_name === 'sessions' && h.action === 'delete' && h.snapshot?.student_id === id) {
+          sessionIds.add(h.record_id);
+        }
+      }
+      const mine = (allHistory || [])
+        .filter((h) =>
+          (h.table_name === 'students' && h.record_id === id) ||
+          (h.table_name === 'sessions' && sessionIds.has(h.record_id)))
+        .sort((a, b) => (b.at || b.created_at || '').localeCompare(a.at || a.created_at || ''));
+      setHistoryEntries(mine);
+    } catch {
+      setHistoryEntries([]);
+    }
     setLoading(false);
   }, [id]);
 
@@ -1000,7 +1024,11 @@ export default function StudentDetailPage() {
           marginBottom: 20,
         }}
       >
-        {(crisisEvents.length > 0 ? [...TABS, 'Crisis'] : TABS).map((t) => (
+        {[
+          ...TABS,
+          ...(crisisEvents.length > 0 ? ['Crisis'] : []),
+          ...(historyEntries.length > 0 ? ['History'] : []),
+        ].map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -1538,6 +1566,10 @@ export default function StudentDetailPage() {
           events={crisisEvents}
           onChanged={loadAll}
         />
+      )}
+
+      {tab === 'History' && (
+        <RecordHistorySection entries={historyEntries} />
       )}
 
       {/* Modals */}
