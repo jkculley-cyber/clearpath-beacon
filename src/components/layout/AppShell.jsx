@@ -426,7 +426,7 @@ export default function AppShell() {
                 <div style={guideNum}>4</div>
                 <div>
                   <div style={guideTitle}>Moving to a new device?</div>
-                  <div style={guideDesc}>Export a backup on your old device, then open <strong>beacon.clearpathedgroup.com</strong> on your new device, complete the setup, and immediately restore from backup. Your license key works on any device.</div>
+                  <div style={guideDesc}>Open <strong>beacon.clearpathedgroup.com/setup?signin=1</strong> on the new device, enter your license key and email, and choose <strong>Restore from backup folder</strong> — point it at the same OneDrive/Drive folder this device backs up into and Beacon restores the newest backup automatically (and keeps backing up there). No folder? Use <strong>Restore from backup file</strong> with an exported .bcnbkp instead. Your license key works on any device.</div>
                 </div>
               </div>
             </div>

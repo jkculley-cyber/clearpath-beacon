@@ -202,6 +202,30 @@ export async function saveBackupToHandle(blob, filename) {
 }
 
 /**
+ * Scan a folder handle for Beacon backup files and return the newest one,
+ * or null if none found. Matches the filenames the app itself writes
+ * (beacon-backup-YYYY-MM-DD.bcnbkp / .json) so unrelated files in a shared
+ * sync folder are ignored.
+ *
+ * Powers "Continue on another device": the counselor points the new device
+ * at the same OneDrive/Drive folder her old device backs up into, and we
+ * restore the freshest snapshot — no hunting for a file.
+ */
+const BACKUP_NAME_RE = /^beacon-backup-.*\.(bcnbkp|json)$/i;
+
+export async function findNewestBackupInFolder(handle) {
+  let newest = null;
+  for await (const entry of handle.values()) {
+    if (entry.kind !== 'file' || !BACKUP_NAME_RE.test(entry.name)) continue;
+    const file = await entry.getFile();
+    if (!newest || file.lastModified > newest.file.lastModified) {
+      newest = { file, name: entry.name };
+    }
+  }
+  return newest;
+}
+
+/**
  * Re-prompt for permission on a previously-stored handle (requires user gesture).
  * Returns the folder name on success, null on failure.
  */

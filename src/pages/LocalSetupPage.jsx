@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { seedSampleData } from '../lib/seedSampleData';
 import { decryptBackup } from '../lib/backupCrypto';
 import { importLocalBackup, isCloudModeEnabled } from '../lib/db';
+import { isFsAccessSupported, pickBackupFolder, persistPickedBackupFolder, findNewestBackupInFolder } from '../lib/backupFolder';
 
 // Pre-fill the license field when the page is opened from clearpathedgroup.com/activate
 // with the key in the URL (e.g. /setup?key=BCN-XXXXXX-XXXX). Counselor doesn't retype.
@@ -148,15 +149,20 @@ export default function LocalSetupPage() {
     }
   };
 
-  const onPickRestoreFile = () => {
+  const requireDecryptionInputs = () => {
     if (!licenseKey.trim()) {
       setRestoreError('Enter your license key first — Beacon needs it to decrypt the backup.');
-      return;
+      return false;
     }
     if (!email.trim()) {
       setRestoreError('Enter the work email you used originally — it\'s part of the encryption key.');
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const onPickRestoreFile = () => {
+    if (!requireDecryptionInputs()) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.bcnbkp,.json,application/octet-stream,application/json';
@@ -165,6 +171,38 @@ export default function LocalSetupPage() {
       if (file) await handleRestoreFile(file);
     };
     input.click();
+  };
+
+  /**
+   * "Continue on another device" — the counselor points this device at the
+   * same OneDrive/Google Drive folder her old device backs up into. We find
+   * the newest beacon-backup-* file, restore it, AND persist the folder
+   * handle so this device keeps backing up to the same place going forward.
+   * Poor-man's multi-device sync with zero cloud infrastructure.
+   */
+  const onRestoreFromFolder = async () => {
+    if (!requireDecryptionInputs()) return;
+    setRestoreError('');
+    try {
+      const handle = await pickBackupFolder();
+      setRestoring(true);
+      const newest = await findNewestBackupInFolder(handle);
+      if (!newest) {
+        setRestoreError('No Beacon backup files (beacon-backup-…) found in that folder. Pick the folder your old device backs up into, or use the file option below.');
+        setRestoring(false);
+        return;
+      }
+      // Keep future auto-backups flowing to the same folder from this device.
+      // Persist BEFORE restore so even a decrypt failure leaves the folder wired.
+      try { await persistPickedBackupFolder(handle); } catch { /* non-blocking */ }
+      await handleRestoreFile(newest.file);
+    } catch (err) {
+      // User cancelled the picker (AbortError) — not an error worth showing
+      if (err?.name !== 'AbortError') {
+        setRestoreError(err?.message || 'Could not read that folder.');
+      }
+      setRestoring(false);
+    }
   };
 
   return (
@@ -311,8 +349,29 @@ export default function LocalSetupPage() {
             marginTop: 22, paddingTop: 18, borderTop: '1px solid #e5e7eb', textAlign: 'center',
           }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-              Have a backup file?
+              Continuing from another device?
             </div>
+            {isFsAccessSupported() && (
+              <button
+                type="button"
+                onClick={onRestoreFromFolder}
+                disabled={restoring || saving}
+                style={{
+                  width: '100%', padding: '11px 0', borderRadius: 10, border: 'none',
+                  background: '#2A9D8F', color: '#fff', fontSize: 14, fontWeight: 700,
+                  cursor: restoring || saving ? 'wait' : 'pointer',
+                  opacity: restoring || saving ? 0.6 : 1,
+                  marginBottom: 8,
+                }}
+              >
+                {restoring ? 'Restoring...' : 'Restore from backup folder (OneDrive / Drive)'}
+              </button>
+            )}
+            {isFsAccessSupported() && (
+              <div style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 10px', lineHeight: 1.5 }}>
+                Pick the folder your old device backs up into — Beacon restores the newest backup automatically and keeps backing up to that folder from this device.
+              </div>
+            )}
             <button
               type="button"
               onClick={onPickRestoreFile}
