@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
 import { CONTACT_TYPES } from '../lib/constants';
+import { downloadCsv } from '../lib/csvExport';
 import {
   CONTACT_OUTCOMES, OUTCOME_LABELS,
   escalationLevel, maybeCreateFollowUp, generateDueProcessPdf,
@@ -168,6 +169,35 @@ export default function CommunicationsPage() {
     loadData();
   };
 
+  // Open the drafted note in the counselor's own mail client. Nothing is sent
+  // from Beacon (local-first stays intact) — the counselor picks the recipient
+  // and presses send in Outlook/Gmail. Subject stays PII-free by default.
+  const openInEmail = () => {
+    const school = counselor?.campus || counselor?.school_name || 'your school';
+    const subject = encodeURIComponent(`A note from the ${school} counselor`);
+    const body = encodeURIComponent(notes);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
+  // Contact log → CSV for Excel-speaking front offices
+  const handleExportCsv = () => {
+    downloadCsv(
+      `beacon-contact-log-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Date', 'Time', 'Student', 'Type', 'Outcome', 'Duration (min)', 'Language', 'Tracking #', 'Notes'],
+      filteredComms.map((c) => [
+        c.contact_date || '',
+        c.contact_time || '',
+        c.students ? sName(c.students) : '',
+        c.contact_type || '',
+        OUTCOME_LABELS[c.outcome] || c.outcome || '',
+        c.duration_minutes ?? '',
+        c.language === 'es' ? 'Spanish' : 'English',
+        c.tracking_number || '',
+        c.notes || '',
+      ])
+    );
+  };
+
   // Student search dropdown
   const filteredStudents = studentSearch
     ? students.filter((s) => sName(s).toLowerCase().includes(studentSearch.toLowerCase()))
@@ -265,7 +295,23 @@ export default function CommunicationsPage() {
               )}
 
               <label className="form-label">Notes</label>
-              <textarea className="form-input" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ marginBottom: 12 }} />
+              <textarea className="form-input" rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} style={{ marginBottom: 6 }} />
+              {notes.trim() && (
+                <div style={{ marginBottom: 12 }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ fontSize: 12, padding: '5px 12px' }}
+                    onClick={openInEmail}
+                    title="Opens your email app with this note as the message body — you choose the recipient and press send"
+                  >
+                    ✉ Open in Email
+                  </button>
+                  <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>
+                    Opens your mail app — nothing is sent from Beacon.
+                  </span>
+                </div>
+              )}
 
               {/* Escalation banner — visible when this student already has 2+ unanswered attempts */}
               {(() => {
@@ -336,6 +382,15 @@ export default function CommunicationsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 10, flexWrap: 'wrap' }}>
               <h2 style={{ ...sectionTitle, margin: 0 }}>Contact History</h2>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap' }}
+                  onClick={handleExportCsv}
+                  disabled={filteredComms.length === 0}
+                >
+                  Export CSV
+                </button>
                 {studentId && (
                   <button
                     type="button"
