@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
+import { listYearSummaries, computeYearSummary, schoolYearWindow } from '../lib/yearSummary';
 import { TIME_DOMAINS } from '../lib/constants';
 import {
   BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
@@ -788,6 +789,81 @@ export default function ReportsPage() {
           </div>
         </>
       )}
+
+      {/* ─── Year over Year ─── */}
+      <YearOverYearSection counselor={counselor} />
+    </div>
+  );
+}
+
+/* ─── Year over Year ───
+ * Compares archived year snapshots (saved by the School Year Transition in
+ * Settings) against the live current year. Hidden until at least one
+ * snapshot exists — it grows a row each June. */
+function YearOverYearSection({ counselor }) {
+  const [rows, setRows] = useState(null);
+
+  useEffect(() => {
+    if (!counselor?.id) return;
+    let cancelled = false;
+    (async () => {
+      const archived = await listYearSummaries();
+      if (cancelled) return;
+      if (archived.length === 0) { setRows([]); return; }
+      const window_ = schoolYearWindow(counselor);
+      const live = await computeYearSummary(counselor.id, window_);
+      if (cancelled) return;
+      // If the live window duplicates an archived label (snapshot taken this
+      // year already), show the snapshot only once — live wins.
+      const rowsOut = [...archived.filter((a) => a.label !== live.label), { ...live, isLive: true }];
+      setRows(rowsOut);
+    })();
+    return () => { cancelled = true; };
+  }, [counselor]);
+
+  if (!rows || rows.length <= 1) return null;
+
+  const fmt = (v) => (v === null || v === undefined ? '—' : v);
+  return (
+    <div style={styles.card}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: '#1a2332', margin: '0 0 4px' }}>Year over Year</h2>
+      <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 12px' }}>
+        Archived year snapshots vs. this year so far. A snapshot is saved automatically when you run the School Year Transition in Settings.
+      </p>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr>
+              <th style={styles.th}>School Year</th>
+              <th style={{ ...styles.th, textAlign: 'center' }}>Students</th>
+              <th style={{ ...styles.th, textAlign: 'center' }}>Tier 2/3</th>
+              <th style={{ ...styles.th, textAlign: 'center' }}>Sessions</th>
+              <th style={{ ...styles.th, textAlign: 'center' }}>Hours</th>
+              <th style={{ ...styles.th, textAlign: 'center' }}>SB 179</th>
+              <th style={{ ...styles.th, textAlign: 'center' }}>Referrals</th>
+              <th style={{ ...styles.th, textAlign: 'center' }}>Contacts</th>
+              <th style={{ ...styles.th, textAlign: 'center' }}>Groups</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.label} style={i % 2 === 0 ? {} : { background: '#f9fafb' }}>
+                <td style={{ ...styles.td, fontWeight: 600 }}>
+                  {r.label}{r.isLive ? <span style={{ color: '#2A9D8F', fontWeight: 600, fontSize: 11 }}> · live</span> : ''}
+                </td>
+                <td style={{ ...styles.td, textAlign: 'center' }}>{fmt(r.students_served)}</td>
+                <td style={{ ...styles.td, textAlign: 'center' }}>{fmt(r.tier2)}/{fmt(r.tier3)}</td>
+                <td style={{ ...styles.td, textAlign: 'center' }}>{fmt(r.sessions_completed)}</td>
+                <td style={{ ...styles.td, textAlign: 'center' }}>{fmt(r.session_hours)}</td>
+                <td style={{ ...styles.td, textAlign: 'center' }}>{r.sb179_pct !== null ? `${r.sb179_pct}%` : '—'}</td>
+                <td style={{ ...styles.td, textAlign: 'center' }}>{fmt(r.referrals_received)}</td>
+                <td style={{ ...styles.td, textAlign: 'center' }}>{fmt(r.contacts_logged)}</td>
+                <td style={{ ...styles.td, textAlign: 'center' }}>{fmt(r.groups_run)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
