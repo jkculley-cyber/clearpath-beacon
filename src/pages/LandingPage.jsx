@@ -51,12 +51,12 @@ export default function LandingPage() {
         ))}
       </div>
 
-      {/* CountSel section */}
+      {/* Switching section — no competitor names in customer-facing copy */}
       <div style={countselSection}>
         <div style={countselInner}>
-          <h2 style={countselTitle}>Switching from CountSel?</h2>
+          <h2 style={countselTitle}>Switching from another time-tracking tool?</h2>
           <p style={countselText}>
-            Beacon does everything CountSel did &mdash; plus SB 179 compliance tracking, group session management,
+            Beacon covers everything your current tracker does &mdash; plus SB 179 compliance tracking, group session management,
             and professional PDF reports. Import your existing student data via CSV in under 2 minutes.
           </p>
           <a href="/setup" style={{ ...ctaPrimary, display: 'inline-block' }}>Try Beacon Free &rarr;</a>
