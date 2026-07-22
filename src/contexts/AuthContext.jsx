@@ -78,8 +78,8 @@ async function createLocalCounselor(profile) {
   await local.put('counselor', record);
   localStorage.setItem(LOCAL_COUNSELOR_KEY, record.id);
 
-  // Seed bundled lessons and templates
-  await seedLocalLessons(record.id);
+  // Seed bundled lessons (band-appropriate) and templates
+  await seedLocalLessons(record.id, record.grade_band);
   await seedLocalTemplates(record.id);
 
   return record;

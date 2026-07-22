@@ -352,16 +352,24 @@ export const db = {
 
 // ─── Seeded lesson data (bundled for local mode) ───
 
-export async function seedLocalLessons(counselorId) {
+export async function seedLocalLessons(counselorId, band = 'elementary') {
   if (!isLocalMode()) return;
 
   // Check if already seeded
   const existing = await local.getAll('lesson_library');
   if (existing.length > 0) return;
 
-  // Dynamically import the lesson data
+  // Dynamically import the lesson data + band grade map
   const { SEED_LESSONS } = await import('./seedLessonData.js');
-  for (const lesson of SEED_LESSONS) {
+  const { GRADE_BANDS, DEFAULT_GRADE_BAND } = await import('./constants.js');
+  const bandGrades = new Set((GRADE_BANDS[band] || GRADE_BANDS[DEFAULT_GRADE_BAND]).grades);
+
+  // Seed only lessons that overlap the counselor's band; fall back to all if
+  // a band somehow matches nothing (keeps the library from being empty).
+  const inBand = SEED_LESSONS.filter((l) => (l.grade_tags || []).some((g) => bandGrades.has(g)));
+  const toSeed = inBand.length ? inBand : SEED_LESSONS;
+
+  for (const lesson of toSeed) {
     await local.insert('lesson_library', {
       ...lesson,
       counselor_id: counselorId,

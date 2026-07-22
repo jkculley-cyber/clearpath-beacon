@@ -68,10 +68,19 @@ function gradeFiltersForBand(band) {
 
 const BAND_WIDE = ['K-5', '6-8', '9-12'];
 
+// Which item gradeRanges belong to each band-wide filter token.
+const BAND_MEMBERS = {
+  'K-5': ['K-1', '2-5', 'K-5', 'K-2', '1-5', 'K', '1', '2', '3', '4', '5'],
+  '6-8': ['6-8', '6-7', '7-8', '6', '7', '8'],
+  '9-12': ['9-12', '9-10', '11-12', '9', '10', '11', '12'],
+};
+
 function matchesGradeFilter(itemGrade, filter) {
   if (filter === 'All') return true;
   if (filter === itemGrade) return true;
-  // Band-wide items show in every filter
+  // Selecting a band-wide token shows every item within that band.
+  if (BAND_MEMBERS[filter]) return BAND_MEMBERS[filter].includes(itemGrade);
+  // Band-wide items still show under narrower same-band filters.
   if (BAND_WIDE.includes(itemGrade)) return true;
   // Elementary overlaps (existing content taxonomy)
   if (itemGrade === 'K-2' && filter === 'K-1') return true;
@@ -175,10 +184,14 @@ async function printFullKit(kit) {
    ══════════════════════════════════════════════════════ */
 export default function ResourcesPage() {
   const { counselor } = useAuth();
-  const GRADE_FILTERS = gradeFiltersForBand(getGradeBand(counselor));
+  const band = getGradeBand(counselor);
+  const GRADE_FILTERS = gradeFiltersForBand(band);
+  // Default to the counselor's own band (band-wide token) so a secondary
+  // counselor doesn't open to a page of elementary prompts. 'All' stays available.
+  const bandWideToken = { elementary: 'K-5', middle: '6-8', high: '9-12' }[band] || 'K-5';
   const [activeSection, setActiveSection] = useState('prompts');
   const [promptTab, setPromptTab] = useState('icebreakers');
-  const [gradeFilter, setGradeFilter] = useState('All');
+  const [gradeFilter, setGradeFilter] = useState(bandWideToken);
   const [shuffled, setShuffled] = useState(null);
   const [expandedCards, setExpandedCards] = useState({});
   const [expandedKit, setExpandedKit] = useState(null);
@@ -369,7 +382,7 @@ export default function ResourcesPage() {
       {/* ═══ SECTION 2: GROUP STARTER KITS ═══ */}
       {activeSection === 'kits' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14 }}>
-          {GROUP_STARTER_KITS.map((kit) => {
+          {GROUP_STARTER_KITS.filter((kit) => matchesGradeFilter(kit.grade_range, bandWideToken)).map((kit) => {
             const isExpanded = expandedKit === kit.id;
             return (
               <div key={kit.id} style={{ ...card, display: 'flex', flexDirection: 'column' }}>
