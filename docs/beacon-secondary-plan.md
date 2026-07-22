@@ -78,6 +78,17 @@ Counselor picks a **band preset** at setup (editable in Settings). Preset drives
 
 ---
 
+## Build status (2026-07-22)
+
+Branch `feat/grade-bands-secondary` — all three phases implemented, built clean, browser-verified.
+
+- ✅ **Phase 1** (`22bc8cf`) — grade-band foundation (Elementary/Middle/High), band selector in setup + Settings, all hardcoded K-5 removed, band-aware promotion ladder + seed data + copy, compliance-wording/threshold cleanups.
+- ✅ **Phase 2** (`bc15ca2`) — secondary SEL content (16 icebreakers, 12 scenarios, 8 mindfulness, 4 group kits, 12 lessons) + band-aware delivery (lesson seeder, resource filters/default, kit filter); fixed the latent `Social/Emotional` domain-filter bug.
+- ✅ **Phase 3** (`0e3fa16`) — Post-Secondary (CCMR) Advising log: new `ccmr_advising` store (DB v8), band-gated `/ccmr` page + nav, full CRUD verified.
+- ⏭️ **Phase 3 follow-ons (not built):** standalone 4-year graduation-readiness checklist (partly covered by the CCMR "Endorsement / Graduation Plan" category); caseload-by-alpha model (replaces the single-`teacher` homeroom field); attested-PDF export of the advising log (reuse `pdfIntegrity`/`pdfAttestation`).
+
+Not yet: PR/merge to `main` (branch is local + pushed-branch pending); marketing-site copy on clearpathedgroup.com ("now for elementary, middle & high"); store/pricing page (same $79/yr across bands).
+
 ## Implementation plan (phased)
 
 **Phase 0 — Legal ✅ RESOLVED.** SB 179 applies to all TX public-school counselors (Kim, 2026-07-22). No blocker. (Fold the wording/threshold cleanups from "Pre-existing bugs" into Phase 1.)
