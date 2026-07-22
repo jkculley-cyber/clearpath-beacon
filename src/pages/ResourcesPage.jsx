@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { getGradeBand } from '../lib/constants';
 import { ICEBREAKERS, SCENARIO_CARDS, MINDFULNESS_SCRIPTS } from '../lib/sessionPrompts';
 import { GROUP_STARTER_KITS } from '../lib/groupStarterKits';
 import { VISUAL_RESOURCES } from '../lib/visualResources';
@@ -54,17 +56,25 @@ const expandBtn = {
   padding: '4px 0',
 };
 
-/* ── Grade filter logic ── */
-const GRADE_FILTERS = ['All', 'K-1', '2-5', 'K-5'];
+/* ── Grade filter logic ──
+ * Filters are band-aware. Content items carry a `gradeRange` (e.g. 'K-5',
+ * '6-8'). A band-wide item ('K-5','6-8','9-12') shows under every filter in
+ * its band; 'All' always shows everything so no content is ever hidden. */
+function gradeFiltersForBand(band) {
+  if (band === 'middle') return ['All', '6', '7', '8', '6-8'];
+  if (band === 'high') return ['All', '9', '10', '11', '12', '9-12'];
+  return ['All', 'K-1', '2-5', 'K-5'];
+}
+
+const BAND_WIDE = ['K-5', '6-8', '9-12'];
 
 function matchesGradeFilter(itemGrade, filter) {
   if (filter === 'All') return true;
   if (filter === itemGrade) return true;
-  // K-5 items show in every filter
-  if (itemGrade === 'K-5') return true;
-  // K-2 items show in K-1 filter (overlap)
+  // Band-wide items show in every filter
+  if (BAND_WIDE.includes(itemGrade)) return true;
+  // Elementary overlaps (existing content taxonomy)
   if (itemGrade === 'K-2' && filter === 'K-1') return true;
-  // 1-5 items show in 2-5 filter (overlap)
   if (itemGrade === '1-5' && filter === '2-5') return true;
   return false;
 }
@@ -164,6 +174,8 @@ async function printFullKit(kit) {
    Component
    ══════════════════════════════════════════════════════ */
 export default function ResourcesPage() {
+  const { counselor } = useAuth();
+  const GRADE_FILTERS = gradeFiltersForBand(getGradeBand(counselor));
   const [activeSection, setActiveSection] = useState('prompts');
   const [promptTab, setPromptTab] = useState('icebreakers');
   const [gradeFilter, setGradeFilter] = useState('All');

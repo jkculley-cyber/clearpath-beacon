@@ -300,7 +300,7 @@ async function generateSB179PDF(entries, counselor, periodLabel, from, to, filen
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(120, 120, 120);
   const note = doc.splitTextToSize(
-    'Per SB 179 (TEC §33.006), school counselors shall spend at least 80% of work time on direct counseling services. Hours shown are auto-computed from time entries logged in Beacon during the reporting period.',
+    'Per SB 179 (86th Leg., 2019; TEC §33.006), school counselors shall spend at least 80% of work time on duties within the school counseling program — the guidance curriculum, individual student planning, and responsive services. System-support and non-counseling duties count toward the remaining 20%. Hours shown are auto-computed from time entries logged in Beacon during the reporting period.',
     182
   );
   doc.text(note, 14, y);

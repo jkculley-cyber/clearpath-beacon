@@ -14,19 +14,10 @@ import {
 import { downloadCalendarIcs } from '../lib/calendarExport';
 import { schoolYearWindow, computeYearSummary, saveYearSummary } from '../lib/yearSummary';
 import { generateHandoffPdf } from '../lib/handoffExport';
-import { TIME_DOMAINS } from '../lib/constants';
+import { TIME_DOMAINS, GRADE_BANDS, GRADE_BAND_KEYS, getGradeBand, getPromotionLadder, topGradeLabel } from '../lib/constants';
 import ConfirmDestructive from '../components/ConfirmDestructive';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-const GRADE_PROMOTIONS = [
-  { from: 'K', to: '1' },
-  { from: '1', to: '2' },
-  { from: '2', to: '3' },
-  { from: '3', to: '4' },
-  { from: '4', to: '5' },
-  { from: '5', to: 'Graduated' },
-];
 
 const DAYS_OF_WEEK = [
   { label: 'Monday', value: 1 },
@@ -47,6 +38,10 @@ export default function SettingsPage() {
   const [name, setName] = useState('');
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
+  const [gradeBand, setGradeBand] = useState('elementary');
+  // Promotion ladder + exiting top grade derive from the SAVED band on the record.
+  const GRADE_PROMOTIONS = Object.entries(getPromotionLadder(counselor)).map(([from, to]) => ({ from, to }));
+  const topGrade = topGradeLabel(counselor);
   const [yearStart, setYearStart] = useState('');
   const [yearEnd, setYearEnd] = useState('');
   const [alertThreshold, setAlertThreshold] = useState(82);
@@ -103,6 +98,7 @@ export default function SettingsPage() {
       setName(counselor.name || '');
       setCampus(counselor.campus || '');
       setDistrict(counselor.district || '');
+      setGradeBand(getGradeBand(counselor));
       setYearStart(counselor.school_year_start || '');
       setYearEnd(counselor.school_year_end || '');
       setAlertThreshold(counselor.alert_threshold || 82);
@@ -435,6 +431,7 @@ export default function SettingsPage() {
       name,
       campus,
       district,
+      grade_band: gradeBand,
       school_year_start: yearStart || null,
       school_year_end: yearEnd || null,
       alert_threshold: alertThreshold,
@@ -689,6 +686,35 @@ export default function SettingsPage() {
             <div>
               <label className="form-label">District</label>
               <input className="form-input" value={district} onChange={(e) => setDistrict(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label className="form-label">Grade level I serve</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {GRADE_BAND_KEYS.map((key) => {
+                const b = GRADE_BANDS[key];
+                const active = gradeBand === key;
+                return (
+                  <button
+                    type="button"
+                    key={key}
+                    onClick={() => setGradeBand(key)}
+                    style={{
+                      flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer',
+                      border: active ? '2px solid #2A9D8F' : '1px solid #d1d5db',
+                      background: active ? '#e6f4f2' : '#fff',
+                      color: active ? '#1f2937' : '#6b7280',
+                      fontWeight: active ? 700 : 500, fontSize: 13, lineHeight: 1.3,
+                    }}
+                  >
+                    {b.label}
+                    <div style={{ fontSize: 11, fontWeight: 500, color: active ? '#2A9D8F' : '#9ca3af' }}>{b.short}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+              Sets the grade options and year-end promotion. SB 179 (80/20) compliance is identical for every band.
             </div>
           </div>
         </div>
@@ -1132,7 +1158,7 @@ export default function SettingsPage() {
                   <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>Transition Complete</h3>
                   <div style={{ marginBottom: 16 }}>
                     <p style={{ color: '#22c55e', fontWeight: 600, marginBottom: 6 }}>{transitionResult.promoted} student{transitionResult.promoted !== 1 ? 's' : ''} promoted.</p>
-                    <p style={{ color: '#f59e0b', fontWeight: 600, marginBottom: 6 }}>{transitionResult.graduated} 5th grader{transitionResult.graduated !== 1 ? 's' : ''} graduated.</p>
+                    <p style={{ color: '#f59e0b', fontWeight: 600, marginBottom: 6 }}>{transitionResult.graduated} {topGrade} student{transitionResult.graduated !== 1 ? 's' : ''} graduated (exited caseload).</p>
                     {transitionResult.archived > 0 && (
                       <p style={{ color: '#6b7280', fontSize: 13 }}>{transitionResult.archived} completed group{transitionResult.archived !== 1 ? 's' : ''} archived.</p>
                     )}
@@ -1148,7 +1174,7 @@ export default function SettingsPage() {
                 <>
                   <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 4px' }}>Promote & Archive</h3>
                   <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
-                    {transitionPreview.totalStudents - transitionPreview.graduateCount} student{transitionPreview.totalStudents - transitionPreview.graduateCount !== 1 ? 's' : ''} will be promoted, {transitionPreview.graduateCount} 5th grader{transitionPreview.graduateCount !== 1 ? 's' : ''} will be graduated.
+                    {transitionPreview.totalStudents - transitionPreview.graduateCount} student{transitionPreview.totalStudents - transitionPreview.graduateCount !== 1 ? 's' : ''} will be promoted, {transitionPreview.graduateCount} {topGrade} student{transitionPreview.graduateCount !== 1 ? 's' : ''} will be graduated (exit caseload).
                   </p>
 
                   {/* Grade promotion preview */}
@@ -1522,8 +1548,8 @@ export default function SettingsPage() {
     const teal = [15, 118, 110];
     const amount = plan === 'annual' ? '$79.00' : '$8.00';
     const lineItem = plan === 'annual'
-      ? 'Beacon Elementary Counselor Platform \u2014 Annual License'
-      : 'Beacon Elementary Counselor Platform \u2014 Monthly License';
+      ? 'Beacon Counselor Platform \u2014 Annual License'
+      : 'Beacon Counselor Platform \u2014 Monthly License';
     const invoiceNum = `BCN-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`;
     const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 

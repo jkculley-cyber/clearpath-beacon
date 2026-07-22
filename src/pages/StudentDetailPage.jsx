@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
-import { CONTACT_TYPES, PROGRESS_COLORS, PROGRESS_LEVELS, MTSS_TIERS, STUDENT_STATUSES } from '../lib/constants';
+import { CONTACT_TYPES, PROGRESS_COLORS, PROGRESS_LEVELS, MTSS_TIERS, STUDENT_STATUSES, getGrades } from '../lib/constants';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { autoLogTime } from '../lib/autoLogTime';
 import { generateProgressPDF, generateMTSSReport } from '../lib/pdfExports';
@@ -409,10 +409,11 @@ function NoteModal({ open, onClose, student, counselorId, editNote }) {
   );
 }
 
-const GRADES = ['K', '1', '2', '3', '4', '5'];
 
 /* ---- Edit Student Modal ---- */
 function EditStudentModal({ open, onClose, student }) {
+  const { counselor } = useAuth();
+  const GRADES = getGrades(counselor);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [grade, setGrade] = useState('');

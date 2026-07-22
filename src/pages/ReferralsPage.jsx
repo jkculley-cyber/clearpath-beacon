@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
-import { URGENCY_LEVELS, CONCERN_TYPES } from '../lib/constants';
+import { URGENCY_LEVELS, CONCERN_TYPES, getGrades } from '../lib/constants';
 import { isReferralAlert, getAlertReasons, getTopAlertReason } from '../lib/referralAlerts';
 
 const urgencyColor = { Urgent: '#ef4444', Soon: '#f59e0b', Routine: '#6b7280' };
@@ -600,6 +600,8 @@ function ImportEmailModal({ open, onClose, counselorId, onImported }) {
 
 // --- Add Referral Modal (for local mode / manual entry) ---
 function AddReferralModal({ open, onClose, counselorId }) {
+  const { counselor } = useAuth();
+  const GRADES = getGrades(counselor);
   const [studentName, setStudentName] = useState('');
   const [grade, setGrade] = useState('');
   const [teacherName, setTeacherName] = useState('');
@@ -673,7 +675,7 @@ function AddReferralModal({ open, onClose, counselorId }) {
               <label className="form-label">Grade</label>
               <select className="form-input" value={grade} onChange={(e) => setGrade(e.target.value)}>
                 <option value="">Select...</option>
-                {['K', '1', '2', '3', '4', '5'].map(g => <option key={g} value={g}>{g}</option>)}
+                {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div>

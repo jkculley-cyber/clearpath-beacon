@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { db, isLocalMode } from '../lib/db';
-import { CONCERN_TYPES, URGENCY_LEVELS } from '../lib/constants';
+import { CONCERN_TYPES, URGENCY_LEVELS, ALL_GRADES, gradeLabel } from '../lib/constants';
 
 // Cloudflare Turnstile — bot/spam gate on the public referral form.
 // The site key is PUBLIC by design (Cloudflare embeds it client-side; the
@@ -16,7 +16,9 @@ import { CONCERN_TYPES, URGENCY_LEVELS } from '../lib/constants';
 const TURNSTILE_FALLBACK_KEY = '0x4AAAAAADEgqoGSVgO0m4aE';
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || TURNSTILE_FALLBACK_KEY;
 
-const GRADES = ['K', '1', '2', '3', '4', '5'];
+// The public referral form spans all grades — a referring teacher may be at any
+// campus/band, and the counselor's band isn't carried in the share link. The
+// counselor triages on intake regardless.
 
 // Length caps — keep referrals well under the IndexedDB / Supabase row size limit
 // and short enough that a flooding attack can't pump huge payloads through.
@@ -323,7 +325,7 @@ export default function ReferralFormPage() {
           <label className="form-label">Grade *</label>
           <select className="form-input" required value={grade} onChange={(e) => setGrade(e.target.value)} style={{ marginBottom: 12 }}>
             <option value="">Select grade...</option>
-            {GRADES.map((g) => <option key={g} value={g}>{g === 'K' ? 'Kindergarten' : `${g}${g === '1' ? 'st' : g === '2' ? 'nd' : g === '3' ? 'rd' : 'th'} Grade`}</option>)}
+            {ALL_GRADES.map((g) => <option key={g} value={g}>{gradeLabel(g)}</option>)}
           </select>
 
           <label className="form-label">Your Name (Teacher)</label>

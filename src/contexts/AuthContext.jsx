@@ -67,6 +67,8 @@ async function createLocalCounselor(profile) {
     email: profile.email || 'local@beacon.local',
     campus: profile.campus || '',
     district: profile.district || '',
+    grade_band: profile.grade_band || 'elementary',
+    served_grades: profile.served_grades || null,
     subscription_status: 'trial',
     trial_started_at: new Date().toISOString(),
     onboarding_complete: true,

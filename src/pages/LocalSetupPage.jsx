@@ -28,6 +28,7 @@ export default function LocalSetupPage() {
   const [email, setEmail] = useState('');
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
+  const [gradeBand, setGradeBand] = useState('elementary');
   const initialKey = readKeyFromUrl();
   const [licenseKey, setLicenseKey] = useState(initialKey);
   // Auto-expand license field for returning users — they're here BECAUSE they have a key
@@ -59,9 +60,9 @@ export default function LocalSetupPage() {
       }
     }
 
-    const profile = await setupLocalProfile({ name, campus, district });
+    const profile = await setupLocalProfile({ name, campus, district, grade_band: gradeBand });
     if (loadSample && profile?.id) {
-      try { await seedSampleData(profile.id); } catch { /* non-blocking */ }
+      try { await seedSampleData(profile.id, gradeBand); } catch { /* non-blocking */ }
     }
 
     // Notify Kim — fire-and-forget, non-blocking, no student data sent
@@ -290,6 +291,40 @@ export default function LocalSetupPage() {
             onChange={(e) => setDistrict(e.target.value)}
             placeholder="e.g. Lonestar ISD"
           />
+
+          {/* Grade band — which grades this counselor serves. Drives grade lists,
+              promotion ladder, and default content. SB 179 (80/20) is identical
+              across bands, so nothing compliance-related changes here. */}
+          <label style={labelStyle}>Grade level I serve</label>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+            {[
+              { key: 'elementary', label: 'Elementary', sub: 'K–5' },
+              { key: 'middle', label: 'Middle', sub: '6–8' },
+              { key: 'high', label: 'High', sub: '9–12' },
+            ].map((b) => {
+              const active = gradeBand === b.key;
+              return (
+                <button
+                  type="button"
+                  key={b.key}
+                  onClick={() => setGradeBand(b.key)}
+                  style={{
+                    flex: 1, padding: '10px 8px', borderRadius: 8, cursor: 'pointer',
+                    border: active ? '2px solid #2A9D8F' : '1px solid #d1d5db',
+                    background: active ? '#e6f4f2' : '#fff',
+                    color: active ? '#1f2937' : '#6b7280',
+                    fontWeight: active ? 700 : 500, fontSize: 13, lineHeight: 1.3,
+                  }}
+                >
+                  {b.label}
+                  <div style={{ fontSize: 11, fontWeight: 500, color: active ? '#2A9D8F' : '#9ca3af' }}>{b.sub}</div>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4, marginBottom: 4 }}>
+            You can change this later in Settings.
+          </div>
 
           {/* Sample data option */}
           <label style={{

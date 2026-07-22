@@ -27,7 +27,7 @@ export default function LandingPage() {
       {/* Hero */}
       <div style={hero}>
         <p style={eyebrow}>Beacon</p>
-        <h1 style={heroTitle}>The first tool built for elementary school counselors</h1>
+        <h1 style={heroTitle}>The tool built for school counselors — elementary, middle, and high</h1>
         <p style={heroSub}>
           Track your caseload, prove your 80/20 compliance, and document everything &mdash; all from one place.
         </p>

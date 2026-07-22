@@ -2,9 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
-import { MTSS_TIERS, STUDENT_STATUSES, CONCERN_TYPES } from '../lib/constants';
-
-const GRADES = ['K', '1', '2', '3', '4', '5'];
+import { MTSS_TIERS, STUDENT_STATUSES, CONCERN_TYPES, getGrades } from '../lib/constants';
 
 /* ── CSV Parsing Helper ── */
 function parseCSV(text) {
@@ -214,7 +212,7 @@ function downloadCSV(rows, headers, filename) {
   URL.revokeObjectURL(url);
 }
 
-function AddStudentModal({ open, onClose, counselorId }) {
+function AddStudentModal({ open, onClose, counselorId, grades }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [grade, setGrade] = useState('');
@@ -282,7 +280,7 @@ function AddStudentModal({ open, onClose, counselorId }) {
               <label className="form-label">Grade</label>
               <select className="form-input" value={grade} onChange={(e) => setGrade(e.target.value)}>
                 <option value="">Select...</option>
-                {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                {grades.map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div>
@@ -313,6 +311,7 @@ function AddStudentModal({ open, onClose, counselorId }) {
 
 export default function StudentsPage() {
   const { counselor } = useAuth();
+  const GRADES = getGrades(counselor);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [students, setStudents] = useState([]);
@@ -517,6 +516,7 @@ export default function StudentsPage() {
         open={showAdd}
         onClose={(created) => { setShowAdd(false); if (created) loadStudents(); }}
         counselorId={counselor?.id}
+        grades={GRADES}
       />
 
       <ImportModal
