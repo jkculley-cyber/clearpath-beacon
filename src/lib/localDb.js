@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'beacon_local';
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 
 const STORES = [
   'counselor',         // single record — counselor profile
@@ -33,6 +33,7 @@ const STORES = [
   'session_note_templates', // SOAP-format note templates with prompted fields
   'schedule_events',   // one-off non-counseling events on the schedule (meetings, duty, training, etc.)
   'record_history',    // change log for student/session edits + deletes (v7)
+  'ccmr_advising',     // secondary: college/career/military-readiness advising log (v8)
   'settings',          // key-value config
 ];
 
@@ -217,6 +218,19 @@ export function openDB() {
         rh.createIndex('record_id', 'record_id', { unique: false });
         rh.createIndex('table_name', 'table_name', { unique: false });
         rh.createIndex('counselor_id', 'counselor_id', { unique: false });
+      }
+
+      // ccmr_advising (v8) — secondary post-secondary / CCMR advising log.
+      // Documents college/career/military-readiness advising touches. Stays in
+      // Beacon's documentation lane (not a scheduler/SIS): what the counselor
+      // advised, when, and the next step — a defensible record, band-gated to
+      // middle/high in the UI.
+      if (!db.objectStoreNames.contains('ccmr_advising')) {
+        const ca = db.createObjectStore('ccmr_advising', { keyPath: 'id' });
+        ca.createIndex('counselor_id', 'counselor_id', { unique: false });
+        ca.createIndex('student_id', 'student_id', { unique: false });
+        ca.createIndex('category', 'category', { unique: false });
+        ca.createIndex('status', 'status', { unique: false });
       }
 
       // settings (key-value)

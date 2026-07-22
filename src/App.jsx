@@ -28,6 +28,7 @@ import RequestAccessPage from './pages/RequestAccessPage';
 import LandingPage from './pages/LandingPage';
 import DistrictPreviewPage from './pages/DistrictPreviewPage';
 import CrestPage from './pages/CrestPage';
+import CcmrPage from './pages/CcmrPage';
 
 /* ── Auth guard ── */
 function RequireAuth({ children }) {
@@ -91,6 +92,7 @@ export default function App() {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="district-preview" element={<DistrictPreviewPage />} />
         <Route path="crest" element={<CrestPage />} />
+        <Route path="ccmr" element={<CcmrPage />} />
       </Route>
 
       {/* Catch-all */}

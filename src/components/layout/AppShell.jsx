@@ -5,6 +5,7 @@ import { db, exportLocalBackup } from '../../lib/db';
 import { encryptBackup } from '../../lib/backupCrypto';
 import { saveBackupToHandle, getBackupFolderName, isFsAccessSupported } from '../../lib/backupFolder';
 import { isReferralAlert } from '../../lib/referralAlerts';
+import { getGradeBand } from '../../lib/constants';
 import { startNotificationPoll, stopNotificationPoll, getNotificationPrefs } from '../../lib/notifications';
 import CrisisLaunchButton from '../CrisisLaunchButton';
 
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { to: '/communications',label: 'Communications',  icon: CommsIcon },
   { to: '/sessions',      label: 'Sessions',        icon: SessionsIcon },
   { to: '/goals',         label: 'Goals',           icon: GoalsIcon },
+  { to: '/ccmr',          label: 'Post-Secondary',  icon: GoalsIcon, bands: ['middle', 'high'] },
   { to: '/needs-assessment', label: 'Assessments',  icon: AssessmentIcon },
   { to: '/reports',       label: 'Reports',          icon: ReportsIcon },
   { to: '/crest',         label: 'CREST Award',     icon: CrestIcon },
@@ -464,7 +466,7 @@ export default function AppShell() {
           </div>
         </div>
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+          {NAV_ITEMS.filter((item) => !item.bands || item.bands.includes(getGradeBand(counselor))).map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
