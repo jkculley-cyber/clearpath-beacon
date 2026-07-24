@@ -211,7 +211,11 @@ export default function CcmrPage() {
     return { total, complete, openNext, studentsAdvised };
   }, [entries]);
 
-  if (!isSecondaryServed(counselor)) {
+  // Not serving a secondary grade AND nothing logged → explain and stop.
+  // If entries DO exist (e.g. the counselor moved to an elementary campus),
+  // never hide their own records — fall through and render them read-only.
+  const secondary = isSecondaryServed(counselor);
+  if (!secondary && !loading && entries.length === 0) {
     return (
       <div style={{ padding: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1a2332' }}>Post-Secondary Advising</h1>
@@ -232,8 +236,15 @@ export default function CcmrPage() {
             Document college, career, and military-readiness advising — a defensible record of your CCMR work.
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ Log Advising</button>
+        {secondary && <button className="btn btn-primary" onClick={() => setShowNew(true)}>+ Log Advising</button>}
       </div>
+
+      {!secondary && (
+        <div style={{ ...card, marginTop: 14, borderColor: '#fed7aa', background: '#fff7ed', color: '#9a3412', fontSize: 13 }}>
+          Your grade band no longer includes secondary grades, so new advising can&apos;t be logged.
+          Your existing records are kept and shown below. To log new entries, update your grade band in <strong>Settings</strong>.
+        </div>
+      )}
 
       {/* Summary tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, margin: '18px 0' }}>
@@ -284,7 +295,7 @@ export default function CcmrPage() {
             </thead>
             <tbody>
               {filtered.map((e) => (
-                <tr key={e.id} onClick={() => setEditEntry(e)} style={{ borderTop: '1px solid #f0f0f0', cursor: 'pointer' }}>
+                <tr key={e.id} onClick={secondary ? () => setEditEntry(e) : undefined} style={{ borderTop: '1px solid #f0f0f0', cursor: secondary ? 'pointer' : 'default' }}>
                   <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{fmtDate(e.advising_date)}</td>
                   <td style={{ padding: '10px 14px' }}>{e.student_name || '—'}</td>
                   <td style={{ padding: '10px 14px' }}>{CAT_LABEL[e.category] || e.category}</td>

@@ -239,8 +239,31 @@ export function openDB() {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    // Another tab still holds an older-version connection, so the upgrade can't
+    // proceed. Without this the promise never settles and — because dbPromise is
+    // memoized — the whole app hangs on a blank loading state with no message.
+    // Fail loudly instead, and let that tab's connection close on request.
+    request.onblocked = () => {
+      dbPromise = null;
+      reject(new Error(
+        'Beacon is open in another tab using an older version. Please close the other Beacon tabs and reload this page.'
+      ));
+    };
+
+    request.onsuccess = () => {
+      const db = request.result;
+      // If ANOTHER tab later requests a version upgrade, close this connection
+      // so we don't block it (this tab then reloads its data on next open).
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      resolve(db);
+    };
+    request.onerror = () => {
+      dbPromise = null;
+      reject(request.error);
+    };
   });
 
   return dbPromise;

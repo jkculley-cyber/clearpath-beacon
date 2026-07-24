@@ -355,9 +355,16 @@ export const db = {
 export async function seedLocalLessons(counselorId, servedGrades = null) {
   if (!isLocalMode()) return;
 
-  // Check if already seeded
   const existing = await local.getAll('lesson_library');
-  if (existing.length > 0) return;
+
+  // One-time repair for libraries seeded before the domain-tag fix: the old
+  // seed wrote 'Social/Emotional' (slash), which never matches the
+  // 'Social-Emotional' domain filter, so those lessons were invisible.
+  for (const l of existing) {
+    if (l.domain_tag === 'Social/Emotional') {
+      await local.update('lesson_library', l.id, { domain_tag: 'Social-Emotional' });
+    }
+  }
 
   // Dynamically import the lesson data
   const { SEED_LESSONS } = await import('./seedLessonData.js');
@@ -366,7 +373,15 @@ export async function seedLocalLessons(counselorId, servedGrades = null) {
   // Seed only lessons that overlap the counselor's served grades; fall back to
   // all if nothing matches (keeps the library from being empty).
   const inRange = SEED_LESSONS.filter((l) => (l.grade_tags || []).some((g) => gradeSet.has(g)));
-  const toSeed = inRange.length ? inRange : SEED_LESSONS;
+  const candidates = inRange.length ? inRange : SEED_LESSONS;
+
+  // Top-up (not re-seed): only add bundled lessons the library doesn't already
+  // have. This makes a band change bring in that band's lessons instead of
+  // leaving the counselor with an out-of-range library, and never duplicates
+  // or touches the counselor's own entries.
+  const haveTitles = new Set(existing.map((l) => l.title));
+  const toSeed = candidates.filter((l) => !haveTitles.has(l.title));
+  if (!toSeed.length) return;
 
   for (const lesson of toSeed) {
     await local.insert('lesson_library', {

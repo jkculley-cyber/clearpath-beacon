@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { db, exportLocalBackup, importLocalBackup } from '../lib/db';
+import { db, exportLocalBackup, importLocalBackup, seedLocalLessons } from '../lib/db';
 import { encryptBackup, decryptBackup } from '../lib/backupCrypto';
 import { saveBackupToHandle, pickBackupFolder, persistPickedBackupFolder, getBackupFolderName, clearBackupFolder, isFsAccessSupported, getLastOffDeviceSync } from '../lib/backupFolder';
 import { hasSampleData, clearSampleData } from '../lib/seedSampleData';
@@ -14,7 +14,7 @@ import {
 import { downloadCalendarIcs } from '../lib/calendarExport';
 import { schoolYearWindow, computeYearSummary, saveYearSummary } from '../lib/yearSummary';
 import { generateHandoffPdf } from '../lib/handoffExport';
-import { TIME_DOMAINS, GRADE_BANDS, GRADE_BAND_KEYS, COMBINED_PRESETS, getGradeBand, getPromotionLadder, topGradeLabel } from '../lib/constants';
+import { TIME_DOMAINS, GRADE_BANDS, GRADE_BAND_KEYS, COMBINED_PRESETS, getGrades, getGradeBand, getPromotionLadder, topGradeLabel } from '../lib/constants';
 import ConfirmDestructive from '../components/ConfirmDestructive';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -40,14 +40,12 @@ export default function SettingsPage() {
   const [district, setDistrict] = useState('');
   const [gradeBand, setGradeBand] = useState('elementary');
   const [combinedKey, setCombinedKey] = useState('6-12');
-  // Preview the served grades for the CURRENTLY SELECTED (unsaved) band choice,
-  // so the promotion ladder + exiting top grade update live as the user picks.
   const selectedPreset = COMBINED_PRESETS.find((p) => p.key === combinedKey);
-  const previewCounselor = gradeBand === 'combined' && selectedPreset
-    ? { grade_band: 'combined', served_grades: { min: selectedPreset.min, max: selectedPreset.max } }
-    : { grade_band: gradeBand, served_grades: null };
-  const GRADE_PROMOTIONS = Object.entries(getPromotionLadder(previewCounselor)).map(([from, to]) => ({ from, to }));
-  const topGrade = topGradeLabel(previewCounselor);
+  // The year-end transition operates on the counselor's ACTUAL saved band —
+  // never the unsaved selector state — so a mid-edit band toggle can't skip or
+  // mis-promote real students at year rollover.
+  const GRADE_PROMOTIONS = Object.entries(getPromotionLadder(counselor)).map(([from, to]) => ({ from, to }));
+  const topGrade = topGradeLabel(counselor);
   const [yearStart, setYearStart] = useState('');
   const [yearEnd, setYearEnd] = useState('');
   const [alertThreshold, setAlertThreshold] = useState(82);
@@ -438,13 +436,16 @@ export default function SettingsPage() {
   const handleSaveProfile = async () => {
     setSaving(true);
     setSaveMsg('');
+    const servedGrades = gradeBand === 'combined' && selectedPreset
+      ? { min: selectedPreset.min, max: selectedPreset.max } : null;
+    const bandChanged = gradeBand !== getGradeBand(counselor)
+      || JSON.stringify(servedGrades) !== JSON.stringify(counselor?.served_grades ?? null);
     const { error } = await db.update('counselor', counselor.id, {
       name,
       campus,
       district,
       grade_band: gradeBand,
-      served_grades: gradeBand === 'combined' && selectedPreset
-        ? { min: selectedPreset.min, max: selectedPreset.max } : null,
+      served_grades: servedGrades,
       school_year_start: yearStart || null,
       school_year_end: yearEnd || null,
       alert_threshold: alertThreshold,
@@ -455,7 +456,14 @@ export default function SettingsPage() {
     if (error) {
       setSaveMsg('Error: ' + error.message);
     } else {
-      setSaveMsg('Settings saved.');
+      // Band change → top up the bundled library with that band's lessons, so
+      // a counselor who moves campuses isn't left with an out-of-range library.
+      if (bandChanged) {
+        try {
+          await seedLocalLessons(counselor.id, getGrades({ grade_band: gradeBand, served_grades: servedGrades }));
+        } catch { /* non-blocking */ }
+      }
+      setSaveMsg(bandChanged ? 'Settings saved. Lessons for your grade range are available in Lessons.' : 'Settings saved.');
       if (refreshCounselor) refreshCounselor();
     }
     setSaving(false);
@@ -542,6 +550,8 @@ export default function SettingsPage() {
     const students = allStudents || [];
     const promoteCounts = {};
     let graduateCount = 0;
+    let promoteCount = 0;
+    let unchangedCount = 0;
     for (const s of students) {
       const grade = (s.grade || '').toString().trim();
       const promo = GRADE_PROMOTIONS.find((p) => p.from === grade);
@@ -549,14 +559,22 @@ export default function SettingsPage() {
         if (promo.to === 'Graduated') {
           graduateCount++;
         } else {
+          promoteCount++;
           promoteCounts[`${promo.from} -> ${promo.to}`] = (promoteCounts[`${promo.from} -> ${promo.to}`] || 0) + 1;
         }
+      } else {
+        // Blank grade, or a grade outside this counselor's range (imports,
+        // public referrals, a band change). These are NOT touched — count them
+        // honestly instead of folding them into "will be promoted."
+        unchangedCount++;
       }
     }
     setTransitionPreview({
       totalStudents: students.length,
       promoteCounts,
       graduateCount,
+      promoteCount,
+      unchangedCount,
       students,
     });
     setArchiveGroups(true);
@@ -1211,7 +1229,12 @@ export default function SettingsPage() {
                 <>
                   <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 4px' }}>Promote & Archive</h3>
                   <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
-                    {transitionPreview.totalStudents - transitionPreview.graduateCount} student{transitionPreview.totalStudents - transitionPreview.graduateCount !== 1 ? 's' : ''} will be promoted, {transitionPreview.graduateCount} {topGrade} student{transitionPreview.graduateCount !== 1 ? 's' : ''} will be graduated (exit caseload).
+                    {transitionPreview.promoteCount} student{transitionPreview.promoteCount !== 1 ? 's' : ''} will be promoted, {transitionPreview.graduateCount} {topGrade} student{transitionPreview.graduateCount !== 1 ? 's' : ''} will be graduated (exit caseload).
+                    {transitionPreview.unchangedCount > 0 && (
+                      <span style={{ display: 'block', marginTop: 6, color: '#b45309' }}>
+                        {transitionPreview.unchangedCount} student{transitionPreview.unchangedCount !== 1 ? 's' : ''} outside your grade range (or with no grade) will not be changed.
+                      </span>
+                    )}
                   </p>
 
                   {/* Grade promotion preview */}
