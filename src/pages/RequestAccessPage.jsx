@@ -26,7 +26,7 @@ export default function RequestAccessPage() {
           school_name: school.trim(),
           district: district.trim(),
           source: 'beacon_request',
-          product: 'Beacon — Elementary Counselor Platform',
+          product: 'Beacon — Counselor Platform',
         }),
       });
       if (!res.ok) throw new Error('Submit failed');
@@ -85,7 +85,7 @@ export default function RequestAccessPage() {
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <div style={{ fontSize: 32, fontWeight: 800, color: '#2A9D8F', marginBottom: 4 }}>Beacon</div>
           <div style={{ fontSize: 13, color: '#6b7280', letterSpacing: '.08em', textTransform: 'uppercase' }}>
-            Elementary Counselor Platform
+            Counselor Platform
           </div>
         </div>
 

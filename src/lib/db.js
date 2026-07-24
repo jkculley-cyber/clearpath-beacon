@@ -47,6 +47,16 @@ const STORAGE_MODE_KEY = 'beacon_storage_mode';
 // auth context read through, so coercing it to 'local' neutralizes every cloud
 // entry point — including any stale 'cloud' value already in localStorage.
 // To re-enable: confirm cloud RLS, then set CLOUD_MODE_ENABLED = true.
+//
+// !! SECOND, INDEPENDENT BLOCKER (2026-07-22) — read before flipping this !!
+// The cloud SCHEMA is ~9 tables behind local, so even with perfect RLS,
+// enabling cloud silently destroys counselor data (CREST, crisis workflow,
+// follow-ups, needs assessments, parent contacts, record history, note
+// templates, student goals, settings all have no cloud table). Writes to a
+// nonexistent table just fail and the counselor loses those records with no
+// error surfaced. See docs/cloud-mode-parity-debt.md for the full list and the
+// definition of done. Tracked as risk B-8. Grade bands are handled by
+// migration 006, which is written but NOT yet applied.
 const CLOUD_MODE_ENABLED = false;
 
 export function isCloudModeEnabled() {
@@ -78,6 +88,17 @@ const LICENSE_EXEMPT_TABLES = ['lesson_library', 'communication_templates', 'set
 // counselor-made changes.
 const HISTORY_TABLES = ['students', 'sessions'];
 const HISTORY_SKIP_FIELDS = new Set(['updated_at', 'created_at', 'id']);
+
+/* Local store name -> cloud table name, where they differ.
+ * The local profile store is singular ('counselor', one record) while the cloud
+ * table is plural ('counselors', one row per user). Without this mapping every
+ * cloud profile write — including the grade_band/served_grades band setting —
+ * targets a table that does not exist and fails. Cloud mode is currently
+ * disabled (CLOUD_MODE_ENABLED), so this is latent, not live. */
+const CLOUD_TABLE_NAMES = { counselor: 'counselors' };
+function cloudTable(table) {
+  return CLOUD_TABLE_NAMES[table] || table;
+}
 
 async function recordHistory(entry) {
   try {
@@ -133,7 +154,7 @@ export const db = {
       }
 
       // Cloud mode — build Supabase query
-      let q = supabase.from(table).select(opts.select || '*');
+      let q = supabase.from(cloudTable(table)).select(opts.select || '*');
       if (opts.eq) {
         for (const [col, val] of Object.entries(opts.eq)) {
           q = q.eq(col, val);
@@ -170,7 +191,7 @@ export const db = {
         const row = await local.getById(table, id);
         return { data: row, error: null };
       }
-      return await supabase.from(table).select('*').eq('id', id).single();
+      return await supabase.from(cloudTable(table)).select('*').eq('id', id).single();
     } catch (error) {
       return { data: null, error };
     }
@@ -202,7 +223,7 @@ export const db = {
         const row = await local.insert(table, record);
         return { data: row, error: null };
       }
-      return await supabase.from(table).insert(record).select().single();
+      return await supabase.from(cloudTable(table)).insert(record).select().single();
     } catch (error) {
       return { data: null, error };
     }
@@ -229,7 +250,7 @@ export const db = {
         }
         return { data: rows, error: null };
       }
-      return await supabase.from(table).insert(records).select();
+      return await supabase.from(cloudTable(table)).insert(records).select();
     } catch (error) {
       return { data: null, error };
     }
@@ -270,7 +291,7 @@ export const db = {
         }
         return { data: row, error: null };
       }
-      return await supabase.from(table).update(changes).eq('id', id).select().single();
+      return await supabase.from(cloudTable(table)).update(changes).eq('id', id).select().single();
     } catch (error) {
       return { data: null, error };
     }
@@ -307,7 +328,7 @@ export const db = {
         }
         return { error: null };
       }
-      return await supabase.from(table).delete().eq('id', id);
+      return await supabase.from(cloudTable(table)).delete().eq('id', id);
     } catch (error) {
       return { error };
     }
@@ -322,7 +343,7 @@ export const db = {
         const n = await local.count(table, eq);
         return { count: n, error: null };
       }
-      let q = supabase.from(table).select('id', { count: 'exact', head: true });
+      let q = supabase.from(cloudTable(table)).select('id', { count: 'exact', head: true });
       if (eq) {
         for (const [col, val] of Object.entries(eq)) {
           q = q.eq(col, val);
@@ -352,16 +373,38 @@ export const db = {
 
 // ─── Seeded lesson data (bundled for local mode) ───
 
-export async function seedLocalLessons(counselorId) {
+export async function seedLocalLessons(counselorId, servedGrades = null) {
   if (!isLocalMode()) return;
 
-  // Check if already seeded
   const existing = await local.getAll('lesson_library');
-  if (existing.length > 0) return;
+
+  // One-time repair for libraries seeded before the domain-tag fix: the old
+  // seed wrote 'Social/Emotional' (slash), which never matches the
+  // 'Social-Emotional' domain filter, so those lessons were invisible.
+  for (const l of existing) {
+    if (l.domain_tag === 'Social/Emotional') {
+      await local.update('lesson_library', l.id, { domain_tag: 'Social-Emotional' });
+    }
+  }
 
   // Dynamically import the lesson data
   const { SEED_LESSONS } = await import('./seedLessonData.js');
-  for (const lesson of SEED_LESSONS) {
+  const gradeSet = new Set(servedGrades && servedGrades.length ? servedGrades : ['K', '1', '2', '3', '4', '5']);
+
+  // Seed only lessons that overlap the counselor's served grades; fall back to
+  // all if nothing matches (keeps the library from being empty).
+  const inRange = SEED_LESSONS.filter((l) => (l.grade_tags || []).some((g) => gradeSet.has(g)));
+  const candidates = inRange.length ? inRange : SEED_LESSONS;
+
+  // Top-up (not re-seed): only add bundled lessons the library doesn't already
+  // have. This makes a band change bring in that band's lessons instead of
+  // leaving the counselor with an out-of-range library, and never duplicates
+  // or touches the counselor's own entries.
+  const haveTitles = new Set(existing.map((l) => l.title));
+  const toSeed = candidates.filter((l) => !haveTitles.has(l.title));
+  if (!toSeed.length) return;
+
+  for (const lesson of toSeed) {
     await local.insert('lesson_library', {
       ...lesson,
       counselor_id: counselorId,

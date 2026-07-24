@@ -2,9 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
-import { MTSS_TIERS, STUDENT_STATUSES, CONCERN_TYPES } from '../lib/constants';
-
-const GRADES = ['K', '1', '2', '3', '4', '5'];
+import { MTSS_TIERS, STUDENT_STATUSES, CONCERN_TYPES, getGrades, ALL_GRADES } from '../lib/constants';
 
 /* ── CSV Parsing Helper ── */
 function parseCSV(text) {
@@ -214,7 +212,7 @@ function downloadCSV(rows, headers, filename) {
   URL.revokeObjectURL(url);
 }
 
-function AddStudentModal({ open, onClose, counselorId }) {
+function AddStudentModal({ open, onClose, counselorId, grades }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [grade, setGrade] = useState('');
@@ -282,7 +280,7 @@ function AddStudentModal({ open, onClose, counselorId }) {
               <label className="form-label">Grade</label>
               <select className="form-input" value={grade} onChange={(e) => setGrade(e.target.value)}>
                 <option value="">Select...</option>
-                {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                {grades.map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div>
@@ -313,6 +311,7 @@ function AddStudentModal({ open, onClose, counselorId }) {
 
 export default function StudentsPage() {
   const { counselor } = useAuth();
+  const GRADES = getGrades(counselor);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [students, setStudents] = useState([]);
@@ -354,6 +353,26 @@ export default function StudentsPage() {
   }, [counselor, filterStatus, filterGrade, filterTier]);
 
   useEffect(() => { loadStudents(); }, [loadStudents]);
+
+  /* Grade options for the roster filter. The list above is server-filtered, so
+     the options are derived from an UNFILTERED read — otherwise picking a grade
+     would collapse the option list to that one grade. Includes any grade that
+     actually exists on the roster but sits outside the counselor's range
+     (import / public referral / band change), so those students stay reachable. */
+  const [rosterGrades, setRosterGrades] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!counselor?.id) return;
+      const { data } = await db.select('students', { eq: { counselor_id: counselor.id } });
+      if (cancelled) return;
+      setRosterGrades([...new Set((data || []).map((s) => (s.grade || '').toString().trim()).filter(Boolean))]);
+    })();
+    return () => { cancelled = true; };
+  }, [counselor, students.length]);
+
+  const filterGradeOptions = [...new Set([...GRADES, ...rosterGrades])]
+    .sort((a, b) => ALL_GRADES.indexOf(a) - ALL_GRADES.indexOf(b));
 
   const studentName = (s) => s.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : (s.name || '');
 
@@ -409,9 +428,11 @@ export default function StudentsPage() {
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <input className="form-input" placeholder="Search by name or teacher..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
-        <select className="form-input" value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} style={{ width: 120 }}>
+        <select className="form-input" value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} style={{ width: 140 }}>
           <option value="">All Grades</option>
-          {GRADES.map((g) => <option key={g} value={g}>Grade {g}</option>)}
+          {filterGradeOptions.map((g) => (
+            <option key={g} value={g}>{GRADES.includes(g) ? `Grade ${g}` : `Grade ${g} (outside range)`}</option>
+          ))}
         </select>
         <select className="form-input" value={filterTier} onChange={(e) => setFilterTier(e.target.value)} style={{ width: 120 }}>
           <option value="">All Tiers</option>
@@ -517,6 +538,7 @@ export default function StudentsPage() {
         open={showAdd}
         onClose={(created) => { setShowAdd(false); if (created) loadStudents(); }}
         counselorId={counselor?.id}
+        grades={GRADES}
       />
 
       <ImportModal

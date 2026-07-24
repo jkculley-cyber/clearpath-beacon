@@ -1,7 +1,23 @@
 -- ============================================================
 -- Beacon Foundation Migration 001
--- Elementary school counselor command center
+-- School counselor command center
 -- Tenant unit: counselors (RLS isolates each counselor's data)
+-- ============================================================
+--
+-- !! BEFORE RE-ENABLING CLOUD MODE (db.js CLOUD_MODE_ENABLED) !!
+-- Grade bands: FIXED by migration 006 (widens students.grade to K-12, adds
+-- counselors.grade_band + served_grades, creates ccmr_advising). Apply it.
+--
+-- STILL OUTSTANDING — cloud has no tables for features shipped while cloud was
+-- disabled. Local (IndexedDB) has 25 stores; cloud has 18. Missing entirely:
+--   crest_artifacts, crisis_events, follow_ups, needs_assessments,
+--   parent_contacts, record_history, session_note_templates, student_goals,
+--   settings
+-- Any counselor switched to cloud loses CREST, the crisis workflow, follow-up
+-- reminders, needs assessments, parent-contact logs, record history, note
+-- templates, and student goals. Cloud mode must NOT be re-enabled until this
+-- parity gap is closed and tenant-isolation RLS is verified (see B4 note in
+-- db.js). Local mode is schemaless and unaffected.
 -- ============================================================
 
 -- ============================================================

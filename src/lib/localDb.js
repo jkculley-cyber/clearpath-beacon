@@ -7,7 +7,7 @@
  */
 
 const DB_NAME = 'beacon_local';
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 
 const STORES = [
   'counselor',         // single record — counselor profile
@@ -33,6 +33,7 @@ const STORES = [
   'session_note_templates', // SOAP-format note templates with prompted fields
   'schedule_events',   // one-off non-counseling events on the schedule (meetings, duty, training, etc.)
   'record_history',    // change log for student/session edits + deletes (v7)
+  'ccmr_advising',     // secondary: college/career/military-readiness advising log (v8)
   'settings',          // key-value config
 ];
 
@@ -219,14 +220,50 @@ export function openDB() {
         rh.createIndex('counselor_id', 'counselor_id', { unique: false });
       }
 
+      // ccmr_advising (v8) — secondary post-secondary / CCMR advising log.
+      // Documents college/career/military-readiness advising touches. Stays in
+      // Beacon's documentation lane (not a scheduler/SIS): what the counselor
+      // advised, when, and the next step — a defensible record, band-gated to
+      // middle/high in the UI.
+      if (!db.objectStoreNames.contains('ccmr_advising')) {
+        const ca = db.createObjectStore('ccmr_advising', { keyPath: 'id' });
+        ca.createIndex('counselor_id', 'counselor_id', { unique: false });
+        ca.createIndex('student_id', 'student_id', { unique: false });
+        ca.createIndex('category', 'category', { unique: false });
+        ca.createIndex('status', 'status', { unique: false });
+      }
+
       // settings (key-value)
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'key' });
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    // Another tab still holds an older-version connection, so the upgrade can't
+    // proceed. Without this the promise never settles and — because dbPromise is
+    // memoized — the whole app hangs on a blank loading state with no message.
+    // Fail loudly instead, and let that tab's connection close on request.
+    request.onblocked = () => {
+      dbPromise = null;
+      reject(new Error(
+        'Beacon is open in another tab using an older version. Please close the other Beacon tabs and reload this page.'
+      ));
+    };
+
+    request.onsuccess = () => {
+      const db = request.result;
+      // If ANOTHER tab later requests a version upgrade, close this connection
+      // so we don't block it (this tab then reloads its data on next open).
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      resolve(db);
+    };
+    request.onerror = () => {
+      dbPromise = null;
+      reject(request.error);
+    };
   });
 
   return dbPromise;

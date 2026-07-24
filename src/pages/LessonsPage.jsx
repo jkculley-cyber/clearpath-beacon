@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
-import { ASCA_DOMAINS } from '../lib/constants';
+import { ASCA_DOMAINS, getGrades } from '../lib/constants';
 
-const GRADES = ['K', '1', '2', '3', '4', '5'];
 const SOURCE_PLATFORMS = ['Original', 'Second Step', 'Character Strong', 'Zones of Regulation', 'MindUp', 'Other'];
 const ENTRY_TYPES = ['file', 'link', 'text'];
 
 function LessonModal({ open, onClose, counselorId, editLesson }) {
+  const { counselor } = useAuth();
+  const GRADES = getGrades(counselor);
   const isEdit = !!editLesson;
   const [title, setTitle] = useState('');
   const [entryType, setEntryType] = useState('link');
@@ -155,6 +156,7 @@ function LessonModal({ open, onClose, counselorId, editLesson }) {
 
 export default function LessonsPage() {
   const { counselor } = useAuth();
+  const GRADES = getGrades(counselor);
   const [lessons, setLessons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
-import { CONTACT_TYPES, PROGRESS_COLORS, PROGRESS_LEVELS, MTSS_TIERS, STUDENT_STATUSES } from '../lib/constants';
+import { CONTACT_TYPES, PROGRESS_COLORS, PROGRESS_LEVELS, MTSS_TIERS, STUDENT_STATUSES, getGrades, ALL_GRADES } from '../lib/constants';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { autoLogTime } from '../lib/autoLogTime';
 import { generateProgressPDF, generateMTSSReport } from '../lib/pdfExports';
@@ -409,10 +409,11 @@ function NoteModal({ open, onClose, student, counselorId, editNote }) {
   );
 }
 
-const GRADES = ['K', '1', '2', '3', '4', '5'];
 
 /* ---- Edit Student Modal ---- */
 function EditStudentModal({ open, onClose, student }) {
+  const { counselor } = useAuth();
+  const GRADES = getGrades(counselor);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [grade, setGrade] = useState('');
@@ -481,7 +482,15 @@ function EditStudentModal({ open, onClose, student }) {
               <label className="form-label">Grade</label>
               <select className="form-input" value={grade} onChange={(e) => setGrade(e.target.value)}>
                 <option value="">Select...</option>
-                {GRADES.map((g) => <option key={g} value={g}>{g}</option>)}
+                {/* Keep the student's own grade selectable even when it falls
+                    outside the counselor's range (import, public referral, or a
+                    band change). Without this the field renders blank and the
+                    counselor silently overwrites a correct grade. */}
+                {(GRADES.includes(grade) || !grade ? GRADES : [...GRADES, grade].sort(
+                  (a, b) => ALL_GRADES.indexOf(a) - ALL_GRADES.indexOf(b)
+                )).map((g) => (
+                  <option key={g} value={g}>{GRADES.includes(g) ? g : `${g} (outside your range)`}</option>
+                ))}
               </select>
             </div>
             <div>

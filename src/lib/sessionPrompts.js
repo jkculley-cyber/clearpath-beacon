@@ -1,6 +1,7 @@
 /**
- * Session prompts for elementary school counselors (K-5).
- * Icebreakers, scenario cards, and mindfulness scripts.
+ * Session prompts for school counselors across all bands.
+ * Icebreakers, scenario cards, and mindfulness scripts, tagged by gradeRange
+ * (K-5 / K-1 / 2-5 elementary, 6-8 middle, 9-12 high).
  */
 
 export const ICEBREAKERS = [
@@ -126,6 +127,26 @@ export const ICEBREAKERS = [
     gradeRange: '2-5',
     category: 'icebreaker',
   },
+
+  // ── Middle school (6-8) ──
+  { id: 'ice-ms-1', text: "If you could instantly master one skill for the rest of middle school, what would it be and why?", gradeRange: '6-8', category: 'icebreaker' },
+  { id: 'ice-ms-2', text: "What's one thing people often get wrong about you when they first meet you?", gradeRange: '6-8', category: 'icebreaker' },
+  { id: 'ice-ms-3', text: "Describe your ideal weekend in three words — no phones allowed in the description.", gradeRange: '6-8', category: 'icebreaker' },
+  { id: 'ice-ms-4', text: "If your group chat had a theme song, what would it be, and what does that say about your friends?", gradeRange: '6-8', category: 'icebreaker' },
+  { id: 'ice-ms-5', text: "What's a small thing that instantly makes a bad day feel a little better?", gradeRange: '6-8', category: 'icebreaker' },
+  { id: 'ice-ms-6', text: "Would you rather be really good at something no one knows about, or okay at something everyone sees? Why?", gradeRange: '6-8', category: 'icebreaker' },
+  { id: 'ice-ms-7', text: "What's one thing you wish adults understood about being your age right now?", gradeRange: '6-8', category: 'icebreaker' },
+  { id: 'ice-ms-8', text: "Name a moment recently when you were proud of yourself — even if no one else noticed.", gradeRange: '6-8', category: 'icebreaker' },
+
+  // ── High school (9-12) ──
+  { id: 'ice-hs-1', text: "If you could send one honest sentence to yourself as a freshman, what would it say?", gradeRange: '9-12', category: 'icebreaker' },
+  { id: 'ice-hs-2', text: "What's something you used to care a lot about that matters less to you now — and what changed?", gradeRange: '9-12', category: 'icebreaker' },
+  { id: 'ice-hs-3', text: "When you picture life two years after graduation, what's one feeling you hope you have?", gradeRange: '9-12', category: 'icebreaker' },
+  { id: 'ice-hs-4', text: "What's a way you recharge that actually works for you, not just what you're 'supposed' to do?", gradeRange: '9-12', category: 'icebreaker' },
+  { id: 'ice-hs-5', text: "Who is someone — famous or not — whose way of handling pressure you'd want to borrow?", gradeRange: '9-12', category: 'icebreaker' },
+  { id: 'ice-hs-6', text: "What's one expectation you feel from others that you're still deciding whether to keep?", gradeRange: '9-12', category: 'icebreaker' },
+  { id: 'ice-hs-7', text: "Describe a time you changed your mind about something important. What moved you?", gradeRange: '9-12', category: 'icebreaker' },
+  { id: 'ice-hs-8', text: "If stress took a day off, what's the first thing you'd actually do with that space?", gradeRange: '9-12', category: 'icebreaker' },
 ];
 
 export const SCENARIO_CARDS = [
@@ -420,6 +441,22 @@ export const SCENARIO_CARDS = [
     category: 'scenario',
     topic: 'conflict',
   },
+
+  // ── Middle school (6-8) ──
+  { id: 'sc-ms-1', scenario: "Maya notices her two closest friends have started hanging out without her and posting photos she wasn't invited to. She feels left out and isn't sure if it's on purpose or just how things worked out.", discussion_questions: ["What are some different reasons this could be happening that aren't about Maya doing something wrong?", "How could Maya check in with her friends without starting a fight?", "What could Maya do to take care of her own feelings while she figures it out?"], gradeRange: '6-8', category: 'scenario' },
+  { id: 'sc-ms-2', scenario: "During a group project, one member keeps saying he'll do his part but never does. The deadline is tomorrow and the rest of the group is stressed and starting to blame each other.", discussion_questions: ["What's the difference between solving the problem and just venting about it?", "How could the group talk to the member without attacking him?", "When is it fair to ask a teacher for help, and how would you do that respectfully?"], gradeRange: '6-8', category: 'scenario' },
+  { id: 'sc-ms-3', scenario: "Jordan sees a group chat where classmates are making fun of another student's post. People keep adding comments, and Jordan is expected to say something too. Jordan doesn't want to join in but also doesn't want to be the next target.", discussion_questions: ["What are the risks and the values Jordan is weighing here?", "What are some ways to not participate without making yourself a target?", "How might the student being talked about feel, and does that change what you'd do?"], gradeRange: '6-8', category: 'scenario' },
+  { id: 'sc-ms-4', scenario: "Sam has a big test tomorrow and a project due, but every time Sam sits down to study, the work feels overwhelming and Sam ends up scrolling on their phone instead. Now it's late and almost nothing is done.", discussion_questions: ["What might be underneath the scrolling — boredom, stress, something else?", "What's one small first step that would feel doable instead of tackling everything at once?", "How could Sam set up their space or phone to make focusing easier next time?"], gradeRange: '6-8', category: 'scenario' },
+  { id: 'sc-ms-5', scenario: "A new student, Priya, keeps changing how she dresses and talks depending on which group she's near. A friend asks her, 'Why are you being so fake?' Priya says she's just trying to figure out where she fits.", discussion_questions: ["What's the difference between exploring who you are and losing yourself to fit in?", "Why might someone act differently around different groups?", "How can friends support each other while they're still figuring themselves out?"], gradeRange: '6-8', category: 'scenario' },
+  { id: 'sc-ms-6', scenario: "Devon gets a lower grade than expected and immediately thinks, 'I'm just bad at this — there's no point trying.' Devon starts skipping the homework for that class because it feels pointless.", discussion_questions: ["How does the thought 'I'm just bad at this' affect what Devon does next?", "What's a more accurate and helpful way Devon could describe the situation?", "Who or what could Devon reach out to before giving up on the class?"], gradeRange: '6-8', category: 'scenario' },
+
+  // ── High school (9-12) ──
+  { id: 'sc-hs-1', scenario: "Alex is taking several demanding classes, works a part-time job, and is trying to keep up a social life. Lately Alex feels wired but exhausted, snaps at people, and can't remember the last time they felt rested.", discussion_questions: ["What signals is Alex's body and mood sending, and why do they matter?", "If Alex can't drop any commitments right now, what small changes could still help?", "When does 'pushing through' stop being helpful, and who could Alex talk to?"], gradeRange: '9-12', category: 'scenario' },
+  { id: 'sc-hs-2', scenario: "Everyone in Riley's family assumes Riley will go to a four-year university, but Riley is genuinely interested in a trade program instead. Riley is nervous to bring it up and has started avoiding conversations about the future.", discussion_questions: ["What makes this conversation feel risky for Riley?", "How could Riley share their thinking in a way that invites a real discussion?", "What's the difference between considering others' input and living out their expectations?"], gradeRange: '9-12', category: 'scenario' },
+  { id: 'sc-hs-3', scenario: "Taylor's partner texts constantly and gets upset when Taylor spends time with friends or doesn't reply quickly. Taylor cares about them but has started feeling anxious and cut off from other people.", discussion_questions: ["What's the difference between someone caring about you and someone controlling your time?", "What might Taylor want to say about their own needs in the relationship?", "Who could Taylor talk to if they're unsure whether the relationship feels healthy?"], gradeRange: '9-12', category: 'scenario' },
+  { id: 'sc-hs-4', scenario: "Cameron has been putting off a major assignment for weeks. Now it's worth a large part of the grade and due in two days. Cameron feels frozen — the size of it makes it hard to even start.", discussion_questions: ["Why can a task actually get harder to start the longer we avoid it?", "How could Cameron break this down so the first move feels manageable?", "What's a self-respecting way to talk to a teacher if Cameron needs more time or help?"], gradeRange: '9-12', category: 'scenario' },
+  { id: 'sc-hs-5', scenario: "Jordan scrolls through classmates' posts about internships, acceptances, and plans, and starts feeling like everyone has life figured out except them. The feeling lingers long after Jordan puts the phone down.", discussion_questions: ["How accurate is the picture we get of other people's lives online?", "What's the cost of measuring your progress against a highlight reel?", "What could Jordan focus on that's actually within their own control?"], gradeRange: '9-12', category: 'scenario' },
+  { id: 'sc-hs-6', scenario: "In class, Morgan doesn't understand the material but is afraid that asking a question will make them look behind. Morgan stays quiet, and the confusion keeps building week after week.", discussion_questions: ["What story is Morgan telling themselves about what asking for help means?", "What's actually likely to happen — for grades and stress — if the confusion keeps building?", "What are some low-pressure ways Morgan could advocate for the help they need?"], gradeRange: '9-12', category: 'scenario' },
 ];
 
 export const MINDFULNESS_SCRIPTS = [
@@ -471,4 +508,16 @@ export const MINDFULNESS_SCRIPTS = [
     gradeRange: '1-5',
     category: 'mindfulness',
   },
+
+  // ── Middle school (6-8) ──
+  { id: 'mind-ms-1', title: 'Five Senses Grounding', script: "Let's settle for a moment. Plant both feet on the floor and let your hands rest. Now, quietly notice five things you can see around you — really look at them. Next, four things you can feel: your feet in your shoes, the chair, the air on your skin. Now three things you can hear, near or far. Then two things you can smell, or two smells you like. And finally, one slow breath, just for you. Notice that right now, in this moment, you are okay.", duration: '2 minutes', gradeRange: '6-8', category: 'mindfulness' },
+  { id: 'mind-ms-2', title: 'Box Breathing', script: "We're going to breathe in a slow, steady square. Sit tall and relax your shoulders. Breathe in through your nose while I count to four — one, two, three, four. Hold it gently — one, two, three, four. Now breathe out slowly — one, two, three, four. And hold empty — one, two, three, four. Let's do that a few more times on your own. In, hold, out, hold. If your mind wanders, that's normal — just come back to the counting.", duration: '2-3 minutes', gradeRange: '6-8', category: 'mindfulness' },
+  { id: 'mind-ms-3', title: 'Quick Body Check-In', script: "Close your eyes if you're comfortable, or just lower your gaze. We're going to scan through your body without changing anything — just noticing. Start at the top of your head, and slowly move your attention down: your face, your jaw, your shoulders. Notice where you might be holding tension. Move down through your arms and hands, your chest and stomach, all the way to your feet. Wherever you find tightness, imagine your next breath softening it, just a little. You don't have to fix anything — just notice.", duration: '3 minutes', gradeRange: '6-8', category: 'mindfulness' },
+  { id: 'mind-ms-4', title: 'Naming the Feeling', script: "Take one slow breath and check in with yourself. What are you feeling right now? See if you can put one word to it — maybe stressed, tired, annoyed, or calm. There's no wrong answer, and you don't have to share it. Just naming a feeling can make it feel a little less overwhelming. Now say quietly to yourself, 'I'm feeling this right now, and feelings pass.' Take one more breath, and know you can carry this small skill with you the rest of the day.", duration: '2 minutes', gradeRange: '6-8', category: 'mindfulness' },
+
+  // ── High school (9-12) ──
+  { id: 'mind-hs-1', title: '5-4-3-2-1 Grounding', script: "When your mind is racing, this brings you back to now. Let your breath settle. Silently name five things you can see — notice detail, color, texture. Then four things you can physically feel touching your body. Then three sounds in the space around you. Then two things you can smell, or two scents you find calming. And finally one slow, full breath. Anxiety pulls us into the future; this pulls you back to the present, where you actually are. You can use this anywhere, and no one will even know.", duration: '2-3 minutes', gradeRange: '9-12', category: 'mindfulness' },
+  { id: 'mind-hs-2', title: 'Box Breathing for Stress', script: "Your nervous system responds to slow breathing, so let's use that. Sit tall, unclench your jaw, and drop your shoulders. Inhale through your nose for a count of four. Hold for four. Exhale slowly for four. Hold empty for four. Keep the square going on your own for a few rounds. As you breathe out, imagine releasing a bit of the pressure you're carrying. You can't always control what's stressing you, but you can steady the one thing that's always with you — your breath.", duration: '3 minutes', gradeRange: '9-12', category: 'mindfulness' },
+  { id: 'mind-hs-3', title: 'Body Scan Reset', script: "Find a comfortable position and let your eyes close or soften. We're going to move attention slowly through your body, just observing. Begin at your scalp and forehead — let them relax. Move to your jaw and neck, your shoulders, so many of us carry stress there. Continue down through your arms, your chest, the rise and fall of your stomach, your hips, your legs, all the way to your feet. Wherever you notice gripping or tightness, breathe into it and let it loosen slightly. Nothing to achieve here — just returning to your body after a busy day.", duration: '4 minutes', gradeRange: '9-12', category: 'mindfulness' },
+  { id: 'mind-hs-4', title: 'Unhooking From a Thought', script: "Bring to mind a stressful thought that's been looping — maybe 'I'm going to fail' or 'I can't handle this.' Now, instead of arguing with it, add four words in front: 'I'm having the thought that…' Notice how that creates a little space — you are the one noticing the thought, not the thought itself. Thoughts are mental events, not facts or commands. Take a slow breath. The thought can be there, and you can still choose your next small step. You're allowed to hold a hard thought lightly.", duration: '3 minutes', gradeRange: '9-12', category: 'mindfulness' },
 ];

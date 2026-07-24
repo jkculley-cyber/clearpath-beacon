@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { db, exportLocalBackup, importLocalBackup } from '../lib/db';
+import { db, exportLocalBackup, importLocalBackup, seedLocalLessons } from '../lib/db';
 import { encryptBackup, decryptBackup } from '../lib/backupCrypto';
 import { saveBackupToHandle, pickBackupFolder, persistPickedBackupFolder, getBackupFolderName, clearBackupFolder, isFsAccessSupported, getLastOffDeviceSync } from '../lib/backupFolder';
 import { hasSampleData, clearSampleData } from '../lib/seedSampleData';
@@ -14,19 +14,10 @@ import {
 import { downloadCalendarIcs } from '../lib/calendarExport';
 import { schoolYearWindow, computeYearSummary, saveYearSummary } from '../lib/yearSummary';
 import { generateHandoffPdf } from '../lib/handoffExport';
-import { TIME_DOMAINS } from '../lib/constants';
+import { TIME_DOMAINS, GRADE_BANDS, GRADE_BAND_KEYS, COMBINED_PRESETS, getGrades, getGradeBand, getPromotionLadder, topGradeLabel } from '../lib/constants';
 import ConfirmDestructive from '../components/ConfirmDestructive';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-const GRADE_PROMOTIONS = [
-  { from: 'K', to: '1' },
-  { from: '1', to: '2' },
-  { from: '2', to: '3' },
-  { from: '3', to: '4' },
-  { from: '4', to: '5' },
-  { from: '5', to: 'Graduated' },
-];
 
 const DAYS_OF_WEEK = [
   { label: 'Monday', value: 1 },
@@ -47,6 +38,18 @@ export default function SettingsPage() {
   const [name, setName] = useState('');
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
+  const [gradeBand, setGradeBand] = useState('elementary');
+  const [combinedKey, setCombinedKey] = useState('6-12');
+  // A saved served_grades range that matches no preset — kept verbatim until
+  // the counselor actively picks a preset.
+  const [customRange, setCustomRange] = useState(null);
+  const selectedPreset = COMBINED_PRESETS.find((p) => p.key === combinedKey);
+  const effectiveRange = customRange || (selectedPreset ? { min: selectedPreset.min, max: selectedPreset.max } : null);
+  // The year-end transition operates on the counselor's ACTUAL saved band —
+  // never the unsaved selector state — so a mid-edit band toggle can't skip or
+  // mis-promote real students at year rollover.
+  const GRADE_PROMOTIONS = Object.entries(getPromotionLadder(counselor)).map(([from, to]) => ({ from, to }));
+  const topGrade = topGradeLabel(counselor);
   const [yearStart, setYearStart] = useState('');
   const [yearEnd, setYearEnd] = useState('');
   const [alertThreshold, setAlertThreshold] = useState(82);
@@ -103,6 +106,18 @@ export default function SettingsPage() {
       setName(counselor.name || '');
       setCampus(counselor.campus || '');
       setDistrict(counselor.district || '');
+      setGradeBand(getGradeBand(counselor));
+      const sg = counselor.served_grades;
+      if (sg && sg.min && sg.max) {
+        const match = COMBINED_PRESETS.find((p) => p.min === sg.min && p.max === sg.max);
+        // A range that isn't one of our presets (restored backup, or written by
+        // a newer build) must be PRESERVED, not silently rewritten to the
+        // default preset by the next unrelated profile save.
+        if (match) { setCombinedKey(match.key); setCustomRange(null); }
+        else setCustomRange({ min: sg.min, max: sg.max });
+      } else {
+        setCustomRange(null);
+      }
       setYearStart(counselor.school_year_start || '');
       setYearEnd(counselor.school_year_end || '');
       setAlertThreshold(counselor.alert_threshold || 82);
@@ -431,10 +446,15 @@ export default function SettingsPage() {
   const handleSaveProfile = async () => {
     setSaving(true);
     setSaveMsg('');
+    const servedGrades = gradeBand === 'combined' ? effectiveRange : null;
+    const bandChanged = gradeBand !== getGradeBand(counselor)
+      || JSON.stringify(servedGrades) !== JSON.stringify(counselor?.served_grades ?? null);
     const { error } = await db.update('counselor', counselor.id, {
       name,
       campus,
       district,
+      grade_band: gradeBand,
+      served_grades: servedGrades,
       school_year_start: yearStart || null,
       school_year_end: yearEnd || null,
       alert_threshold: alertThreshold,
@@ -445,7 +465,14 @@ export default function SettingsPage() {
     if (error) {
       setSaveMsg('Error: ' + error.message);
     } else {
-      setSaveMsg('Settings saved.');
+      // Band change → top up the bundled library with that band's lessons, so
+      // a counselor who moves campuses isn't left with an out-of-range library.
+      if (bandChanged) {
+        try {
+          await seedLocalLessons(counselor.id, getGrades({ grade_band: gradeBand, served_grades: servedGrades }));
+        } catch { /* non-blocking */ }
+      }
+      setSaveMsg(bandChanged ? 'Settings saved. Lessons for your grade range are available in Lessons.' : 'Settings saved.');
       if (refreshCounselor) refreshCounselor();
     }
     setSaving(false);
@@ -532,6 +559,8 @@ export default function SettingsPage() {
     const students = allStudents || [];
     const promoteCounts = {};
     let graduateCount = 0;
+    let promoteCount = 0;
+    let unchangedCount = 0;
     for (const s of students) {
       const grade = (s.grade || '').toString().trim();
       const promo = GRADE_PROMOTIONS.find((p) => p.from === grade);
@@ -539,14 +568,22 @@ export default function SettingsPage() {
         if (promo.to === 'Graduated') {
           graduateCount++;
         } else {
+          promoteCount++;
           promoteCounts[`${promo.from} -> ${promo.to}`] = (promoteCounts[`${promo.from} -> ${promo.to}`] || 0) + 1;
         }
+      } else {
+        // Blank grade, or a grade outside this counselor's range (imports,
+        // public referrals, a band change). These are NOT touched — count them
+        // honestly instead of folding them into "will be promoted."
+        unchangedCount++;
       }
     }
     setTransitionPreview({
       totalStudents: students.length,
       promoteCounts,
       graduateCount,
+      promoteCount,
+      unchangedCount,
       students,
     });
     setArchiveGroups(true);
@@ -689,6 +726,64 @@ export default function SettingsPage() {
             <div>
               <label className="form-label">District</label>
               <input className="form-input" value={district} onChange={(e) => setDistrict(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label className="form-label">Grade level I serve</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[...GRADE_BAND_KEYS.map((key) => ({ key, label: GRADE_BANDS[key].label, short: GRADE_BANDS[key].short })),
+                { key: 'combined', label: 'Combined', short: '6–12 · K–8…' }].map((b) => {
+                const active = gradeBand === b.key;
+                return (
+                  <button
+                    type="button"
+                    key={b.key}
+                    onClick={() => setGradeBand(b.key)}
+                    style={{
+                      flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer',
+                      border: active ? '2px solid #2A9D8F' : '1px solid #d1d5db',
+                      background: active ? '#e6f4f2' : '#fff',
+                      color: active ? '#1f2937' : '#6b7280',
+                      fontWeight: active ? 700 : 500, fontSize: 12, lineHeight: 1.3,
+                    }}
+                  >
+                    {b.label}
+                    <div style={{ fontSize: 10, fontWeight: 500, color: active ? '#2A9D8F' : '#9ca3af' }}>{b.short}</div>
+                  </button>
+                );
+              })}
+            </div>
+            {gradeBand === 'combined' && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                {COMBINED_PRESETS.map((p) => {
+                  const active = combinedKey === p.key;
+                  return (
+                    <button
+                      type="button"
+                      key={p.key}
+                      onClick={() => { setCombinedKey(p.key); setCustomRange(null); }}
+                      style={{
+                        flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer',
+                        border: active ? '2px solid #2A9D8F' : '1px solid #d1d5db',
+                        background: active ? '#e6f4f2' : '#fff',
+                        color: active ? '#1f2937' : '#6b7280',
+                        fontWeight: active ? 700 : 500, fontSize: 12,
+                      }}
+                    >
+                      {p.short}
+                      <div style={{ fontSize: 10, fontWeight: 500, color: active ? '#2A9D8F' : '#9ca3af' }}>{p.label}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {gradeBand === 'combined' && customRange && (
+              <div style={{ fontSize: 11, color: '#b45309', marginTop: 6 }}>
+                Currently serving a custom range: <strong>{customRange.min}–{customRange.max}</strong>. Choosing a preset above will replace it.
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+              Sets the grade options and year-end promotion. Choose <strong>Combined</strong> if you serve more than one level (e.g. a 6–12 campus). SB 179 (80/20) compliance is identical for every band.
             </div>
           </div>
         </div>
@@ -1132,7 +1227,7 @@ export default function SettingsPage() {
                   <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>Transition Complete</h3>
                   <div style={{ marginBottom: 16 }}>
                     <p style={{ color: '#22c55e', fontWeight: 600, marginBottom: 6 }}>{transitionResult.promoted} student{transitionResult.promoted !== 1 ? 's' : ''} promoted.</p>
-                    <p style={{ color: '#f59e0b', fontWeight: 600, marginBottom: 6 }}>{transitionResult.graduated} 5th grader{transitionResult.graduated !== 1 ? 's' : ''} graduated.</p>
+                    <p style={{ color: '#f59e0b', fontWeight: 600, marginBottom: 6 }}>{transitionResult.graduated} {topGrade} student{transitionResult.graduated !== 1 ? 's' : ''} graduated (exited caseload).</p>
                     {transitionResult.archived > 0 && (
                       <p style={{ color: '#6b7280', fontSize: 13 }}>{transitionResult.archived} completed group{transitionResult.archived !== 1 ? 's' : ''} archived.</p>
                     )}
@@ -1148,7 +1243,12 @@ export default function SettingsPage() {
                 <>
                   <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 4px' }}>Promote & Archive</h3>
                   <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
-                    {transitionPreview.totalStudents - transitionPreview.graduateCount} student{transitionPreview.totalStudents - transitionPreview.graduateCount !== 1 ? 's' : ''} will be promoted, {transitionPreview.graduateCount} 5th grader{transitionPreview.graduateCount !== 1 ? 's' : ''} will be graduated.
+                    {transitionPreview.promoteCount} student{transitionPreview.promoteCount !== 1 ? 's' : ''} will be promoted, {transitionPreview.graduateCount} {topGrade} student{transitionPreview.graduateCount !== 1 ? 's' : ''} will be graduated (exit caseload).
+                    {transitionPreview.unchangedCount > 0 && (
+                      <span style={{ display: 'block', marginTop: 6, color: '#b45309' }}>
+                        {transitionPreview.unchangedCount} student{transitionPreview.unchangedCount !== 1 ? 's' : ''} outside your grade range (or with no grade) will not be changed.
+                      </span>
+                    )}
                   </p>
 
                   {/* Grade promotion preview */}
@@ -1522,8 +1622,8 @@ export default function SettingsPage() {
     const teal = [15, 118, 110];
     const amount = plan === 'annual' ? '$79.00' : '$8.00';
     const lineItem = plan === 'annual'
-      ? 'Beacon Elementary Counselor Platform \u2014 Annual License'
-      : 'Beacon Elementary Counselor Platform \u2014 Monthly License';
+      ? 'Beacon Counselor Platform \u2014 Annual License'
+      : 'Beacon Counselor Platform \u2014 Monthly License';
     const invoiceNum = `BCN-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`;
     const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 

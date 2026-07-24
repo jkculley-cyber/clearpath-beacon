@@ -105,8 +105,8 @@ async function computeScorecard(counselorId, counselor) {
   const compliancePct = totalMin > 0 ? Math.round((counselingMin / totalMin) * 100) : 0;
   let complianceScore, complianceTip;
   if (totalMin === 0) { complianceScore = 30; complianceTip = 'No time entries logged. Open Time Tracker and log today\'s activities — this powers your SB 179 compliance proof.'; }
-  else if (compliancePct >= 82) { complianceScore = 95; complianceTip = compliancePct + '% counseling time. You\'re above the 80% SB 179 threshold. Keep it up.'; }
-  else if (compliancePct >= 78) { complianceScore = 75; complianceTip = compliancePct + '% — close to the 80% threshold but not there yet. Reduce non-counseling duties where possible.'; }
+  else if (compliancePct >= 80) { complianceScore = 95; complianceTip = compliancePct + '% counseling time. You\'re at or above the 80% SB 179 threshold. Keep it up.'; }
+  else if (compliancePct >= 75) { complianceScore = 75; complianceTip = compliancePct + '% — close to the 80% threshold but not there yet. Reduce non-counseling duties where possible.'; }
   else if (compliancePct >= 70) { complianceScore = 55; complianceTip = compliancePct + '% is below compliance. Talk to your admin about reducing non-counseling assignments.'; }
   else { complianceScore = 35; complianceTip = compliancePct + '% counseling time means most of your day is non-counseling duties. This needs admin attention.'; }
   categories.push({ key: 'compliance', label: 'SB 179 Compliance', score: complianceScore, tip: complianceTip, icon: '⚖️' });

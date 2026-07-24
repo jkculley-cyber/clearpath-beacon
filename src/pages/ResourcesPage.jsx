@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { getGrades, gradeFilterTokens, itemMatchesFilter } from '../lib/constants';
 import { ICEBREAKERS, SCENARIO_CARDS, MINDFULNESS_SCRIPTS } from '../lib/sessionPrompts';
 import { GROUP_STARTER_KITS } from '../lib/groupStarterKits';
 import { VISUAL_RESOURCES } from '../lib/visualResources';
@@ -54,20 +56,11 @@ const expandBtn = {
   padding: '4px 0',
 };
 
-/* ── Grade filter logic ── */
-const GRADE_FILTERS = ['All', 'K-1', '2-5', 'K-5'];
-
-function matchesGradeFilter(itemGrade, filter) {
-  if (filter === 'All') return true;
-  if (filter === itemGrade) return true;
-  // K-5 items show in every filter
-  if (itemGrade === 'K-5') return true;
-  // K-2 items show in K-1 filter (overlap)
-  if (itemGrade === 'K-2' && filter === 'K-1') return true;
-  // 1-5 items show in 2-5 filter (overlap)
-  if (itemGrade === '1-5' && filter === '2-5') return true;
-  return false;
-}
+/* ── Grade filter logic ──
+ * Content items carry a `gradeRange` token (e.g. 'K-5', '6-8', '9-12', or a
+ * single grade). Filtering is scoped to the grades the counselor actually
+ * serves (via itemMatchesFilter in constants), so a K-5, 6-12, or K-12
+ * counselor each sees exactly their range — 'All' = everything in-range. */
 
 /* ── PDF generation for Group Starter Kits ── */
 async function printFullKit(kit) {
@@ -164,8 +157,12 @@ async function printFullKit(kit) {
    Component
    ══════════════════════════════════════════════════════ */
 export default function ResourcesPage() {
+  const { counselor } = useAuth();
+  const servedSet = useMemo(() => new Set(getGrades(counselor)), [counselor]);
+  const GRADE_FILTERS = useMemo(() => gradeFilterTokens(counselor), [counselor]);
   const [activeSection, setActiveSection] = useState('prompts');
   const [promptTab, setPromptTab] = useState('icebreakers');
+  // 'All' means everything within the counselor's served grades.
   const [gradeFilter, setGradeFilter] = useState('All');
   const [shuffled, setShuffled] = useState(null);
   const [expandedCards, setExpandedCards] = useState({});
@@ -182,8 +179,8 @@ export default function ResourcesPage() {
     if (promptTab === 'icebreakers') items = ICEBREAKERS;
     else if (promptTab === 'scenarios') items = SCENARIO_CARDS;
     else items = MINDFULNESS_SCRIPTS;
-    return items.filter((i) => matchesGradeFilter(i.gradeRange, gradeFilter));
-  }, [promptTab, gradeFilter]);
+    return items.filter((i) => itemMatchesFilter(i.gradeRange, gradeFilter, servedSet));
+  }, [promptTab, gradeFilter, servedSet]);
 
   const handleShuffle = useCallback(() => {
     if (promptData.length === 0) { setShuffled(null); return; }
@@ -357,7 +354,7 @@ export default function ResourcesPage() {
       {/* ═══ SECTION 2: GROUP STARTER KITS ═══ */}
       {activeSection === 'kits' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14 }}>
-          {GROUP_STARTER_KITS.map((kit) => {
+          {GROUP_STARTER_KITS.filter((kit) => itemMatchesFilter(kit.grade_range, 'All', servedSet)).map((kit) => {
             const isExpanded = expandedKit === kit.id;
             return (
               <div key={kit.id} style={{ ...card, display: 'flex', flexDirection: 'column' }}>

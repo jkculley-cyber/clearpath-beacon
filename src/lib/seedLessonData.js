@@ -67,7 +67,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students identify and label their emotions using a mood meter (energy + pleasantness).\n\nMaterials: Large mood meter poster (4 quadrants: red=high energy/unpleasant, yellow=high energy/pleasant, green=low energy/pleasant, blue=low energy/unpleasant), sticky dots.\n\n1. Opening (5 min): "Right now, how does your body feel? Lots of energy or a little? Happy or not so happy?" Introduce the 4 color zones.\n2. Model (5 min): Counselor shares: "This morning I felt yellow because I was excited about seeing you all." Place dot.\n3. Student Practice (10 min): Each student places a dot on the mood meter and tells a partner why they chose that zone.\n4. Vocabulary Builder (5 min): Brainstorm 3 feeling words for each zone. Post on chart.\n5. Closing (5 min): "Knowing your feelings is the first step to managing them. We'll practice that next time."\n\nOngoing: Use mood meter as a daily check-in routine.`,
     grade_tags: ['K', '1', '2', '3'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['feelings identification', 'emotional awareness', 'self-awareness'],
   },
   {
@@ -75,7 +75,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students distinguish small problems from big problems and use Kelso's 9 choices to handle small problems independently.\n\nMaterials: Kelso's Choices wheel poster, scenario cards.\n\n1. Opening (5 min): "What's the difference between a small problem and a big problem?" Anchor chart together. Big = someone is hurt or in danger (get an adult). Small = annoying but safe (try Kelso's choices first).\n2. Teach the Wheel (8 min): Review all 9 choices: Go to another game, Talk it out, Share and take turns, Ignore it, Walk away, Tell them to stop, Apologize, Make a deal, Wait and cool off.\n3. Scenario Practice (12 min): Read scenario cards aloud. Students hold up fingers for which choice(s) they would try. Discuss why different choices work for different situations.\n4. Closing (5 min): "Name one Kelso choice you want to try this week."\n\nReinforcement: Post wheel in every classroom. Prompt students: "Did you try two Kelso choices before coming to an adult?"`,
     grade_tags: ['K', '1', '2'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['conflict resolution', 'problem solving', 'independence'],
   },
   {
@@ -83,7 +83,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students learn that kind actions fill others' invisible buckets and unkind actions dip from them.\n\nMaterials: "Have You Filled a Bucket Today?" by Carol McCloud, small bucket, paper hearts.\n\n1. Read Aloud (8 min): Read the book. Pause to ask: "Was that bucket filling or bucket dipping?"\n2. Discussion (5 min): "How does it feel when someone fills your bucket? When someone dips?" Chart responses.\n3. Activity (12 min): Each student writes 3 bucket-filling actions on paper hearts and drops them in the class bucket. Read several aloud.\n4. Closing (5 min): Bucket Filler pledge — "This week I will fill someone's bucket by _____."\n\nFollow-Up: Start a Bucket Filler board in the classroom where students can post notes about kind acts they witnessed.`,
     grade_tags: ['K', '1', '2'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['friendship', 'kindness', 'empathy', 'bucket filling'],
   },
   {
@@ -91,7 +91,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students learn and practice 4 calm-down strategies they can use independently.\n\nMaterials: Breathing ball (Hoberman sphere), glitter jar, stress ball, calm-down strategy cards.\n\n1. Opening (5 min): "Has your body ever felt really angry or really worried? What happened?" Normalize big feelings.\n2. Strategy Stations (15 min, rotate every 3-4 min):\n   - Station 1: Belly breathing with the Hoberman sphere (breathe in = expand, out = contract)\n   - Station 2: Glitter jar — shake it and watch glitter settle, just like our thoughts settle when we're calm\n   - Station 3: Squeeze and release — stress ball, tense muscles then relax\n   - Station 4: Positive self-talk cards — read and repeat ("I can handle this," "This feeling will pass")\n3. Closing (5 min): "Which strategy worked best for YOUR body?" Students choose their top 2 and draw them on a personal calm-down plan card.\n\nClassroom Integration: Help teacher set up a calm-down corner with these tools.`,
     grade_tags: ['K', '1', '2', '3'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['self-regulation', 'coping skills', 'calm down', 'anger management'],
   },
   {
@@ -99,7 +99,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students use I-Messages ("I feel ___ when ___ because ___. I need ___.") to express feelings without blaming.\n\nMaterials: I-Message formula poster, role-play scenario cards.\n\n1. Opening (5 min): Act out a scenario using "You" language ("You always cut in line! You're so mean!"). Ask: "How would that make you feel? Would it solve the problem?"\n2. Teach the Formula (8 min): Introduce I-Messages. Redo the scenario: "I feel frustrated when someone cuts in front of me because I've been waiting. I need you to go to the back of the line." Compare the two approaches.\n3. Guided Practice (12 min): Pairs draw scenario cards and practice writing and saying I-Messages. Counselor coaches.\n4. Closing (5 min): Whole group — volunteers share their best I-Message. Reinforce: "I-Messages help people listen instead of getting defensive."\n\nHome Connection: Send home I-Message practice sheet for families.`,
     grade_tags: ['2', '3', '4', '5'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['communication', 'conflict resolution', 'assertiveness'],
   },
   {
@@ -107,7 +107,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students differentiate bullying from conflict, identify the 4 roles (bully, target, bystander, upstander), and practice upstander strategies.\n\nMaterials: Role definition cards, scenario strips, upstander pledge cards.\n\n1. Opening (5 min): Define bullying — repeated, on purpose, power imbalance. "Is every mean thing bullying?" Discuss the difference.\n2. Four Roles (8 min): Teach bully, target, bystander, upstander with simple definitions. "A bystander watches. An upstander ACTS."\n3. Upstander Strategies (7 min): (a) Say "Stop, that's not cool," (b) Include the target — invite them to join you, (c) Walk away with the target, (d) Tell a trusted adult. Emphasize safety.\n4. Scenario Practice (10 min): Read 4 scenarios. Small groups decide: Is this bullying or conflict? What would an upstander do?\n5. Closing (5 min): Sign the Upstander Pledge: "I will speak up, reach out, or get help when I see someone being treated unfairly."\n\nSchool-Wide Tie-In: Coordinate with Bullying Prevention Month activities.`,
     grade_tags: ['3', '4', '5'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['bullying prevention', 'upstander', 'peer relationships', 'safety'],
   },
   {
@@ -115,7 +115,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students externalize worry and learn to sort worries into "can control" and "can't control."\n\nMaterials: Paper bags, markers, worry slips, two-column sorting mat.\n\n1. Opening (5 min): "Everyone worries sometimes. That's normal! But sometimes worry gets too big. Today we're going to tame our worries."\n2. Create a Worry Monster (10 min): Students decorate a paper bag as their personal Worry Monster. This is where worries go so they don't have to carry them.\n3. Sorting Activity (10 min): Students write 3 worries on slips. Sort into "Things I Can Control" (studying for a test, being kind) and "Things I Can't Control" (weather, what others think). Discuss: for controllable worries, make a plan. For uncontrollable ones, practice letting go (feed to the Worry Monster).\n4. Closing (5 min): Teach one quick strategy — "5-4-3-2-1 grounding" (5 things you see, 4 hear, 3 touch, 2 smell, 1 taste). Practice together.\n\nFollow-Up: Check in with students who identified significant worries.`,
     grade_tags: ['K', '1', '2', '3'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['anxiety', 'worry', 'coping skills', 'self-regulation'],
   },
   {
@@ -123,7 +123,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students define empathy and practice perspective-taking through guided scenarios.\n\nMaterials: "Shoes" cutouts (paper), scenario cards, empathy definition poster.\n\n1. Opening (5 min): Hold up a pair of shoes. "What does 'walking in someone else's shoes' mean?" Define empathy: understanding how someone else feels.\n2. Scenario Stations (15 min): Set up 4 stations around the room, each with a scenario card and paper shoe cutout. Students rotate, read the scenario, and write on the shoe how that person might feel and why. Scenarios: new student at school, student who lost a pet, student struggling with reading, student whose parents are divorcing.\n3. Group Debrief (5 min): Discuss one scenario as a whole group. "Did anyone write something different? Can two people feel different things about the same situation?" Yes — and that's OK.\n4. Closing (5 min): "One way I will show empathy this week is ___."\n\nAssessment: Review shoe responses for depth of perspective-taking.`,
     grade_tags: ['2', '3', '4', '5'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['empathy', 'perspective taking', 'social awareness'],
   },
   {
@@ -131,7 +131,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students practice cooperation, communication, and compromise through a hands-on team challenge.\n\nMaterials: 20 index cards + 12 inches of tape per group, timer.\n\n1. Opening (3 min): "Today we're building towers, but the real goal is teamwork. I'll be watching HOW you work together, not just how tall your tower is."\n2. Planning Phase (5 min): Groups of 4 discuss their plan. No building yet — only talking and sketching.\n3. Building Phase (10 min): Build the tallest freestanding tower using only the cards and tape. Counselor observes and notes teamwork behaviors.\n4. Debrief (10 min): Each group shares: What went well? What was hard? Did everyone's ideas get heard? What would you do differently? Connect to classroom and friendship: cooperation requires listening, compromising, and encouraging.\n5. Closing (2 min): "Name one teamwork skill you used today that you can use at recess or in class."\n\nTeacher Note: Great lesson to co-facilitate during a class that's struggling with group dynamics.`,
     grade_tags: ['2', '3', '4', '5'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['teamwork', 'cooperation', 'communication', 'social skills'],
   },
   {
@@ -139,7 +139,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students learn about personal space bubbles and practice asking permission before touching others.\n\nMaterials: Hula hoops (1 per student or shared), body boundary coloring page.\n\n1. Opening (5 min): "Everyone has an invisible bubble around them — that's their personal space. When someone gets too close without asking, it can feel uncomfortable."\n2. Bubble Practice (8 min): Each student stands in or near a hula hoop. Practice walking around the room keeping bubbles from overlapping. "If you need to get close, what do you say?" ("Excuse me," "Can I give you a hug?")\n3. Yes/No/Maybe Activity (7 min): Counselor names physical interactions (high five, hug, pat on back, holding hands). Students show thumbs up (yes, I like that), sideways (depends on who), or down (no thanks). Discuss: "Everyone's answers are different, and that's OK. We always ask first."\n4. Closing (5 min): Color the body boundary page — circle the parts that are private, star the ways you like to greet friends.\n\nSafety Note: This lesson supports body safety education. Connect to reporting trusted adults if boundaries are violated.`,
     grade_tags: ['K', '1'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['personal space', 'body boundaries', 'safety', 'consent'],
   },
   {
@@ -147,7 +147,7 @@ export const SEED_LESSONS = [
     entry_type: 'link',
     link_url: 'https://www.gonoodle.com/good-energy-at-home/breathing-exercises',
     grade_tags: ['K', '1', '2', '3', '4', '5'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['mindfulness', 'breathing', 'self-regulation', 'calm down'],
   },
   {
@@ -155,7 +155,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students distinguish between tattling (to get someone IN trouble) and reporting (to get someone OUT of trouble or stay safe).\n\nMaterials: T-chart poster, scenario cards, "Tattle or Report?" sorting mat.\n\n1. Opening (5 min): "Has anyone ever been told 'stop tattling'? Today we'll learn the difference between tattling and reporting — because reporting is ALWAYS OK."\n2. T-Chart (8 min): Build the chart together. Tattling = small problem, no one is hurt, trying to get someone in trouble. Reporting = someone is hurt or could be hurt, someone is being bullied, something is dangerous or scary.\n3. Sorting Activity (10 min): Read scenario cards. Students sort into Tattle or Report. Examples: "He's not sharing the markers" (tattle — try Kelso's choices), "She keeps pushing me every day at recess" (report — that's bullying), "Someone brought something dangerous to school" (report — safety).\n4. Closing (5 min): "When should you ALWAYS tell an adult?" Review the key rule: if someone is hurt, scared, or in danger — report it. You will never get in trouble for reporting.\n\nAlignment: Pairs with Kelso's Choices and Upstander Training.`,
     grade_tags: ['K', '1', '2'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['tattling vs reporting', 'safety', 'problem solving'],
   },
   {
@@ -163,7 +163,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students identify the 4 Zones (Blue, Green, Yellow, Red) and match feelings and body signals to each zone.\n\nMaterials: Zones of Regulation poster, feeling word cards, body signal pictures.\n\n1. Opening (5 min): "Our feelings are like a traffic light — they tell us information about how we're doing. Let's learn the 4 Zones."\n2. Teach the Zones (10 min): Blue = low energy, sad, tired, bored. Green = calm, happy, focused, ready to learn (this is our "learning zone"). Yellow = getting frustrated, worried, silly, wiggly, losing control. Red = out of control, angry, terrified, meltdown. Emphasize: no zone is "bad" — all feelings are OK. The goal is to recognize your zone and have tools to get back to green when you need to.\n3. Matching Game (10 min): Students sort feeling word cards and body signal pictures into the correct zone on a 4-column mat.\n4. Closing (5 min): "What zone are you in right now? What's one thing you could do to stay in or get to green?" Quick share.\n\nOngoing: Use Zones language consistently across school. Check in: "What zone are you in?"`,
     grade_tags: ['K', '1', '2', '3'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['zones of regulation', 'emotional awareness', 'self-regulation'],
   },
   {
@@ -171,7 +171,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students replace negative self-talk with positive affirmations.\n\nMaterials: Hand mirrors (or phone camera on selfie mode), affirmation cards, worksheet.\n\n1. Opening (5 min): "That little voice in your head — is it usually nice to you or mean to you?" Discuss how our self-talk affects how we feel and what we try.\n2. Negative vs. Positive (8 min): Show examples side by side. "I'm so stupid" → "This is hard, but I can keep trying." "Nobody likes me" → "I have people who care about me." "I can't do anything right" → "I'm getting better every day." Practice flipping 3 more together.\n3. Mirror Affirmations (10 min): Each student looks in a mirror and says 3 positive statements about themselves: "I am ___. I am good at ___. I am working on ___ and that's OK." Counselor models first.\n4. Closing (5 min): Write your favorite affirmation on a sticky note and put it somewhere you'll see it every day (inside desk, locker, folder).\n\nFollow-Up: Check in next session — "Did you use your affirmation this week?"`,
     grade_tags: ['3', '4', '5'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['positive self-talk', 'self-esteem', 'growth mindset'],
   },
   {
@@ -179,7 +179,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students understand that grief is a normal response to loss and learn healthy ways to cope and remember.\n\nMaterials: "The Invisible String" by Patrice Karst, heart-shaped paper, crayons.\n\nNote: Use this lesson for classroom guidance after a school loss, or in a small grief support group. Coordinate with administration first.\n\n1. Read Aloud (8 min): Read "The Invisible String." Key message: love connects us to the people we care about, even when they're far away or have died.\n2. Discussion (7 min): "What happens when someone we love dies? How might we feel?" Normalize the range: sad, angry, confused, numb, even OK sometimes. "All of those feelings are normal. Grief doesn't follow rules."\n3. Remembering Activity (10 min): On the heart-shaped paper, students draw or write a memory of someone they miss (could be a person, a pet, or even a friend who moved away). "Our memories keep that invisible string connected."\n4. Closing (5 min): "If you're feeling really sad about a loss, who can you talk to?" Identify 3 trusted adults. Remind students the counselor's door is always open.\n\nCritical: Follow up individually with any student who appears significantly distressed.`,
     grade_tags: ['K', '1', '2', '3', '4', '5'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['grief', 'loss', 'coping', 'death', 'remembering'],
   },
   {
@@ -187,7 +187,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students understand that anger is often a surface emotion covering deeper feelings like hurt, embarrassment, or fear.\n\nMaterials: Iceberg drawing (tip above water = anger, below water = other feelings), scenario cards.\n\n1. Opening (5 min): Show the iceberg image. "When we see an iceberg, we only see the tip. But the biggest part is hidden underwater. Anger works the same way."\n2. Teach the Concept (8 min): Walk through an example: "Marcus yelled at his friend during recess." Above water = anger. Below water = he felt left out, embarrassed that he missed the catch, worried his friends don't like him. "When we only see anger, we miss the real problem."\n3. Scenario Exploration (12 min): Small groups receive a scenario card. They draw the iceberg — what anger looks like on top, and what feelings might be underneath. Groups share.\n4. Closing (5 min): "Next time you feel angry, try to peek below the surface. What's the deeper feeling? That's what really needs attention."\n\nCounselor Note: Excellent for anger management small groups. Pairs with calm-down strategies.`,
     grade_tags: ['3', '4', '5'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['anger management', 'emotional awareness', 'feelings identification'],
   },
 
@@ -261,7 +261,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students appreciate differences among people and practice inclusive behaviors.\n\nMaterials: "The Crayon Box That Talked" by Shane DeRolf, plain white paper, crayons.\n\n1. Read Aloud (7 min): Read the book. Key message: every crayon (person) is different, and the picture is beautiful because of ALL the colors working together.\n2. Discussion (5 min): "What makes you unique? What makes our class special?" Chart 10 ways students are different from each other (languages, foods, hobbies, families, abilities). "Are any of these things bad?" No — they make us interesting.\n3. Crayon Activity (10 min): Give each student one crayon color. Draw a picture using ONLY that color. Then combine with a partner's color. Then with the whole table. "Which picture is better — one color or many?" Connect to real life.\n4. Inclusive Actions (5 min): Brainstorm ways to be inclusive: invite someone new to play, learn about someone's culture, stand up if someone is being teased for being different, ask questions respectfully.\n5. Closing (3 min): "Different is not wrong. Different is interesting. And including everyone makes our school stronger."\n\nSchool-Wide: Coordinate with Multicultural Week or Unity Day.`,
     grade_tags: ['K', '1', '2', '3'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['diversity', 'respect', 'inclusion', 'differences'],
   },
   {
@@ -277,7 +277,7 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students practice identifying emotions through facial expressions and body language.\n\nMaterials: Emotion cards (happy, sad, angry, scared, surprised, embarrassed, frustrated, excited, lonely, proud), mirror (optional).\n\n1. Opening (5 min): "Can you tell how someone feels without them saying a word? Let's find out!"\n2. Emotion Vocabulary (5 min): Review 10 feeling words with picture cards. For each, ask students to make the face and show the body posture.\n3. Charades Game (12 min): One student draws an emotion card and acts it out (no words!). Class guesses. After each round, discuss: "What clues helped you guess? What does ___ look like on someone's face? In their body?"\n4. Real-Life Connection (3 min): "Why is it important to notice how other people feel?" (So we can be a good friend, help someone who's sad, give space to someone who's angry.)\n5. Closing (5 min): "When you go back to class, try to notice how one classmate is feeling today. If they look sad or lonely, what could you do?"\n\nAdaptation: For shy students, allow them to draw the emotion instead of acting it out.`,
     grade_tags: ['K', '1', '2'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['feelings identification', 'emotional awareness', 'nonverbal communication'],
   },
   {
@@ -285,7 +285,107 @@ export const SEED_LESSONS = [
     entry_type: 'text',
     content_text: `Objective: Students learn and apply a 3-step problem-solving framework.\n\nMaterials: STOP-THINK-ACT poster, scenario strips, traffic light visual.\n\n1. Opening (5 min): "When you have a problem, do you react right away or think first?" Discuss what happens when we react without thinking (things usually get worse).\n2. Teach the Steps (8 min): Use a traffic light visual.\n   - RED = STOP: Pause. Take a breath. Don't react yet.\n   - YELLOW = THINK: What are my options? What might happen if I try each one? Which choice is safe, fair, and kind?\n   - GREEN = ACT: Choose the best option and try it. If it doesn't work, go back to yellow and think of another option.\n3. Scenario Practice (12 min): Small groups receive scenario strips. They walk through STOP-THINK-ACT for each one and present their solutions to the class.\n4. Closing (5 min): "This week, when you have a problem, try to STOP before you react. Even 3 seconds of thinking can change everything."\n\nClassroom Integration: Post the STOP-THINK-ACT traffic light in every classroom. Teachers can reference it when redirecting behavior.`,
     grade_tags: ['1', '2', '3', '4', '5'],
-    domain_tag: 'Social/Emotional',
+    domain_tag: 'Social-Emotional',
     topic_tags: ['problem solving', 'impulse control', 'decision making', 'self-regulation'],
+  },
+
+  // ══ Middle School (6-8) ══
+  {
+    title: 'Building a Study System That Works: Executive Function for Middle School',
+    entry_type: 'text',
+    content_text: 'Objective: Students will design a personalized weekly study and homework system using a planner, a task list, and a distraction-management strategy.\n\nMaterials: Paper or digital planner, index cards, timer (phone or classroom), a copy of the student\'s current class schedule.\n\n1. Opening (5 min): Ask students to name one time they forgot an assignment or studied but still felt unprepared. Normalize that organization is a skill, not a personality trait.\n2. Mini-lesson (8 min): Introduce the three parts of a study system: Capture (write everything down in one place), Schedule (assign a when to each task), and Focus (protect study time). Explain the difference between a to-do list and a calendar.\n3. Guided practice (12 min): Students transfer this week\'s assignments and tests from every class into one planner. For each, they estimate minutes needed and choose a day/time block.\n4. Focus strategy (7 min): Teach the 20-5 method — 20 minutes focused work, 5 minute break, phone in another room or face-down. Students identify their biggest distraction and write one rule to manage it.\n5. Closing (3 min): Each student states one system they will test for one week.\n\nAssessment/Follow-up: One week later, students rate how consistently they used the system (1-5) and revise one part. Counselor checks in with students who rate 1-2.',
+    grade_tags: ['6', '7', '8'],
+    domain_tag: 'Academic',
+    topic_tags: ['study skills', 'executive function', 'organization'],
+  },
+  {
+    title: 'Growth Mindset and the Power of Yet',
+    entry_type: 'text',
+    content_text: 'Objective: Students will identify fixed-mindset self-talk and reframe it into growth-mindset statements they can use before challenging schoolwork.\n\nMaterials: Whiteboard or chart paper, sticky notes, printed list of common thought reframes.\n\n1. Opening (5 min): Write "I\'m just not a math person" on the board. Ask students to thumbs-up or thumbs-down whether they have ever thought something like this.\n2. Mini-lesson (8 min): Explain the brain as a muscle — struggle and mistakes physically build new connections. Contrast fixed thoughts ("I can\'t do this") with growth thoughts ("I can\'t do this yet").\n3. Activity (12 min): Give each student three sticky notes with fixed-mindset statements. In pairs, they rewrite each into a growth version and post it on the class wall.\n4. Real-application (7 min): Students name one current subject or skill that frustrates them and write one specific next action (ask a question, redo one problem, watch a tutorial) instead of quitting.\n5. Closing (3 min): Class reads several reframes aloud from the wall.\n\nAssessment/Follow-up: Students keep a "yet" card in their binder and log one time during the next two weeks they used a growth reframe on a hard task.',
+    grade_tags: ['6', '7'],
+    domain_tag: 'Academic',
+    topic_tags: ['growth mindset', 'self-talk', 'resilience'],
+  },
+  {
+    title: 'Career Exploration: Interests, Strengths, and the World of Work',
+    entry_type: 'text',
+    content_text: 'Objective: Students will connect their personal interests and strengths to broad career clusters and identify two careers they want to learn more about.\n\nMaterials: Interest-inventory handout (like/dislike checklist), list of career clusters, internet-connected device or printed career profiles.\n\n1. Opening (5 min): Ask students what they wanted to be when they were little and what they think about now. Point out that interests change and that is normal.\n2. Interest inventory (10 min): Students complete a simple checklist rating activities they enjoy (building things, helping people, using technology, creating art, leading groups, working outdoors).\n3. Mini-lesson (7 min): Introduce career clusters as broad families of jobs (health science, business, arts and communication, skilled trades, STEM, public service). Explain there are many paths into each — college, technical training, military, apprenticeship.\n4. Research (10 min): Each student picks two careers tied to their top interests and records typical tasks, education or training needed, and one thing that surprised them.\n5. Closing (3 min): Volunteers share one career they now want to explore further.\n\nAssessment/Follow-up: Students save their inventory results in a career folder to revisit when choosing high school courses and endorsement areas.',
+    grade_tags: ['6', '7', '8'],
+    domain_tag: 'Career',
+    topic_tags: ['career exploration', 'interest inventory', 'career clusters'],
+  },
+  {
+    title: 'Getting Ready for High School: Endorsements and the 4-Year Picture',
+    entry_type: 'text',
+    content_text: 'Objective: Eighth graders will understand what a high school graduation plan and endorsement area are, and draft a tentative endorsement choice based on their interests.\n\nMaterials: Overview handout of endorsement areas, sample high school course-sequence chart, students\' career-interest results from earlier lessons.\n\n1. Opening (5 min): Ask what students are nervous or excited about for high school. Validate that a plan reduces the nervous part.\n2. Mini-lesson (10 min): Explain that high school students choose an endorsement area — a focus like STEM, business and industry, public services, arts and humanities, or multidisciplinary studies — that shapes some elective courses. Emphasize endorsements can be changed and are meant to explore interests, not lock in a career.\n3. Connect (8 min): Students pull out prior career-interest results and match them to one or two endorsement areas that fit.\n4. Course preview (9 min): Using a sample course-sequence chart, students see how core classes plus endorsement electives fill four years. They circle one elective they hope to take.\n5. Closing (3 min): Each student writes a one-sentence tentative plan: "I\'m leaning toward the ___ endorsement because ___."\n\nAssessment/Follow-up: Counselor collects tentative choices to guide individual course-selection conversations; students revisit with a parent before registration.',
+    grade_tags: ['8'],
+    domain_tag: 'Career',
+    topic_tags: ['high school transition', 'endorsements', 'graduation plan'],
+  },
+  {
+    title: 'Managing Stress: Your Body\'s Alarm System',
+    entry_type: 'text',
+    content_text: 'Objective: Students will recognize physical and emotional signs of stress and practice three coping strategies they can use before tests, conflicts, or overwhelming days.\n\nMaterials: Body-outline handout, index cards, quiet space for practice.\n\n1. Opening (5 min): Ask students where they feel stress in their body (tight chest, headache, stomachache, clenched jaw). Map answers on a body outline on the board.\n2. Mini-lesson (7 min): Explain the stress response — the brain treats a big test or argument like a threat and floods the body with alarm signals. This is normal and manageable.\n3. Skill practice (15 min): Teach and practice three tools. (a) Box breathing: inhale 4, hold 4, exhale 4, hold 4. (b) Grounding 5-4-3-2-1: name things you see, hear, feel, smell, taste. (c) A physical reset: stretch, walk, or push against a wall for 10 seconds.\n4. Application (5 min): Each student writes on an index card which tool they will use and one situation this week where they will try it.\n5. Closing (3 min): Whole class does one round of box breathing together.\n\nAssessment/Follow-up: Two weeks later students report which strategy helped most; counselor identifies students reporting persistent high stress for a check-in.',
+    grade_tags: ['6', '7', '8'],
+    domain_tag: 'Social-Emotional',
+    topic_tags: ['stress management', 'coping skills', 'self-regulation'],
+  },
+  {
+    title: 'Digital Citizenship: Your Online Footprint and Healthy Boundaries',
+    entry_type: 'text',
+    content_text: 'Objective: Students will evaluate how online choices affect their reputation and relationships, and set two personal rules for healthy technology use.\n\nMaterials: Scenario cards describing online situations, chart paper, sticky notes.\n\n1. Opening (5 min): Ask students what "digital footprint" might mean. Explain that posts, comments, and messages can last far longer than expected.\n2. Mini-lesson (8 min): Cover three ideas: permanence (screenshots make nothing truly deleted), audience (people you did not intend can see it), and tone (text loses the meaning your face and voice add). Discuss how to pause before posting.\n3. Scenario work (12 min): In small groups, students receive scenario cards (a rumor spreading in a group chat, a friend posting an embarrassing photo, a stranger requesting a follow). Each group decides on a respectful, safe response and shares out.\n4. Boundaries (7 min): Students write two personal tech rules (for example: phone charges outside the bedroom at night; do not respond to messages when angry) on sticky notes.\n5. Closing (3 min): Discuss one trusted adult students could tell if something online feels wrong or scary.\n\nAssessment/Follow-up: Students revisit their two rules after one week and note whether they kept them; counselor reinforces the reporting pathway for online harm.',
+    grade_tags: ['6', '7', '8'],
+    domain_tag: 'Social-Emotional',
+    topic_tags: ['digital citizenship', 'online safety', 'boundaries'],
+  },
+
+  // ══ High School (9-12) ══
+  {
+    title: 'Test Prep That Actually Works: Active Study Strategies',
+    entry_type: 'text',
+    content_text: 'Objective: Students will replace passive re-reading with evidence-based active study techniques and build a study plan for an upcoming exam.\n\nMaterials: A current syllabus or unit outline, blank index cards, printed spaced-practice calendar template.\n\n1. Opening (5 min): Ask how students usually study. Note how many say "read it over" or "highlight." Explain research shows these feel productive but retain little.\n2. Mini-lesson (10 min): Introduce three high-yield techniques. Retrieval practice: close the notes and quiz yourself. Spaced practice: study in short sessions across several days, not one cram night. Interleaving: mix problem types instead of doing all of one kind.\n3. Build it (15 min): Students choose a real upcoming test. They create five retrieval flashcards or self-quiz questions, then map study sessions across a spaced-practice calendar backward from the test date.\n4. Practice round (7 min): Students quiz a partner using their cards, experiencing retrieval firsthand.\n5. Closing (3 min): Each student commits to the first study session date and time.\n\nAssessment/Follow-up: After the test, students reflect on whether the plan helped and what they would change. Counselor offers a follow-up mini-session for students who did not follow the plan.',
+    grade_tags: ['9', '10'],
+    domain_tag: 'Academic',
+    topic_tags: ['test prep', 'study skills', 'time management'],
+  },
+  {
+    title: 'Owning Your GPA: Grades, Credits, and Getting Back on Track',
+    entry_type: 'text',
+    content_text: 'Objective: Students will understand how grades convert to credits and GPA, read their own transcript, and set one measurable academic goal for the term.\n\nMaterials: Sample transcript, students\' own current grades or progress reports, goal-setting worksheet, calculator.\n\n1. Opening (5 min): Ask students to guess how many credits they need to graduate and how a single failed class affects that. Clear up common myths.\n2. Mini-lesson (10 min): Explain credits (earned by passing courses), the difference between passing and mastery, and how GPA is a running average that is easier to protect than to repair. Show how one term of strong grades pulls an average up gradually.\n3. Read your own data (12 min): Students review their current grades, identify their lowest class, and determine what specific actions (missing work, tutoring, retakes) would move it.\n4. Goal setting (8 min): Using a worksheet, each student writes one SMART academic goal with the concrete steps and support needed (teacher help, tutoring schedule, study system).\n5. Closing (3 min): Students name one adult on campus they will ask for help.\n\nAssessment/Follow-up: Counselor schedules a mid-term check on each student\'s goal and flags students at risk of losing credit for targeted support.',
+    grade_tags: ['9', '10', '11'],
+    domain_tag: 'Academic',
+    topic_tags: ['academic planning', 'goal setting', 'credits and GPA'],
+  },
+  {
+    title: 'Life After High School: Exploring College, Career, and Military Pathways',
+    entry_type: 'text',
+    content_text: 'Objective: Students will compare postsecondary pathways — four-year college, two-year and technical college, career and technical (CTE) credentials, apprenticeship, and military service — and identify which align with their goals.\n\nMaterials: Pathway comparison handout, device for research, dual-credit and CTE program list from the campus, sticky notes.\n\n1. Opening (5 min): Ask students to stand along an imaginary line from "I have a clear plan" to "I have no idea." Normalize every spot on the line.\n2. Mini-lesson (12 min): Walk through pathways side by side — time required, typical cost, and outcomes. Emphasize college readiness, career readiness, and military readiness are all valid goals, and that dual credit and CTE courses in high school can shorten or clarify a path.\n3. Exploration (13 min): Students research one pathway that interests them and record entry requirements, cost or funding options, and first steps to take while still in high school.\n4. Reflection (7 min): Students write which pathway they are most curious about and one question they still have.\n5. Closing (3 min): Collect questions on sticky notes to guide future advising and a follow-up session.\n\nAssessment/Follow-up: Counselor sorts questions by theme and plans targeted small groups (college applications, CTE certifications, military testing and enlistment steps, financial aid basics).',
+    grade_tags: ['9', '10', '11', '12'],
+    domain_tag: 'Career',
+    topic_tags: ['CCMR', 'postsecondary planning', 'career pathways'],
+  },
+  {
+    title: 'Resume and Application Basics: Telling Your Story',
+    entry_type: 'text',
+    content_text: 'Objective: Students will draft a starter resume capturing their experiences and skills, and learn how to present themselves for jobs, college, and scholarship applications.\n\nMaterials: One-page resume template, brainstorm worksheet, examples of strong action verbs, device or paper.\n\n1. Opening (5 min): Ask students what they would put on a resume if they think they have "nothing." Reframe school activities, sports, volunteering, caregiving, and part-time work as real experience.\n2. Brainstorm (10 min): Using a worksheet, students list activities, responsibilities, skills, and accomplishments — including informal roles like babysitting or helping a family business.\n3. Mini-lesson (8 min): Teach resume sections (contact info, objective or summary, experience, education, skills, activities) and the value of specific, action-verb bullet points over vague phrases. Discuss honesty and proofreading.\n4. Draft (12 min): Students transfer their brainstorm into a template, writing at least three action-verb bullet points.\n5. Peer review (3 min): Partners trade drafts and mark one strong bullet and one to improve.\n6. Closing (2 min): Students note one experience they want to add this year to strengthen their resume.\n\nAssessment/Follow-up: Students save a digital copy to update each semester; counselor offers a workshop on tailoring the resume for job versus college and scholarship applications.',
+    grade_tags: ['10', '11', '12'],
+    domain_tag: 'Career',
+    topic_tags: ['resume', 'applications', 'career readiness'],
+  },
+  {
+    title: 'Healthy Relationships and Conflict Resolution',
+    entry_type: 'text',
+    content_text: 'Objective: Students will distinguish healthy from unhealthy relationship patterns and practice a structured approach to resolving conflict without escalation.\n\nMaterials: Healthy-vs-unhealthy trait sort cards, whiteboard, printed conflict-resolution steps.\n\n1. Opening (5 min): Ask students to name a trait of a good friend or partner. List responses; highlight respect, trust, and honesty.\n2. Trait sort (10 min): In small groups, students sort cards describing behaviors into healthy (support, honesty, respecting boundaries and privacy) versus unhealthy (control, jealousy, pressure, constant checking). Groups share one card that sparked discussion.\n3. Mini-lesson (8 min): Introduce boundaries and consent as ongoing, and the difference between assertive, passive, and aggressive communication. Model an "I feel ___ when ___ because ___, and I need ___" statement.\n4. Conflict practice (12 min): In pairs, students role-play a low-stakes conflict (borrowed item, canceled plans) using steps: stay calm, use an I-statement, listen and restate the other view, propose a solution.\n5. Closing (5 min): Discuss when a relationship problem is bigger than the two people can solve and which trusted adults or resources can help.\n\nAssessment/Follow-up: Students privately identify one relationship they want to improve and one boundary to set; counselor shares confidential support options for anyone experiencing an unsafe relationship.',
+    grade_tags: ['9', '10', '11', '12'],
+    domain_tag: 'Social-Emotional',
+    topic_tags: ['healthy relationships', 'conflict resolution', 'communication'],
+  },
+  {
+    title: 'Self-Advocacy and Stress Management Under Pressure',
+    entry_type: 'text',
+    content_text: 'Objective: Students will practice advocating for their needs with adults and build a personal toolkit for managing academic and personal stress.\n\nMaterials: Scenario cards, "ask script" handout, stress-toolkit worksheet, index cards.\n\n1. Opening (5 min): Ask when students have needed to ask a teacher, coach, or counselor for something but did not. Explore what held them back.\n2. Mini-lesson (8 min): Define self-advocacy as knowing your needs and communicating them respectfully. Teach a simple ask script: state the situation, state your need, propose a solution, and thank them (for example, requesting a deadline extension or extra help).\n3. Role-play (12 min): Using scenario cards (falling behind after an absence, not understanding feedback, needing accommodations, feeling overwhelmed), students practice the ask script in pairs and swap roles.\n4. Stress toolkit (10 min): Students build a personal plan listing early warning signs of stress, three go-to coping strategies, and two people or resources they can reach out to. Emphasize sleep, movement, and asking for help as strengths, not weaknesses.\n5. Closing (5 min): Each student writes on an index card one real ask they will make this week and one coping strategy they will use.\n\nAssessment/Follow-up: Counselor follows up on whether students made their ask; students who report chronic overwhelm are invited to an individual check-in and connected to support resources.',
+    grade_tags: ['9', '10', '11', '12'],
+    domain_tag: 'Social-Emotional',
+    topic_tags: ['self-advocacy', 'stress management', 'coping skills'],
   },
 ];
