@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
-import { getGradeBand } from '../lib/constants';
+import { isSecondaryServed } from '../lib/constants';
 
 /* ─── College/Career/Military-Readiness advising log (secondary) ───
  * Documents post-secondary advising touches. Beacon's lane is documentation,
@@ -172,7 +172,6 @@ function AdvisingModal({ open, onClose, students, entry, counselorId }) {
 
 export default function CcmrPage() {
   const { counselor } = useAuth();
-  const band = getGradeBand(counselor);
   const [entries, setEntries] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -212,7 +211,7 @@ export default function CcmrPage() {
     return { total, complete, openNext, studentsAdvised };
   }, [entries]);
 
-  if (band === 'elementary') {
+  if (!isSecondaryServed(counselor)) {
     return (
       <div style={{ padding: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1a2332' }}>Post-Secondary Advising</h1>

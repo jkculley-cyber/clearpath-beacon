@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { isLocalMode, getStorageMode, setStorageMode, seedLocalLessons, seedLocalTemplates } from '../lib/db';
 import * as local from '../lib/localDb';
 import { checkLicense, getLicenseKey, setLicenseKey, clearLicense, getCachedLicense, getLicenseDaysLeft } from '../lib/license';
+import { getGrades } from '../lib/constants';
 
 const AuthContext = createContext(null);
 
@@ -78,8 +79,8 @@ async function createLocalCounselor(profile) {
   await local.put('counselor', record);
   localStorage.setItem(LOCAL_COUNSELOR_KEY, record.id);
 
-  // Seed bundled lessons (band-appropriate) and templates
-  await seedLocalLessons(record.id, record.grade_band);
+  // Seed bundled lessons (scoped to the counselor's served grades) and templates
+  await seedLocalLessons(record.id, getGrades(record));
   await seedLocalTemplates(record.id);
 
   return record;

@@ -78,8 +78,35 @@ export const GRADE_BANDS = {
 
 export const GRADE_BAND_KEYS = ['elementary', 'middle', 'high'];
 
+// Band-wide filter/content token per preset band.
+export const BAND_WIDE_TOKEN = { elementary: 'K-5', middle: '6-8', high: '9-12' };
+
 // Ordered union of every grade, used for combined-campus (served_grades) ranges.
 export const ALL_GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+
+const SECONDARY_GRADES = ['6', '7', '8', '9', '10', '11', '12'];
+
+/* Combined-campus presets (6-12, K-8, K-12) — a counselor at a combined campus
+ * serves a grade RANGE that spans more than one preset band. Stored as
+ * grade_band: 'combined' + served_grades: {min, max}. */
+export const COMBINED_PRESETS = [
+  { key: '6-12', label: 'Middle + High', short: '6–12', min: '6', max: '12' },
+  { key: 'k-8', label: 'Elementary + Middle', short: 'K–8', min: 'K', max: '8' },
+  { key: 'k-12', label: 'All grades', short: 'K–12', min: 'K', max: '12' },
+];
+
+// Expand a content/filter grade token (band-wide, overlap range, or single grade) to its grades.
+const RANGE_TOKEN_GRADES = {
+  'K-1': ['K', '1'], '2-5': ['2', '3', '4', '5'], 'K-5': ['K', '1', '2', '3', '4', '5'],
+  'K-2': ['K', '1', '2'], '1-5': ['1', '2', '3', '4', '5'],
+  '6-8': ['6', '7', '8'], '6-7': ['6', '7'], '7-8': ['7', '8'],
+  '9-12': ['9', '10', '11', '12'], '9-10': ['9', '10'], '11-12': ['11', '12'],
+};
+export function rangeTokenToGrades(token) {
+  if (RANGE_TOKEN_GRADES[token]) return RANGE_TOKEN_GRADES[token];
+  if (ALL_GRADES.includes(token)) return [token];
+  return [];
+}
 
 /* Resolve the grade list for a counselor.
  * Priority: explicit served_grades range → band preset → elementary default.
@@ -100,7 +127,39 @@ export function getGrades(counselor) {
 
 export function getGradeBand(counselor) {
   if (typeof counselor === 'string') return GRADE_BANDS[counselor] ? counselor : DEFAULT_GRADE_BAND;
-  return (counselor && GRADE_BANDS[counselor.grade_band]) ? counselor.grade_band : DEFAULT_GRADE_BAND;
+  const b = counselor && counselor.grade_band;
+  if (b === 'combined') return 'combined';
+  return (counselor && GRADE_BANDS[b]) ? b : DEFAULT_GRADE_BAND;
+}
+
+// True if the counselor serves ANY secondary grade (6-12) — gates secondary-only
+// features (e.g. the CCMR advising log) for both High and combined counselors.
+export function isSecondaryServed(counselor) {
+  return getGrades(counselor).some((g) => SECONDARY_GRADES.includes(g));
+}
+
+// Which preset bands the counselor's served grades touch (drives content + filters).
+export function touchedBands(counselor) {
+  const g = new Set(getGrades(counselor));
+  return GRADE_BAND_KEYS.filter((k) => GRADE_BANDS[k].grades.some((x) => g.has(x)));
+}
+
+// The grade-filter tokens to show a counselor: 'All' + a band-wide token per
+// touched band + each individual served grade.
+export function gradeFilterTokens(counselor) {
+  const served = getGrades(counselor);
+  const bandTokens = touchedBands(counselor).map((b) => BAND_WIDE_TOKEN[b]);
+  return ['All', ...bandTokens, ...served];
+}
+
+/* Does a content item (its gradeRange token) belong under the chosen filter,
+ * scoped to what the counselor actually serves? 'All' = anything within the
+ * counselor's served grades; a specific token = grade-set intersection. */
+export function itemMatchesFilter(itemGrade, filter, servedSet) {
+  const ig = rangeTokenToGrades(itemGrade);
+  if (filter === 'All') return ig.some((g) => servedSet.has(g));
+  const fg = rangeTokenToGrades(filter);
+  return ig.some((g) => fg.includes(g));
 }
 
 /* Year-end promotion map for a counselor's grade list.

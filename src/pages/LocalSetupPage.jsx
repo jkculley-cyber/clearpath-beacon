@@ -5,6 +5,7 @@ import { seedSampleData } from '../lib/seedSampleData';
 import { decryptBackup } from '../lib/backupCrypto';
 import { importLocalBackup, isCloudModeEnabled } from '../lib/db';
 import { isFsAccessSupported, pickBackupFolder, persistPickedBackupFolder, findNewestBackupInFolder } from '../lib/backupFolder';
+import { COMBINED_PRESETS } from '../lib/constants';
 
 // Pre-fill the license field when the page is opened from clearpathedgroup.com/activate
 // with the key in the URL (e.g. /setup?key=BCN-XXXXXX-XXXX). Counselor doesn't retype.
@@ -29,6 +30,7 @@ export default function LocalSetupPage() {
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
   const [gradeBand, setGradeBand] = useState('elementary');
+  const [combinedKey, setCombinedKey] = useState('6-12');
   const initialKey = readKeyFromUrl();
   const [licenseKey, setLicenseKey] = useState(initialKey);
   // Auto-expand license field for returning users — they're here BECAUSE they have a key
@@ -60,9 +62,14 @@ export default function LocalSetupPage() {
       }
     }
 
-    const profile = await setupLocalProfile({ name, campus, district, grade_band: gradeBand });
+    const preset = COMBINED_PRESETS.find((p) => p.key === combinedKey);
+    const served = gradeBand === 'combined' && preset ? { min: preset.min, max: preset.max } : null;
+    const profile = await setupLocalProfile({ name, campus, district, grade_band: gradeBand, served_grades: served });
     if (loadSample && profile?.id) {
-      try { await seedSampleData(profile.id, gradeBand); } catch { /* non-blocking */ }
+      // For a combined campus, seed a representative secondary dataset.
+      const sampleBand = gradeBand !== 'combined' ? gradeBand
+        : (served && served.max === '8' ? 'middle' : 'high');
+      try { await seedSampleData(profile.id, sampleBand); } catch { /* non-blocking */ }
     }
 
     // Notify Kim — fire-and-forget, non-blocking, no student data sent
@@ -301,6 +308,7 @@ export default function LocalSetupPage() {
               { key: 'elementary', label: 'Elementary', sub: 'K–5' },
               { key: 'middle', label: 'Middle', sub: '6–8' },
               { key: 'high', label: 'High', sub: '9–12' },
+              { key: 'combined', label: 'Combined', sub: '6–12 · K–8…' },
             ].map((b) => {
               const active = gradeBand === b.key;
               return (
@@ -309,21 +317,45 @@ export default function LocalSetupPage() {
                   key={b.key}
                   onClick={() => setGradeBand(b.key)}
                   style={{
-                    flex: 1, padding: '10px 8px', borderRadius: 8, cursor: 'pointer',
+                    flex: 1, padding: '10px 6px', borderRadius: 8, cursor: 'pointer',
                     border: active ? '2px solid #2A9D8F' : '1px solid #d1d5db',
                     background: active ? '#e6f4f2' : '#fff',
                     color: active ? '#1f2937' : '#6b7280',
-                    fontWeight: active ? 700 : 500, fontSize: 13, lineHeight: 1.3,
+                    fontWeight: active ? 700 : 500, fontSize: 12, lineHeight: 1.3,
                   }}
                 >
                   {b.label}
-                  <div style={{ fontSize: 11, fontWeight: 500, color: active ? '#2A9D8F' : '#9ca3af' }}>{b.sub}</div>
+                  <div style={{ fontSize: 10, fontWeight: 500, color: active ? '#2A9D8F' : '#9ca3af' }}>{b.sub}</div>
                 </button>
               );
             })}
           </div>
+          {gradeBand === 'combined' && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+              {COMBINED_PRESETS.map((p) => {
+                const active = combinedKey === p.key;
+                return (
+                  <button
+                    type="button"
+                    key={p.key}
+                    onClick={() => setCombinedKey(p.key)}
+                    style={{
+                      flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer',
+                      border: active ? '2px solid #2A9D8F' : '1px solid #d1d5db',
+                      background: active ? '#e6f4f2' : '#fff',
+                      color: active ? '#1f2937' : '#6b7280',
+                      fontWeight: active ? 700 : 500, fontSize: 12,
+                    }}
+                  >
+                    {p.short}
+                    <div style={{ fontSize: 10, fontWeight: 500, color: active ? '#2A9D8F' : '#9ca3af' }}>{p.label}</div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4, marginBottom: 4 }}>
-            You can change this later in Settings.
+            Serve more than one level? Choose <strong>Combined</strong>. You can change this later in Settings.
           </div>
 
           {/* Sample data option */}

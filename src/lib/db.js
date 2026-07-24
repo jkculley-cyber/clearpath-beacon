@@ -352,22 +352,21 @@ export const db = {
 
 // ─── Seeded lesson data (bundled for local mode) ───
 
-export async function seedLocalLessons(counselorId, band = 'elementary') {
+export async function seedLocalLessons(counselorId, servedGrades = null) {
   if (!isLocalMode()) return;
 
   // Check if already seeded
   const existing = await local.getAll('lesson_library');
   if (existing.length > 0) return;
 
-  // Dynamically import the lesson data + band grade map
+  // Dynamically import the lesson data
   const { SEED_LESSONS } = await import('./seedLessonData.js');
-  const { GRADE_BANDS, DEFAULT_GRADE_BAND } = await import('./constants.js');
-  const bandGrades = new Set((GRADE_BANDS[band] || GRADE_BANDS[DEFAULT_GRADE_BAND]).grades);
+  const gradeSet = new Set(servedGrades && servedGrades.length ? servedGrades : ['K', '1', '2', '3', '4', '5']);
 
-  // Seed only lessons that overlap the counselor's band; fall back to all if
-  // a band somehow matches nothing (keeps the library from being empty).
-  const inBand = SEED_LESSONS.filter((l) => (l.grade_tags || []).some((g) => bandGrades.has(g)));
-  const toSeed = inBand.length ? inBand : SEED_LESSONS;
+  // Seed only lessons that overlap the counselor's served grades; fall back to
+  // all if nothing matches (keeps the library from being empty).
+  const inRange = SEED_LESSONS.filter((l) => (l.grade_tags || []).some((g) => gradeSet.has(g)));
+  const toSeed = inRange.length ? inRange : SEED_LESSONS;
 
   for (const lesson of toSeed) {
     await local.insert('lesson_library', {

@@ -14,7 +14,7 @@ import {
 import { downloadCalendarIcs } from '../lib/calendarExport';
 import { schoolYearWindow, computeYearSummary, saveYearSummary } from '../lib/yearSummary';
 import { generateHandoffPdf } from '../lib/handoffExport';
-import { TIME_DOMAINS, GRADE_BANDS, GRADE_BAND_KEYS, getGradeBand, getPromotionLadder, topGradeLabel } from '../lib/constants';
+import { TIME_DOMAINS, GRADE_BANDS, GRADE_BAND_KEYS, COMBINED_PRESETS, getGradeBand, getPromotionLadder, topGradeLabel } from '../lib/constants';
 import ConfirmDestructive from '../components/ConfirmDestructive';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -39,9 +39,15 @@ export default function SettingsPage() {
   const [campus, setCampus] = useState('');
   const [district, setDistrict] = useState('');
   const [gradeBand, setGradeBand] = useState('elementary');
-  // Promotion ladder + exiting top grade derive from the SAVED band on the record.
-  const GRADE_PROMOTIONS = Object.entries(getPromotionLadder(counselor)).map(([from, to]) => ({ from, to }));
-  const topGrade = topGradeLabel(counselor);
+  const [combinedKey, setCombinedKey] = useState('6-12');
+  // Preview the served grades for the CURRENTLY SELECTED (unsaved) band choice,
+  // so the promotion ladder + exiting top grade update live as the user picks.
+  const selectedPreset = COMBINED_PRESETS.find((p) => p.key === combinedKey);
+  const previewCounselor = gradeBand === 'combined' && selectedPreset
+    ? { grade_band: 'combined', served_grades: { min: selectedPreset.min, max: selectedPreset.max } }
+    : { grade_band: gradeBand, served_grades: null };
+  const GRADE_PROMOTIONS = Object.entries(getPromotionLadder(previewCounselor)).map(([from, to]) => ({ from, to }));
+  const topGrade = topGradeLabel(previewCounselor);
   const [yearStart, setYearStart] = useState('');
   const [yearEnd, setYearEnd] = useState('');
   const [alertThreshold, setAlertThreshold] = useState(82);
@@ -99,6 +105,11 @@ export default function SettingsPage() {
       setCampus(counselor.campus || '');
       setDistrict(counselor.district || '');
       setGradeBand(getGradeBand(counselor));
+      const sg = counselor.served_grades;
+      if (sg && sg.min && sg.max) {
+        const match = COMBINED_PRESETS.find((p) => p.min === sg.min && p.max === sg.max);
+        if (match) setCombinedKey(match.key);
+      }
       setYearStart(counselor.school_year_start || '');
       setYearEnd(counselor.school_year_end || '');
       setAlertThreshold(counselor.alert_threshold || 82);
@@ -432,6 +443,8 @@ export default function SettingsPage() {
       campus,
       district,
       grade_band: gradeBand,
+      served_grades: gradeBand === 'combined' && selectedPreset
+        ? { min: selectedPreset.min, max: selectedPreset.max } : null,
       school_year_start: yearStart || null,
       school_year_end: yearEnd || null,
       alert_threshold: alertThreshold,
@@ -691,30 +704,54 @@ export default function SettingsPage() {
           <div style={{ marginTop: 12 }}>
             <label className="form-label">Grade level I serve</label>
             <div style={{ display: 'flex', gap: 8 }}>
-              {GRADE_BAND_KEYS.map((key) => {
-                const b = GRADE_BANDS[key];
-                const active = gradeBand === key;
+              {[...GRADE_BAND_KEYS.map((key) => ({ key, label: GRADE_BANDS[key].label, short: GRADE_BANDS[key].short })),
+                { key: 'combined', label: 'Combined', short: '6–12 · K–8…' }].map((b) => {
+                const active = gradeBand === b.key;
                 return (
                   <button
                     type="button"
-                    key={key}
-                    onClick={() => setGradeBand(key)}
+                    key={b.key}
+                    onClick={() => setGradeBand(b.key)}
                     style={{
                       flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer',
                       border: active ? '2px solid #2A9D8F' : '1px solid #d1d5db',
                       background: active ? '#e6f4f2' : '#fff',
                       color: active ? '#1f2937' : '#6b7280',
-                      fontWeight: active ? 700 : 500, fontSize: 13, lineHeight: 1.3,
+                      fontWeight: active ? 700 : 500, fontSize: 12, lineHeight: 1.3,
                     }}
                   >
                     {b.label}
-                    <div style={{ fontSize: 11, fontWeight: 500, color: active ? '#2A9D8F' : '#9ca3af' }}>{b.short}</div>
+                    <div style={{ fontSize: 10, fontWeight: 500, color: active ? '#2A9D8F' : '#9ca3af' }}>{b.short}</div>
                   </button>
                 );
               })}
             </div>
+            {gradeBand === 'combined' && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                {COMBINED_PRESETS.map((p) => {
+                  const active = combinedKey === p.key;
+                  return (
+                    <button
+                      type="button"
+                      key={p.key}
+                      onClick={() => setCombinedKey(p.key)}
+                      style={{
+                        flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer',
+                        border: active ? '2px solid #2A9D8F' : '1px solid #d1d5db',
+                        background: active ? '#e6f4f2' : '#fff',
+                        color: active ? '#1f2937' : '#6b7280',
+                        fontWeight: active ? 700 : 500, fontSize: 12,
+                      }}
+                    >
+                      {p.short}
+                      <div style={{ fontSize: 10, fontWeight: 500, color: active ? '#2A9D8F' : '#9ca3af' }}>{p.label}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
-              Sets the grade options and year-end promotion. SB 179 (80/20) compliance is identical for every band.
+              Sets the grade options and year-end promotion. Choose <strong>Combined</strong> if you serve more than one level (e.g. a 6–12 campus). SB 179 (80/20) compliance is identical for every band.
             </div>
           </div>
         </div>
