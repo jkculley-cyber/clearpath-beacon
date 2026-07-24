@@ -47,6 +47,16 @@ const STORAGE_MODE_KEY = 'beacon_storage_mode';
 // auth context read through, so coercing it to 'local' neutralizes every cloud
 // entry point — including any stale 'cloud' value already in localStorage.
 // To re-enable: confirm cloud RLS, then set CLOUD_MODE_ENABLED = true.
+//
+// !! SECOND, INDEPENDENT BLOCKER (2026-07-22) — read before flipping this !!
+// The cloud SCHEMA is ~9 tables behind local, so even with perfect RLS,
+// enabling cloud silently destroys counselor data (CREST, crisis workflow,
+// follow-ups, needs assessments, parent contacts, record history, note
+// templates, student goals, settings all have no cloud table). Writes to a
+// nonexistent table just fail and the counselor loses those records with no
+// error surfaced. See docs/cloud-mode-parity-debt.md for the full list and the
+// definition of done. Tracked as risk B-8. Grade bands are handled by
+// migration 006, which is written but NOT yet applied.
 const CLOUD_MODE_ENABLED = false;
 
 export function isCloudModeEnabled() {
