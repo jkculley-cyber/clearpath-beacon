@@ -79,6 +79,17 @@ const LICENSE_EXEMPT_TABLES = ['lesson_library', 'communication_templates', 'set
 const HISTORY_TABLES = ['students', 'sessions'];
 const HISTORY_SKIP_FIELDS = new Set(['updated_at', 'created_at', 'id']);
 
+/* Local store name -> cloud table name, where they differ.
+ * The local profile store is singular ('counselor', one record) while the cloud
+ * table is plural ('counselors', one row per user). Without this mapping every
+ * cloud profile write — including the grade_band/served_grades band setting —
+ * targets a table that does not exist and fails. Cloud mode is currently
+ * disabled (CLOUD_MODE_ENABLED), so this is latent, not live. */
+const CLOUD_TABLE_NAMES = { counselor: 'counselors' };
+function cloudTable(table) {
+  return CLOUD_TABLE_NAMES[table] || table;
+}
+
 async function recordHistory(entry) {
   try {
     await local.insert('record_history', { at: new Date().toISOString(), ...entry });
@@ -133,7 +144,7 @@ export const db = {
       }
 
       // Cloud mode — build Supabase query
-      let q = supabase.from(table).select(opts.select || '*');
+      let q = supabase.from(cloudTable(table)).select(opts.select || '*');
       if (opts.eq) {
         for (const [col, val] of Object.entries(opts.eq)) {
           q = q.eq(col, val);
@@ -170,7 +181,7 @@ export const db = {
         const row = await local.getById(table, id);
         return { data: row, error: null };
       }
-      return await supabase.from(table).select('*').eq('id', id).single();
+      return await supabase.from(cloudTable(table)).select('*').eq('id', id).single();
     } catch (error) {
       return { data: null, error };
     }
@@ -202,7 +213,7 @@ export const db = {
         const row = await local.insert(table, record);
         return { data: row, error: null };
       }
-      return await supabase.from(table).insert(record).select().single();
+      return await supabase.from(cloudTable(table)).insert(record).select().single();
     } catch (error) {
       return { data: null, error };
     }
@@ -229,7 +240,7 @@ export const db = {
         }
         return { data: rows, error: null };
       }
-      return await supabase.from(table).insert(records).select();
+      return await supabase.from(cloudTable(table)).insert(records).select();
     } catch (error) {
       return { data: null, error };
     }
@@ -270,7 +281,7 @@ export const db = {
         }
         return { data: row, error: null };
       }
-      return await supabase.from(table).update(changes).eq('id', id).select().single();
+      return await supabase.from(cloudTable(table)).update(changes).eq('id', id).select().single();
     } catch (error) {
       return { data: null, error };
     }
@@ -307,7 +318,7 @@ export const db = {
         }
         return { error: null };
       }
-      return await supabase.from(table).delete().eq('id', id);
+      return await supabase.from(cloudTable(table)).delete().eq('id', id);
     } catch (error) {
       return { error };
     }
@@ -322,7 +333,7 @@ export const db = {
         const n = await local.count(table, eq);
         return { count: n, error: null };
       }
-      let q = supabase.from(table).select('id', { count: 'exact', head: true });
+      let q = supabase.from(cloudTable(table)).select('id', { count: 'exact', head: true });
       if (eq) {
         for (const [col, val] of Object.entries(eq)) {
           q = q.eq(col, val);

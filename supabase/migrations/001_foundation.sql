@@ -5,14 +5,19 @@
 -- ============================================================
 --
 -- !! BEFORE RE-ENABLING CLOUD MODE (db.js CLOUD_MODE_ENABLED) !!
--- This schema is still elementary-only and WILL break the grade-band feature:
---   1. students.grade below is CHECK (grade IN ('K'..'5')) — inserts for
---      grades 6-12 are rejected outright.
---   2. counselors has no grade_band / served_grades columns, so a counselor's
---      band silently fails to persist in cloud mode.
--- A follow-up migration must widen the CHECK to 'K'..'12' and add
--- counselors.grade_band TEXT plus counselors.served_grades JSONB.
--- Local (IndexedDB) mode is schemaless and already handles all of this.
+-- Grade bands: FIXED by migration 006 (widens students.grade to K-12, adds
+-- counselors.grade_band + served_grades, creates ccmr_advising). Apply it.
+--
+-- STILL OUTSTANDING — cloud has no tables for features shipped while cloud was
+-- disabled. Local (IndexedDB) has 25 stores; cloud has 18. Missing entirely:
+--   crest_artifacts, crisis_events, follow_ups, needs_assessments,
+--   parent_contacts, record_history, session_note_templates, student_goals,
+--   settings
+-- Any counselor switched to cloud loses CREST, the crisis workflow, follow-up
+-- reminders, needs assessments, parent-contact logs, record history, note
+-- templates, and student goals. Cloud mode must NOT be re-enabled until this
+-- parity gap is closed and tenant-isolation RLS is verified (see B4 note in
+-- db.js). Local mode is schemaless and unaffected.
 -- ============================================================
 
 -- ============================================================
