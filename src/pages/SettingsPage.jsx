@@ -40,7 +40,11 @@ export default function SettingsPage() {
   const [district, setDistrict] = useState('');
   const [gradeBand, setGradeBand] = useState('elementary');
   const [combinedKey, setCombinedKey] = useState('6-12');
+  // A saved served_grades range that matches no preset — kept verbatim until
+  // the counselor actively picks a preset.
+  const [customRange, setCustomRange] = useState(null);
   const selectedPreset = COMBINED_PRESETS.find((p) => p.key === combinedKey);
+  const effectiveRange = customRange || (selectedPreset ? { min: selectedPreset.min, max: selectedPreset.max } : null);
   // The year-end transition operates on the counselor's ACTUAL saved band —
   // never the unsaved selector state — so a mid-edit band toggle can't skip or
   // mis-promote real students at year rollover.
@@ -106,7 +110,13 @@ export default function SettingsPage() {
       const sg = counselor.served_grades;
       if (sg && sg.min && sg.max) {
         const match = COMBINED_PRESETS.find((p) => p.min === sg.min && p.max === sg.max);
-        if (match) setCombinedKey(match.key);
+        // A range that isn't one of our presets (restored backup, or written by
+        // a newer build) must be PRESERVED, not silently rewritten to the
+        // default preset by the next unrelated profile save.
+        if (match) { setCombinedKey(match.key); setCustomRange(null); }
+        else setCustomRange({ min: sg.min, max: sg.max });
+      } else {
+        setCustomRange(null);
       }
       setYearStart(counselor.school_year_start || '');
       setYearEnd(counselor.school_year_end || '');
@@ -436,8 +446,7 @@ export default function SettingsPage() {
   const handleSaveProfile = async () => {
     setSaving(true);
     setSaveMsg('');
-    const servedGrades = gradeBand === 'combined' && selectedPreset
-      ? { min: selectedPreset.min, max: selectedPreset.max } : null;
+    const servedGrades = gradeBand === 'combined' ? effectiveRange : null;
     const bandChanged = gradeBand !== getGradeBand(counselor)
       || JSON.stringify(servedGrades) !== JSON.stringify(counselor?.served_grades ?? null);
     const { error } = await db.update('counselor', counselor.id, {
@@ -752,7 +761,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       key={p.key}
-                      onClick={() => setCombinedKey(p.key)}
+                      onClick={() => { setCombinedKey(p.key); setCustomRange(null); }}
                       style={{
                         flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer',
                         border: active ? '2px solid #2A9D8F' : '1px solid #d1d5db',
@@ -766,6 +775,11 @@ export default function SettingsPage() {
                     </button>
                   );
                 })}
+              </div>
+            )}
+            {gradeBand === 'combined' && customRange && (
+              <div style={{ fontSize: 11, color: '#b45309', marginTop: 6 }}>
+                Currently serving a custom range: <strong>{customRange.min}–{customRange.max}</strong>. Choosing a preset above will replace it.
               </div>
             )}
             <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>

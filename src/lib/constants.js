@@ -95,17 +95,24 @@ export const COMBINED_PRESETS = [
   { key: 'k-12', label: 'All grades', short: 'K–12', min: 'K', max: '12' },
 ];
 
-// Expand a content/filter grade token (band-wide, overlap range, or single grade) to its grades.
-const RANGE_TOKEN_GRADES = {
-  'K-1': ['K', '1'], '2-5': ['2', '3', '4', '5'], 'K-5': ['K', '1', '2', '3', '4', '5'],
-  'K-2': ['K', '1', '2'], '1-5': ['1', '2', '3', '4', '5'],
-  '6-8': ['6', '7', '8'], '6-7': ['6', '7'], '7-8': ['7', '8'],
-  '9-12': ['9', '10', '11', '12'], '9-10': ['9', '10'], '11-12': ['11', '12'],
-};
+/* Expand a content/filter grade token to the grades it covers.
+ * Parses ANY "<grade>-<grade>" range generically (K-5, 6-8, 9-12, 2-5, 6-7,
+ * 11-12, …) plus bare single grades. Parsing beats a lookup table: an
+ * unrecognized token used to expand to [] and then silently vanish from every
+ * filter INCLUDING "All", so mistyped or newly-invented tokens removed content
+ * from the product with no error. Anything genuinely unparseable is treated as
+ * band-agnostic (always shown) — visible-but-unfiltered beats invisible. */
 export function rangeTokenToGrades(token) {
-  if (RANGE_TOKEN_GRADES[token]) return RANGE_TOKEN_GRADES[token];
-  if (ALL_GRADES.includes(token)) return [token];
-  return [];
+  if (!token || typeof token !== 'string') return ALL_GRADES;
+  const t = token.trim();
+  if (ALL_GRADES.includes(t)) return [t];
+  const m = t.match(/^([Kk]|\d{1,2})\s*-\s*([Kk]|\d{1,2})$/);
+  if (m) {
+    const lo = ALL_GRADES.indexOf(m[1].toUpperCase() === 'K' ? 'K' : String(Number(m[1])));
+    const hi = ALL_GRADES.indexOf(m[2].toUpperCase() === 'K' ? 'K' : String(Number(m[2])));
+    if (lo !== -1 && hi !== -1 && lo <= hi) return ALL_GRADES.slice(lo, hi + 1);
+  }
+  return ALL_GRADES; // unparseable → show it rather than hide it
 }
 
 /* Resolve the grade list for a counselor.

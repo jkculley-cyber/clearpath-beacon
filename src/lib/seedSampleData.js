@@ -72,8 +72,35 @@ const DATASETS = {
   },
 };
 
-export async function seedSampleData(counselorId, band = 'elementary') {
-  const ds = DATASETS[band] || DATASETS.elementary;
+/* Build a dataset for a combined campus by spreading the sample roster across
+ * the grades the counselor actually serves. A K-12 counselor should not get a
+ * roster of 9th-12th graders — the point of Combined is that they cover the
+ * whole range, so the sample should reflect it. Base content comes from the
+ * band at the TOP of the range (most advanced material present). */
+function combinedDataset(servedGrades) {
+  const grades = servedGrades && servedGrades.length ? servedGrades : null;
+  if (!grades) return DATASETS.elementary;
+  const top = grades[grades.length - 1];
+  const baseKey = ['9', '10', '11', '12'].includes(top) ? 'high'
+    : ['6', '7', '8'].includes(top) ? 'middle' : 'elementary';
+  const base = DATASETS[baseKey];
+  // Spread the 5 sample students evenly across the served range.
+  const pick = (i) => grades[Math.min(grades.length - 1, Math.round((i * (grades.length - 1)) / 4))];
+  return {
+    ...base,
+    students: base.students.map((s, i) => ({ ...s, grade: pick(i) })),
+    groups: base.groups.map((g, i) => ({
+      ...g,
+      grade_band: i === 0
+        ? `${grades[0]}-${grades[Math.floor((grades.length - 1) / 2)]}`
+        : `${grades[Math.floor((grades.length - 1) / 2)]}-${grades[grades.length - 1]}`,
+    })),
+    referrals: base.referrals.map((r, i) => ({ ...r, grade: pick(i === 0 ? 0 : 4) })),
+  };
+}
+
+export async function seedSampleData(counselorId, band = 'elementary', servedGrades = null) {
+  const ds = band === 'combined' ? combinedDataset(servedGrades) : (DATASETS[band] || DATASETS.elementary);
   const students = ds.students;
 
   const studentRecords = [];

@@ -5,7 +5,7 @@ import { seedSampleData } from '../lib/seedSampleData';
 import { decryptBackup } from '../lib/backupCrypto';
 import { importLocalBackup, isCloudModeEnabled } from '../lib/db';
 import { isFsAccessSupported, pickBackupFolder, persistPickedBackupFolder, findNewestBackupInFolder } from '../lib/backupFolder';
-import { COMBINED_PRESETS } from '../lib/constants';
+import { COMBINED_PRESETS, getGrades } from '../lib/constants';
 
 // Pre-fill the license field when the page is opened from clearpathedgroup.com/activate
 // with the key in the URL (e.g. /setup?key=BCN-XXXXXX-XXXX). Counselor doesn't retype.
@@ -66,10 +66,10 @@ export default function LocalSetupPage() {
     const served = gradeBand === 'combined' && preset ? { min: preset.min, max: preset.max } : null;
     const profile = await setupLocalProfile({ name, campus, district, grade_band: gradeBand, served_grades: served });
     if (loadSample && profile?.id) {
-      // For a combined campus, seed a representative secondary dataset.
-      const sampleBand = gradeBand !== 'combined' ? gradeBand
-        : (served && served.max === '8' ? 'middle' : 'high');
-      try { await seedSampleData(profile.id, sampleBand); } catch { /* non-blocking */ }
+      // Combined campuses get a roster spread across their whole served range.
+      try {
+        await seedSampleData(profile.id, gradeBand, getGrades({ grade_band: gradeBand, served_grades: served }));
+      } catch { /* non-blocking */ }
     }
 
     // Notify Kim — fire-and-forget, non-blocking, no student data sent

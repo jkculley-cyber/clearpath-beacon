@@ -1,7 +1,18 @@
 -- ============================================================
 -- Beacon Foundation Migration 001
--- Elementary school counselor command center
+-- School counselor command center
 -- Tenant unit: counselors (RLS isolates each counselor's data)
+-- ============================================================
+--
+-- !! BEFORE RE-ENABLING CLOUD MODE (db.js CLOUD_MODE_ENABLED) !!
+-- This schema is still elementary-only and WILL break the grade-band feature:
+--   1. students.grade below is CHECK (grade IN ('K'..'5')) — inserts for
+--      grades 6-12 are rejected outright.
+--   2. counselors has no grade_band / served_grades columns, so a counselor's
+--      band silently fails to persist in cloud mode.
+-- A follow-up migration must widen the CHECK to 'K'..'12' and add
+-- counselors.grade_band TEXT plus counselors.served_grades JSONB.
+-- Local (IndexedDB) mode is schemaless and already handles all of this.
 -- ============================================================
 
 -- ============================================================
