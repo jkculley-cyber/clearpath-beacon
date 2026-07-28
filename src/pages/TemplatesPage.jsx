@@ -804,7 +804,7 @@ function generateMandatedReport(counselor, student) {
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(...GRAY);
   const legal = doc.splitTextToSize(
-    'Per Texas Family Code \u00A7261.101, professionals have a duty to report suspected child abuse or neglect within 48 hours.',
+    'Per Texas Family Code \u00A7261.101 (as amended by SB 571, 2025), professionals have a non-delegable duty to report suspected child abuse or neglect within 24 hours.',
     CONTENT_W
   );
   doc.text(legal, MARGIN, y);

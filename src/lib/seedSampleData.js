@@ -160,8 +160,21 @@ export async function seedSampleData(counselorId, band = 'elementary', servedGra
       sessions.push({ counselor_id: counselorId, student_id: studentRecords[2].id, session_date: dateStr, duration_minutes: 20, status: 'Completed', start_time: '13:00', end_time: '13:20', session_type: 'individual', notes: ds.notes.individual, ...SAMPLE });
     }
   }
+  const groupRoster = new Map();
+  if (group1) groupRoster.set(group1.id, [studentRecords[1], studentRecords[3]].filter(Boolean));
+  if (group2) groupRoster.set(group2.id, [studentRecords[0], studentRecords[4]].filter(Boolean));
   for (const s of sessions) {
-    await db.insert('sessions', s);
+    const { data: sess } = await db.insert('sessions', s);
+    // Completed group sessions get attendance rows so Reports' group
+    // utilization reflects real numbers instead of a 0% placeholder.
+    if (sess && s.group_id && s.status === 'Completed') {
+      const members = groupRoster.get(s.group_id) || [];
+      for (let i = 0; i < members.length; i++) {
+        // One deterministic absence per group across the run keeps it realistic.
+        const absent = i === 1 && s.session_date.endsWith('4');
+        await db.insert('attendance', { session_id: sess.id, student_id: members[i].id, status: absent ? 'absent' : 'present', ...SAMPLE });
+      }
+    }
   }
 
   // Time entries for last 2 weeks
