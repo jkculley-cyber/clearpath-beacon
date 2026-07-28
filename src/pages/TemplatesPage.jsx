@@ -804,7 +804,7 @@ function generateMandatedReport(counselor, student) {
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(...GRAY);
   const legal = doc.splitTextToSize(
-    'Per Texas Family Code \u00A7261.101 (as amended by SB 571, 2025), professionals have a non-delegable duty to report suspected child abuse or neglect within 24 hours.',
+    'Per Texas Family Code \u00A7261.101 (as amended by SB 571, 2025), professionals have a non-delegable duty to report suspected child abuse or neglect within 24 hours to DFPS or a law enforcement agency (many districts require both \u2014 follow your district policy). A school district police department does not count as a law enforcement agency for this report.',
     CONTENT_W
   );
   doc.text(legal, MARGIN, y);
