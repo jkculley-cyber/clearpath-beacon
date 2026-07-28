@@ -95,8 +95,9 @@ const ABUSE_STEPS = [
   { key: 'category',        label: 'Type of suspected abuse / neglect',                       type: 'select', required: true, options: ['Physical abuse', 'Sexual abuse', 'Emotional abuse', 'Neglect (physical)', 'Neglect (medical)', 'Neglect (supervision)', 'Other / multiple'] },
   { key: 'prior_reports',   label: 'Have you (or anyone known to you) made prior CPS reports for this student?', type: 'yn_detail' },
   { key: 'imminent_danger', label: 'Is the student in immediate danger if returned home?',    type: 'select', required: true, options: ['No', 'Possibly', 'Yes'] },
-  { key: 'cps_called',      label: 'CPS hotline called (1-800-252-5400)?',                    type: 'yn_detail', required: true, detailLabel: 'Time of call + intake worker name + case/intake # if issued' },
-  { key: 'cps_outcome',     label: 'CPS intake outcome (accepted for investigation, screened out, etc.)', type: 'long' },
+  { key: 'cps_called',      label: 'DFPS hotline called (1-800-252-5400)?',                   type: 'yn_detail', required: true, detailLabel: 'Time of call + intake worker name + case/intake # if issued' },
+  { key: 'le_called',       label: 'Law enforcement agency called (DPS, municipal police, sheriff, or constable — a district PD/SRO does NOT count, per SB 571/TEA guidance)?', type: 'yn_detail', required: true, detailLabel: 'Agency + time of call + officer/report # if issued' },
+  { key: 'cps_outcome',     label: 'DFPS intake outcome (accepted for investigation, screened out, etc.)', type: 'long' },
   { key: 'admin_notified',  label: 'Administrator notified?',                                  type: 'yn_detail', required: true, detailLabel: 'Who + when' },
   { key: 'parent_notified', label: 'Parent notification status',                                type: 'select', options: ['Not contacted (per CPS guidance — would compromise investigation)', 'Contacted', 'Will be contacted by CPS', 'Other'] },
 ];

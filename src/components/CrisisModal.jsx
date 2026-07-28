@@ -428,7 +428,7 @@ function PickerStage({ studentId, setStudentId, studentSearch, setStudentSearch,
           <br />
           <strong>DFPS abuse hotline:</strong> 1-800-252-5400 (24/7)
           <br />
-          You are required to make a CPS report personally <strong>within 24 hours</strong> (TFC §261.101, as amended by SB 571, 2025) — Beacon documents that you did, but cannot make the call for you.
+          You are required to report personally <strong>within 24 hours</strong> to DFPS or a law enforcement agency — many districts require both (TFC §261.101, as amended by SB 571, 2025). Per TEA guidance, a school district police department does <strong>not</strong> count — telling your SRO does not discharge the duty. Beacon documents that you reported, but cannot make the calls for you.
         </div>
       )}
 
@@ -480,7 +480,7 @@ function WorkflowStage({ studentName, workflow, stepIdx, answers, setAnswers, ne
 
       {triggerKey === 'abuse' && stepIdx === 0 && (
         <div style={dfpsCallout}>
-          <strong>DFPS hotline:</strong> 1-800-252-5400 — make this call personally before completing the workflow. The report is due within <strong>24 hours</strong> of first suspecting abuse or neglect.
+          <strong>DFPS hotline:</strong> 1-800-252-5400 — make this call personally before completing the workflow. If your district also requires a law enforcement report, only DPS, municipal police, a sheriff, or a constable count — a district PD/SRO does not. Reports are due within <strong>24 hours</strong> of first suspecting abuse or neglect.
         </div>
       )}
 
