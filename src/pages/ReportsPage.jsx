@@ -263,6 +263,9 @@ export default function ReportsPage() {
         let totalPresent = 0;
         periodSessions.forEach((s) => {
           const att = (allAttendance || []).filter((a) => a.session_id === s.id);
+          // Only sessions where attendance was actually taken count toward the
+          // average — otherwise scheduled/unmarked sessions read as all-absent.
+          if (att.length === 0) return;
           totalExpected += memberCount;
           totalPresent += att.filter((a) => a.status === 'present').length;
         });
