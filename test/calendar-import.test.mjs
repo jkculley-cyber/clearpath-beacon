@@ -2,6 +2,7 @@
  * Pure functions only (calendarImport.js has no browser deps). */
 import {
   parseIcs, parseIcsDetailed, expandRecurrence, categorizeDomain, defaultImportWindow,
+  occurrenceUid,
 } from '../src/lib/calendarImport.js';
 
 let pass = 0, fail = 0;
@@ -21,12 +22,14 @@ function ics(...bodies) {
     .concat(['END:VCALENDAR'])
     .join('\n');
 }
-const ev = ({ summary, start, end, rrule, exdate }) => [
+const ev = ({ summary, start, end, rrule, exdate, uid, recurrenceId }) => [
+  uid ? `UID:${uid}` : null,
   `SUMMARY:${summary}`,
   `DTSTART:${start}`,
   `DTEND:${end}`,
   rrule ? `RRULE:${rrule}` : null,
   exdate ? `EXDATE:${exdate}` : null,
+  recurrenceId ? `RECURRENCE-ID:${recurrenceId}` : null,
 ].filter(Boolean).join('\n');
 
 console.log('=== 1. Date-range windowing (Nicole: "imported every event back to 2024") ===');
@@ -178,6 +181,71 @@ console.log('=== 5. Default import window follows the Texas school year ===');
   eq(defaultImportWindow(new Date(2026, 7, 30)), { from: '2026-08-01', to: '2026-08-30' }, 'August lands in the new year');
   eq(defaultImportWindow(new Date(2027, 2, 15)), { from: '2026-08-01', to: '2027-03-15' }, 'March looks back to last August');
   eq(defaultImportWindow(new Date(2026, 6, 31)), { from: '2025-08-01', to: '2026-07-31' }, 'July still belongs to the prior year');
+}
+
+
+console.log('=== 6. Event identity (source_uid) — repeat imports must not duplicate or lose ===');
+{
+  // A single event keeps its bare UID, so moving it in Google reads as the SAME entry.
+  const single = parseIcs(ics(ev({
+    summary: 'Faculty meeting', start: '20260903T150000', end: '20260903T160000', uid: 'abc123@google.com',
+  })), { from: '2026-09-01', to: '2026-09-30' });
+  eq(single[0].source_uid, 'abc123@google.com', 'single event is keyed by bare UID');
+
+  // Re-parsing the identical file yields identical keys — that is what makes a
+  // re-import a no-op rather than a pile of duplicates.
+  const again = parseIcs(ics(ev({
+    summary: 'Faculty meeting', start: '20260903T150000', end: '20260903T160000', uid: 'abc123@google.com',
+  })), { from: '2026-09-01', to: '2026-09-30' });
+  eq(again[0].source_uid, single[0].source_uid, 'the same event yields the same key across imports');
+
+  // Moving the event to another date keeps the key, so the caller updates in place.
+  const moved = parseIcs(ics(ev({
+    summary: 'Faculty meeting', start: '20260910T150000', end: '20260910T160000', uid: 'abc123@google.com',
+  })), { from: '2026-09-01', to: '2026-09-30' });
+  eq(moved[0].source_uid, single[0].source_uid, 'a moved event keeps its identity');
+  ok(moved[0].entry_date !== single[0].entry_date, 'but its date really did change');
+
+  // THE BUG THIS FIXES: two shifts of the same duty on one day previously collided
+  // on (date + title) and one was silently dropped. Distinct UIDs keep them apart.
+  const twoShifts = parseIcs(ics(
+    ev({ summary: 'Bus duty', start: '20260917T073000', end: '20260917T080000', uid: 'morning@g' }),
+    ev({ summary: 'Bus duty', start: '20260917T123000', end: '20260917T130000', uid: 'afternoon@g' }),
+  ), { from: '2026-09-01', to: '2026-09-30' });
+  eq(twoShifts.length, 2, 'two same-day same-title events both survive parsing');
+  ok(twoShifts[0].source_uid !== twoShifts[1].source_uid,
+    'two shifts of the same duty get DIFFERENT keys', JSON.stringify(twoShifts.map((e) => e.source_uid)));
+
+  // Occurrences of one series are keyed per date, so they never collapse together.
+  const series = parseIcs(ics(ev({
+    summary: 'Lunch duty', start: '20260907T113000', end: '20260907T120000',
+    uid: 'series@google.com', rrule: 'FREQ=WEEKLY;BYDAY=MO',
+  })), { from: '2026-09-01', to: '2026-09-30' });
+  eq(series.map((e) => e.source_uid),
+    ['series@google.com::2026-09-07', 'series@google.com::2026-09-14',
+      'series@google.com::2026-09-21', 'series@google.com::2026-09-28'],
+    'each occurrence of a series is keyed by UID + its own date');
+  eq(new Set(series.map((e) => e.source_uid)).size, series.length, 'series keys are all distinct');
+
+  // A modified instance is exported with the parent UID + RECURRENCE-ID. It is one
+  // event, not a series, so it keeps the bare UID.
+  const exception = parseIcs(ics(ev({
+    summary: 'Lunch duty (moved)', start: '20260914T130000', end: '20260914T133000',
+    uid: 'series@google.com', recurrenceId: '20260914T113000',
+  })), { from: '2026-09-01', to: '2026-09-30' });
+  eq(exception[0].source_uid, 'series@google.com', 'a RECURRENCE-ID instance is not treated as a series');
+
+  // A file with no UID still imports; the caller falls back to date + title.
+  const noUid = parseIcs(ics(ev({
+    summary: 'Mystery event', start: '20260908T090000', end: '20260908T093000',
+  })), { from: '2026-09-01', to: '2026-09-30' });
+  eq(noUid[0].source_uid, null, 'a missing UID yields null rather than a bogus key');
+
+  // The helper itself.
+  eq(occurrenceUid('u1', '2026-09-07', false), 'u1', 'non-recurring -> bare uid');
+  eq(occurrenceUid('u1', '2026-09-07', true), 'u1::2026-09-07', 'recurring -> uid + date');
+  eq(occurrenceUid('', '2026-09-07', true), null, 'empty uid -> null');
+  eq(occurrenceUid(undefined, '2026-09-07', false), null, 'missing uid -> null');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -86,6 +86,22 @@ function parseIcsDateOnly(str) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Stable identity for one imported entry, so a re-import can recognise the same
+ * calendar event rather than guessing from date + title.
+ *
+ * A single event is keyed by its UID alone, so moving it to another date reads as
+ * an UPDATE rather than a second entry. An occurrence of a repeating event is
+ * keyed by UID + its own date — that is what RECURRENCE-ID means — so two shifts
+ * of the same duty on one day stay distinct instead of colliding.
+ *
+ * Returns null when the file gives no UID; callers fall back to date + title.
+ */
+export function occurrenceUid(uid, entryDate, isRecurring) {
+  if (!uid) return null;
+  return isRecurring ? `${uid}::${entryDate}` : uid;
+}
+
 /** Local yyyy-mm-dd for a Date. */
 function isoDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -293,6 +309,10 @@ export function parseIcsDetailed(icsString, options = {}) {
     else if (propName === 'DTEND') current.dtend = propFull.includes(';') ? propFull.split(';').slice(1).join(';') + ':' + value : value;
     else if (propName === 'RRULE') current.rrule = value;
     else if (propName === 'EXDATE') current.exdates = (current.exdates || []).concat(value.split(','));
+    else if (propName === 'UID') current.uid = value.trim();
+    // A modified instance of a series is exported as its own VEVENT carrying the
+    // parent UID plus the date of the occurrence it replaces.
+    else if (propName === 'RECURRENCE-ID') current.recurrenceId = propFull.includes(';') ? propFull.split(';').slice(1).join(';') + ':' + value : value;
   }
 
   const results = [];
@@ -316,6 +336,8 @@ export function parseIcsDetailed(icsString, options = {}) {
     const { occurrences, expanded, unsupported } = expandRecurrence(
       start, evt.rrule, exdates, windowStart, windowEnd,
     );
+    // A VEVENT carrying RECURRENCE-ID is one modified instance, not a series.
+    const isRecurringSeries = expanded && !evt.recurrenceId;
     if (expanded && occurrences.length > 1) stats.recurringExpanded++;
     if (unsupported) stats.recurringUnsupported++;
 
@@ -336,8 +358,10 @@ export function parseIcsDetailed(icsString, options = {}) {
       if (dow === 0 || dow === 6) { stats.weekend++; continue; }
 
       const occEnd = new Date(occStart.getTime() + durationMinutes * 60000);
+      const occDate = isoDate(occStart);
       results.push({
-        entry_date: isoDate(occStart),
+        source_uid: occurrenceUid(evt.uid, occDate, isRecurringSeries),
+        entry_date: occDate,
         domain,
         activity_description: title || 'Calendar event',
         duration_minutes: durationMinutes,

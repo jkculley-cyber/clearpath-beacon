@@ -1085,32 +1085,111 @@ export default function SettingsPage() {
                   setCalMsg('');
                   const toImport = calEvents.filter(e => e._include);
                   let imported = 0;
+                  let updated = 0;
                   let skipped = 0;
+                  let failed = 0;
+                  let failMsg = '';
+
+                  // Match on the calendar event's own identity (its ICS UID) instead of
+                  // guessing from date + title. Two duty shifts on one day have distinct
+                  // UIDs, so neither is mistaken for the other; and an event edited in
+                  // Google is recognised as the SAME entry and updated in place.
+                  const { data: allEntries } = await db.select('time_entries', {
+                    eq: { counselor_id: counselor.id },
+                  });
+                  const existing = allEntries || [];
+                  const byUid = new Map();
+                  for (const row of existing) {
+                    if (row.source_uid) byUid.set(row.source_uid, row);
+                  }
+                  const legacyKey = (r) => `${r.entry_date}|${r.activity_description}`;
 
                   for (const ev of toImport) {
-                    // Deduplicate by date + description match
-                    const { data: existing } = await db.select('time_entries', {
-                      eq: { counselor_id: counselor.id, entry_date: ev.entry_date, activity_description: ev.activity_description },
-                    });
-                    if (existing && existing.length > 0) {
+                    const match = ev.source_uid ? byUid.get(ev.source_uid) : null;
+
+                    // Entries imported before UIDs were recorded have no source_uid.
+                    // Adopt one by date + title so the first UID-aware import heals it
+                    // instead of duplicating it — but ONLY a calendar-sourced row.
+                    // Hand-typed and auto-logged entries are the counselor's, never ours
+                    // to rewrite.
+                    const legacy = match ? null : existing.find(
+                      (r) => !r.source_uid && r.source === 'calendar' && legacyKey(r) === legacyKey(ev),
+                    );
+                    const target = match || legacy;
+
+                    if (target) {
+                      // Update only what the calendar is authoritative for. `domain` is
+                      // the counselor's own compliance classification — never overwrite it.
+                      const changes = {};
+                      if (target.entry_date !== ev.entry_date) changes.entry_date = ev.entry_date;
+                      if (target.duration_minutes !== ev.duration_minutes) changes.duration_minutes = ev.duration_minutes;
+                      if (target.activity_description !== ev.activity_description) changes.activity_description = ev.activity_description;
+                      if (!target.source_uid && ev.source_uid) changes.source_uid = ev.source_uid;
+
+                      if (Object.keys(changes).length > 0) {
+                        await db.update('time_entries', target.id, changes);
+                        const merged = { ...target, ...changes };
+                        if (merged.source_uid) byUid.set(merged.source_uid, merged);
+                        // Only count a real content change as an update; stamping a UID
+                        // onto an already-correct row is bookkeeping, not a change.
+                        if (changes.entry_date || changes.duration_minutes || changes.activity_description) updated++;
+                        else skipped++;
+                      } else {
+                        skipped++;
+                      }
+                      continue;
+                    }
+
+                    // No identity match, so fall back to date + title — but narrowly.
+                    // When the event HAS a UID we only guard against the counselor's own
+                    // entries (hand-typed or auto-logged from a completed session), never
+                    // against other calendar rows: two shifts of the same duty on one day
+                    // share a date and a title while being genuinely different events, and
+                    // the old blanket check silently dropped the second one.
+                    // A file with no UIDs gives us no identity to reason with, so it keeps
+                    // the original broad behaviour.
+                    const guardRows = ev.source_uid
+                      ? existing.filter((r) => r.source !== 'calendar')
+                      : existing;
+                    if (guardRows.some((r) => legacyKey(r) === legacyKey(ev))) {
                       skipped++;
                       continue;
                     }
-                    await db.insert('time_entries', {
+
+                    const row = {
                       counselor_id: counselor.id,
                       entry_date: ev.entry_date,
                       domain: ev.domain,
                       activity_description: ev.activity_description,
                       duration_minutes: ev.duration_minutes,
                       source: 'calendar',
-                    });
+                      source_uid: ev.source_uid || null,
+                    };
+                    const { data: inserted, error: insErr } = await db.insert('time_entries', row);
+                    if (insErr) {
+                      // A soft-gated (expired) licence blocks writes. Say so instead of
+                      // reporting a successful import that wrote nothing.
+                      failed++;
+                      failMsg = insErr.message || String(insErr);
+                      continue;
+                    }
+                    const saved = Array.isArray(inserted) ? inserted[0] : inserted;
+                    const tracked = { ...row, id: saved?.id };
+                    existing.push(tracked);
+                    if (row.source_uid) byUid.set(row.source_uid, tracked);
                     imported++;
                   }
 
                   setCalImporting(false);
                   setCalEvents([]);
                   setCalStats(null);
-                  setCalMsg(`Imported ${imported} time entr${imported === 1 ? 'y' : 'ies'}${skipped > 0 ? `, ${skipped} duplicate${skipped === 1 ? '' : 's'} skipped` : ''}.`);
+                  setCalMsg(
+                    `Imported ${imported} new time entr${imported === 1 ? 'y' : 'ies'}`
+                    + (updated > 0 ? `, updated ${updated} changed in your calendar` : '')
+                    + (skipped > 0 ? `, ${skipped} already logged` : '')
+                    + '.'
+                    + (failed > 0 ? ` Error: ${failed} could not be saved — ${failMsg}` : ''),
+                  );
                 }}
               >
                 {calImporting ? 'Importing...' : `Import ${calEvents.filter(e => e._include).length} time entr${calEvents.filter(e => e._include).length === 1 ? 'y' : 'ies'}`}
