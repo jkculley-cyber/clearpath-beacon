@@ -13,8 +13,12 @@ const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const MONTH_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const GROUP_COLORS = ['#2A9D8F', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
+/** Whole class lessons get their own top-level Type in the Add modal, so this
+ *  value is written by that branch rather than picked from the Event Type list. */
+const CLASSROOM_LESSON_TYPE = 'classroom_lesson';
+
 const EVENT_TYPES = [
-  { value: 'classroom_lesson', label: 'Whole Class Lesson', color: '#0d9488' }, // teal
+  { value: CLASSROOM_LESSON_TYPE, label: 'Whole Class Lesson', color: '#0d9488' }, // teal
   { value: 'meeting',  label: 'Meeting',       color: '#475569' }, // slate
   { value: 'duty',     label: 'Duty',          color: '#d97706' }, // amber
   { value: 'planning', label: 'Planning',      color: '#0284c7' }, // sky
@@ -164,10 +168,36 @@ function SessionDetailModal({ session, groups, onClose, onSave }) {
   };
 
   const handleDelete = async () => {
-    if (!confirm('Delete this session? This cannot be undone.')) return;
+    if (!session.series_id) {
+      if (!confirm('Delete this session? This cannot be undone.')) return;
+      setDeleting(true);
+      await removeAutoLoggedTime(session.id);
+      await db.del('sessions', session.id);
+      setDeleting(false);
+      onSave();
+      return;
+    }
+
+    // Recurring series — same three choices as a recurring event.
+    const choice = (window.prompt(
+      'This is part of a repeating series. Type:\n  1 = delete this session only\n  2 = delete this + all future\n  3 = delete the entire series',
+      '1',
+    ) || '').trim();
+    if (!['1', '2', '3'].includes(choice)) return;
+
     setDeleting(true);
-    await removeAutoLoggedTime(session.id);
-    await db.del('sessions', session.id);
+    if (choice === '1') {
+      await removeAutoLoggedTime(session.id);
+      await db.del('sessions', session.id);
+    } else {
+      const { data: siblings } = await db.select('sessions', { eq: { series_id: session.series_id } });
+      const targets = (siblings || []).filter((x) => choice === '3' || x.session_date >= session.session_date);
+      for (const x of targets) {
+        // Drop the auto-logged time with the session, or the hours outlive the record.
+        await removeAutoLoggedTime(x.id);
+        await db.del('sessions', x.id);
+      }
+    }
     setDeleting(false);
     onSave();
   };
@@ -178,6 +208,15 @@ function SessionDetailModal({ session, groups, onClose, onSave }) {
         <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>
           {group?.name || 'Session'}
         </h3>
+
+        {session.series_id && (
+          <div style={{
+            fontSize: 12, color: '#0f766e', background: '#f0fdfa', border: '1px solid #99f6e4',
+            borderRadius: 8, padding: '8px 12px', marginBottom: 12,
+          }}>
+            Part of a repeating series. Edits here apply only to this session.
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
           <div>
@@ -458,42 +497,51 @@ function AddSessionModal({ open, onClose, counselorId }) {
     setSaving(true);
     const endTime = computeEndTime(startTime, duration);
 
+    // One occurrence list drives every kind — a weekly check-in with a student
+    // and a weekly duty are the same scheduling problem.
+    const isSeries = recurrence === 'weekly' && recurrenceUntil && recurrenceUntil >= sessionDate;
+    const dates = isSeries ? weeklyOccurrenceDates(sessionDate, recurrenceUntil, recurrenceDays) : [sessionDate];
+
+    if (isSeries) {
+      if (dates.length === 0) {
+        alert('That repeat pattern does not land on any date before the end date. Pick different days or move the end date.');
+        setSaving(false);
+        return;
+      }
+      if (dates.length > MAX_SERIES_OCCURRENCES) {
+        alert(`That repeat pattern would create ${dates.length} entries (limit ${MAX_SERIES_OCCURRENCES}). Shorten the end date or pick fewer days.`);
+        setSaving(false);
+        return;
+      }
+    }
+
+    // Every occurrence shares a series_id so it can be edited or deleted as a set.
+    const seriesId = isSeries
+      ? ((crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random()}`)
+      : null;
+
+    const isCalendarEvent = kind === 'event' || kind === 'lesson';
+    const resolvedEventType = kind === 'lesson' ? CLASSROOM_LESSON_TYPE : eventType;
+
     let err;
-    if (kind === 'event') {
+    if (isCalendarEvent) {
       const baseRecord = {
         counselor_id: counselorId,
-        title: eventTitle.trim() || EVENT_TYPES.find((t) => t.value === eventType)?.label || 'Event',
-        event_type: eventType,
+        title: eventTitle.trim() || EVENT_TYPES.find((t) => t.value === resolvedEventType)?.label || 'Event',
+        event_type: resolvedEventType,
         start_time: startTime,
         end_time: endTime,
         duration_minutes: duration,
         notes: notes || null,
+        series_id: seriesId,
       };
-
-      if (recurrence === 'weekly' && recurrenceUntil && recurrenceUntil >= sessionDate) {
-        // Materialize one row per occurrence, all sharing a series_id.
-        const dates = weeklyOccurrenceDates(sessionDate, recurrenceUntil, recurrenceDays);
-        if (dates.length > MAX_SERIES_OCCURRENCES) {
-          alert(`That repeat pattern would create ${dates.length} events (limit ${MAX_SERIES_OCCURRENCES}). Shorten the end date or pick fewer days.`);
-          setSaving(false);
-          return;
-        }
-        const seriesId = (crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random()}`;
-        for (const d of dates) {
-          const { error: insErr } = await db.insert('schedule_events', {
-            ...baseRecord,
-            event_date: d,
-            series_id: seriesId,
-          });
-          if (insErr) { err = insErr; break; }
-        }
-      } else {
-        ({ error: err } = await db.insert('schedule_events', { ...baseRecord, event_date: sessionDate }));
+      for (const d of dates) {
+        const { error: insErr } = await db.insert('schedule_events', { ...baseRecord, event_date: d });
+        if (insErr) { err = insErr; break; }
       }
     } else {
-      const record = {
+      const baseRecord = {
         counselor_id: counselorId,
-        session_date: sessionDate,
         start_time: startTime,
         end_time: endTime,
         duration_minutes: duration,
@@ -502,8 +550,12 @@ function AddSessionModal({ open, onClose, counselorId }) {
         session_type: kind,
         student_id: kind === 'individual' ? (studentId || null) : null,
         group_id: kind === 'group' ? (groupId || null) : null,
+        series_id: seriesId,
       };
-      ({ error: err } = await db.insert('sessions', record));
+      for (const d of dates) {
+        const { error: insErr } = await db.insert('sessions', { ...baseRecord, session_date: d });
+        if (insErr) { err = insErr; break; }
+      }
     }
 
     if (err) {
@@ -527,6 +579,7 @@ function AddSessionModal({ open, onClose, counselorId }) {
           <select className="form-input" value={kind} onChange={(e) => setKind(e.target.value)}>
             <option value="individual">Individual session</option>
             <option value="group">Group session</option>
+            <option value="lesson">Whole class lesson</option>
             <option value="event">Other event (meeting, duty, etc.)</option>
           </select>
 
@@ -556,14 +609,16 @@ function AddSessionModal({ open, onClose, counselorId }) {
             </>
           )}
 
-          {kind === 'event' && (
+          {(kind === 'event' || kind === 'lesson') && (
             <>
               <label style={lbl}>Title *</label>
               <input
                 className="form-input"
                 value={eventTitle}
                 onChange={(e) => setEventTitle(e.target.value)}
-                placeholder="e.g., Faculty meeting, Bus duty, ARD for J. Smith"
+                placeholder={kind === 'lesson'
+                  ? 'e.g., Kindness lesson - 3rd grade, Career day - Ms. Lopez'
+                  : 'e.g., Faculty meeting, Bus duty, ARD for J. Smith'}
                 required
                 autoFocus
               />
@@ -571,12 +626,23 @@ function AddSessionModal({ open, onClose, counselorId }) {
                 Shows up on your calendar — make it descriptive.
               </div>
 
-              <label style={lbl}>Event Type</label>
-              <select className="form-input" value={eventType} onChange={(e) => setEventType(e.target.value)}>
-                {EVENT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
+              {kind === 'lesson' ? (
+                <div style={{
+                  fontSize: 11, color: '#0f766e', background: '#f0fdfa', border: '1px solid #99f6e4',
+                  borderRadius: 8, padding: '8px 12px', marginTop: 10,
+                }}>
+                  Logged as <strong>Guidance Curriculum</strong> — the 80% side of your SB 179 time.
+                </div>
+              ) : (
+                <>
+                  <label style={lbl}>Event Type</label>
+                  <select className="form-input" value={eventType} onChange={(e) => setEventType(e.target.value)}>
+                    {EVENT_TYPES.filter((t) => t.value !== CLASSROOM_LESSON_TYPE).map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </>
+              )}
             </>
           )}
 
@@ -589,67 +655,63 @@ function AddSessionModal({ open, onClose, counselorId }) {
           <label style={lbl}>Duration (minutes)</label>
           <input className="form-input" type="number" min="5" max="480" value={duration} onChange={(e) => setDuration(parseInt(e.target.value, 10) || 30)} required />
 
-          {kind === 'event' && (
+          <label style={lbl}>Repeats</label>
+          <select className="form-input" value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
+            <option value="never">Once</option>
+            <option value="weekly">Weekly</option>
+          </select>
+          {recurrence === 'weekly' && (
             <>
-              <label style={lbl}>Repeats</label>
-              <select className="form-input" value={recurrence} onChange={(e) => setRecurrence(e.target.value)}>
-                <option value="never">Once</option>
-                <option value="weekly">Weekly</option>
-              </select>
-              {recurrence === 'weekly' && (
-                <>
-                  <label style={lbl}>On these days</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {WEEKDAY_CHIPS.map(({ dow, label }) => {
-                      const active = recurrenceDays.includes(dow);
-                      return (
-                        <button
-                          key={dow}
-                          type="button"
-                          aria-pressed={active}
-                          onClick={() => setRecurrenceDays((prev) => (
-                            prev.includes(dow) ? prev.filter((d) => d !== dow) : [...prev, dow].sort()
-                          ))}
-                          style={{
-                            padding: '6px 10px', fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: 'pointer',
-                            border: `1px solid ${active ? '#2A9D8F' : '#d1d5db'}`,
-                            background: active ? '#2A9D8F' : '#fff',
-                            color: active ? '#fff' : '#374151',
-                          }}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                    <button type="button" onClick={() => setRecurrenceDays([1, 2, 3, 4, 5])}
-                      style={linkBtn}>Every weekday (Mon-Fri)</button>
-                    <button type="button" onClick={() => setRecurrenceDays([0, 1, 2, 3, 4, 5, 6])}
-                      style={linkBtn}>Every day</button>
-                    {recurrenceDays.length > 0 && (
-                      <button type="button" onClick={() => setRecurrenceDays([])} style={linkBtn}>Clear</button>
-                    )}
-                  </div>
+              <label style={lbl}>On these days</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {WEEKDAY_CHIPS.map(({ dow, label }) => {
+                  const active = recurrenceDays.includes(dow);
+                  return (
+                    <button
+                      key={dow}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setRecurrenceDays((prev) => (
+                        prev.includes(dow) ? prev.filter((d) => d !== dow) : [...prev, dow].sort()
+                      ))}
+                      style={{
+                        padding: '6px 10px', fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: 'pointer',
+                        border: `1px solid ${active ? '#2A9D8F' : '#d1d5db'}`,
+                        background: active ? '#2A9D8F' : '#fff',
+                        color: active ? '#fff' : '#374151',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                <button type="button" onClick={() => setRecurrenceDays([1, 2, 3, 4, 5])}
+                  style={linkBtn}>Every weekday (Mon-Fri)</button>
+                <button type="button" onClick={() => setRecurrenceDays([0, 1, 2, 3, 4, 5, 6])}
+                  style={linkBtn}>Every day</button>
+                {recurrenceDays.length > 0 && (
+                  <button type="button" onClick={() => setRecurrenceDays([])} style={linkBtn}>Clear</button>
+                )}
+              </div>
 
-                  <label style={lbl}>Until</label>
-                  <input
-                    className="form-input"
-                    type="date"
-                    value={recurrenceUntil}
-                    min={sessionDate}
-                    onChange={(e) => setRecurrenceUntil(e.target.value)}
-                  />
-                  <div style={{ fontSize: 11, color: seriesCount > MAX_SERIES_OCCURRENCES ? '#dc2626' : '#9ca3af', marginTop: 4 }}>
-                    {recurrenceDays.length === 0
-                      ? `Repeats every ${format(parseISO(sessionDate), 'EEEE')} through ${recurrenceUntil}`
-                      : `Repeats on ${recurrenceDays.map((d) => WEEKDAY_CHIPS.find((c) => c.dow === d).label).join(', ')} through ${recurrenceUntil}`}
-                    {' — '}
-                    <strong>{seriesCount} event{seriesCount === 1 ? '' : 's'}</strong>
-                    {seriesCount > MAX_SERIES_OCCURRENCES && ` (over the ${MAX_SERIES_OCCURRENCES} limit — shorten the end date or pick fewer days)`}
-                  </div>
-                </>
-              )}
+              <label style={lbl}>Until</label>
+              <input
+                className="form-input"
+                type="date"
+                value={recurrenceUntil}
+                min={sessionDate}
+                onChange={(e) => setRecurrenceUntil(e.target.value)}
+              />
+              <div style={{ fontSize: 11, color: seriesCount > MAX_SERIES_OCCURRENCES ? '#dc2626' : '#9ca3af', marginTop: 4 }}>
+                {recurrenceDays.length === 0
+                  ? `Repeats every ${format(parseISO(sessionDate), 'EEEE')} through ${recurrenceUntil}`
+                  : `Repeats on ${recurrenceDays.map((d) => WEEKDAY_CHIPS.find((c) => c.dow === d).label).join(', ')} through ${recurrenceUntil}`}
+                {' — '}
+                <strong>{seriesCount} {kind === 'event' ? 'event' : kind === 'lesson' ? 'lesson' : 'session'}{seriesCount === 1 ? '' : 's'}</strong>
+                {seriesCount > MAX_SERIES_OCCURRENCES && ` (over the ${MAX_SERIES_OCCURRENCES} limit — shorten the end date or pick fewer days)`}
+              </div>
             </>
           )}
 
