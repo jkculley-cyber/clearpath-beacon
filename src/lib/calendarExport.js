@@ -119,6 +119,7 @@ function icsAllDay(date) {
 }
 
 const EVENT_TYPE_LABELS = {
+  classroom_lesson: 'Whole Class Lesson',
   meeting: 'Meeting',
   duty: 'Duty',
   planning: 'Planning',
