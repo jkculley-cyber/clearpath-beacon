@@ -14,6 +14,7 @@ const MONTH_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const GROUP_COLORS = ['#2A9D8F', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 const EVENT_TYPES = [
+  { value: 'classroom_lesson', label: 'Whole Class Lesson', color: '#0d9488' }, // teal
   { value: 'meeting',  label: 'Meeting',       color: '#475569' }, // slate
   { value: 'duty',     label: 'Duty',          color: '#d97706' }, // amber
   { value: 'planning', label: 'Planning',      color: '#0284c7' }, // sky
@@ -23,6 +24,37 @@ const EVENT_TYPES = [
   { value: 'admin',    label: 'Admin',         color: '#4b5563' }, // gray
   { value: 'other',    label: 'Other',         color: '#525252' }, // neutral
 ];
+
+/** Ceiling on how many rows one recurring event may create. A full school year of
+ *  weekday events is ~200, so this leaves headroom without letting a stray
+ *  "every day until 2030" quietly write thousands of rows. */
+const MAX_SERIES_OCCURRENCES = 400;
+
+const WEEKDAY_CHIPS = [
+  { dow: 1, label: 'Mon' }, { dow: 2, label: 'Tue' }, { dow: 3, label: 'Wed' },
+  { dow: 4, label: 'Thu' }, { dow: 5, label: 'Fri' }, { dow: 6, label: 'Sat' }, { dow: 0, label: 'Sun' },
+];
+
+/**
+ * Every date a weekly series lands on, as yyyy-MM-dd.
+ * `days` is a list of JS weekday numbers (0=Sun..6=Sat); empty means "whatever
+ * weekday the start date falls on", which is the pre-existing behaviour.
+ * Capped at MAX_SERIES_OCCURRENCES — the caller surfaces the cap rather than
+ * silently truncating the series.
+ */
+function weeklyOccurrenceDates(startISO, untilISO, days) {
+  if (!startISO || !untilISO || untilISO < startISO) return [];
+  const start = parseISO(startISO);
+  const until = parseISO(untilISO);
+  const wanted = days && days.length ? days : [start.getDay()];
+  const out = [];
+  let cursor = start;
+  while (cursor <= until && out.length <= MAX_SERIES_OCCURRENCES) {
+    if (wanted.includes(cursor.getDay())) out.push(format(cursor, 'yyyy-MM-dd'));
+    cursor = addDays(cursor, 1);
+  }
+  return out;
+}
 
 function colorForEventType(t) {
   return EVENT_TYPES.find((x) => x.value === t)?.color || '#475569';
@@ -377,6 +409,8 @@ function AddSessionModal({ open, onClose, counselorId }) {
   const [notes, setNotes] = useState('');
   const [recurrence, setRecurrence] = useState('never'); // never | weekly
   const [recurrenceUntil, setRecurrenceUntil] = useState(() => format(addWeeks(new Date(), 12), 'yyyy-MM-dd'));
+  // Which weekdays the series lands on (0=Sun..6=Sat). Empty = follow the start date.
+  const [recurrenceDays, setRecurrenceDays] = useState([]);
   const [students, setStudents] = useState([]);
   const [groupList, setGroupList] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -394,6 +428,7 @@ function AddSessionModal({ open, onClose, counselorId }) {
     setNotes('');
     setRecurrence('never');
     setRecurrenceUntil(format(addWeeks(new Date(), 12), 'yyyy-MM-dd'));
+    setRecurrenceDays([]);
     setSaving(false);
     Promise.all([
       db.select('students', { eq: { counselor_id: counselorId, status: 'active' }, order: { column: 'first_name', ascending: true } }),
@@ -405,6 +440,10 @@ function AddSessionModal({ open, onClose, counselorId }) {
   }, [open, counselorId]);
 
   if (!open) return null;
+
+  const seriesCount = recurrence === 'weekly'
+    ? weeklyOccurrenceDates(sessionDate, recurrenceUntil, recurrenceDays).length
+    : 0;
 
   const computeEndTime = (start, dur) => {
     const [h, m] = start.split(':').map(Number);
@@ -432,20 +471,21 @@ function AddSessionModal({ open, onClose, counselorId }) {
       };
 
       if (recurrence === 'weekly' && recurrenceUntil && recurrenceUntil >= sessionDate) {
-        // Materialize one row per weekly occurrence, all sharing a series_id.
+        // Materialize one row per occurrence, all sharing a series_id.
+        const dates = weeklyOccurrenceDates(sessionDate, recurrenceUntil, recurrenceDays);
+        if (dates.length > MAX_SERIES_OCCURRENCES) {
+          alert(`That repeat pattern would create ${dates.length} events (limit ${MAX_SERIES_OCCURRENCES}). Shorten the end date or pick fewer days.`);
+          setSaving(false);
+          return;
+        }
         const seriesId = (crypto.randomUUID && crypto.randomUUID()) || `${Date.now()}-${Math.random()}`;
-        let cursor = parseISO(sessionDate);
-        const untilDate = parseISO(recurrenceUntil);
-        let inserted = 0;
-        while (cursor <= untilDate && inserted < 200) {
+        for (const d of dates) {
           const { error: insErr } = await db.insert('schedule_events', {
             ...baseRecord,
-            event_date: format(cursor, 'yyyy-MM-dd'),
+            event_date: d,
             series_id: seriesId,
           });
           if (insErr) { err = insErr; break; }
-          cursor = addDays(cursor, 7);
-          inserted++;
         }
       } else {
         ({ error: err } = await db.insert('schedule_events', { ...baseRecord, event_date: sessionDate }));
@@ -477,11 +517,12 @@ function AddSessionModal({ open, onClose, counselorId }) {
 
   return (
     <div style={overlay} onClick={() => onClose(false)}>
-      <div style={modal} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: '0 0 16px' }}>
+      <div style={modalStickyFooter} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a2332', margin: 0, padding: '28px 28px 12px' }}>
           Add to Schedule
         </h3>
-        <form onSubmit={handleSave}>
+        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+          <div style={{ overflowY: 'auto', padding: '0 28px 4px', flex: 1 }}>
           <label style={lbl}>Type</label>
           <select className="form-input" value={kind} onChange={(e) => setKind(e.target.value)}>
             <option value="individual">Individual session</option>
@@ -557,6 +598,40 @@ function AddSessionModal({ open, onClose, counselorId }) {
               </select>
               {recurrence === 'weekly' && (
                 <>
+                  <label style={lbl}>On these days</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {WEEKDAY_CHIPS.map(({ dow, label }) => {
+                      const active = recurrenceDays.includes(dow);
+                      return (
+                        <button
+                          key={dow}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setRecurrenceDays((prev) => (
+                            prev.includes(dow) ? prev.filter((d) => d !== dow) : [...prev, dow].sort()
+                          ))}
+                          style={{
+                            padding: '6px 10px', fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: 'pointer',
+                            border: `1px solid ${active ? '#2A9D8F' : '#d1d5db'}`,
+                            background: active ? '#2A9D8F' : '#fff',
+                            color: active ? '#fff' : '#374151',
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                    <button type="button" onClick={() => setRecurrenceDays([1, 2, 3, 4, 5])}
+                      style={linkBtn}>Every weekday (Mon-Fri)</button>
+                    <button type="button" onClick={() => setRecurrenceDays([0, 1, 2, 3, 4, 5, 6])}
+                      style={linkBtn}>Every day</button>
+                    {recurrenceDays.length > 0 && (
+                      <button type="button" onClick={() => setRecurrenceDays([])} style={linkBtn}>Clear</button>
+                    )}
+                  </div>
+
                   <label style={lbl}>Until</label>
                   <input
                     className="form-input"
@@ -565,8 +640,13 @@ function AddSessionModal({ open, onClose, counselorId }) {
                     min={sessionDate}
                     onChange={(e) => setRecurrenceUntil(e.target.value)}
                   />
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                    Repeats every {format(parseISO(sessionDate), 'EEEE')} through {recurrenceUntil}.
+                  <div style={{ fontSize: 11, color: seriesCount > MAX_SERIES_OCCURRENCES ? '#dc2626' : '#9ca3af', marginTop: 4 }}>
+                    {recurrenceDays.length === 0
+                      ? `Repeats every ${format(parseISO(sessionDate), 'EEEE')} through ${recurrenceUntil}`
+                      : `Repeats on ${recurrenceDays.map((d) => WEEKDAY_CHIPS.find((c) => c.dow === d).label).join(', ')} through ${recurrenceUntil}`}
+                    {' — '}
+                    <strong>{seriesCount} event{seriesCount === 1 ? '' : 's'}</strong>
+                    {seriesCount > MAX_SERIES_OCCURRENCES && ` (over the ${MAX_SERIES_OCCURRENCES} limit — shorten the end date or pick fewer days)`}
                   </div>
                 </>
               )}
@@ -575,10 +655,14 @@ function AddSessionModal({ open, onClose, counselorId }) {
 
           <label style={lbl}>Notes</label>
           <textarea className="form-input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
+          </div>
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          <div style={{
+            display: 'flex', gap: 10, padding: '14px 28px 22px',
+            borderTop: '1px solid #e5e7eb', background: '#fff', flexShrink: 0,
+          }}>
             <button type="button" className="btn btn-outline" onClick={() => onClose(false)} style={{ flex: 1 }}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saving} style={{ flex: 1 }}>
+            <button type="submit" className="btn btn-primary" disabled={saving || seriesCount > MAX_SERIES_OCCURRENCES} style={{ flex: 1 }}>
               {saving ? 'Saving...' : 'Add to Schedule'}
             </button>
           </div>
@@ -1468,9 +1552,19 @@ export default function SchedulePage() {
 const overlay = {
   position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
   display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+  padding: 24, overflowY: 'auto',
 };
 const modal = {
   background: '#fff', borderRadius: 12, padding: 28, width: 440,
   boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+  maxWidth: '100%', maxHeight: 'calc(100vh - 48px)', overflowY: 'auto',
+};
+/** Same box, but the body scrolls and the action row stays pinned to the bottom. */
+const modalStickyFooter = {
+  ...modal, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+};
+const linkBtn = {
+  background: 'none', border: 'none', padding: 0, fontSize: 11, fontWeight: 600,
+  color: '#2A9D8F', cursor: 'pointer', textDecoration: 'underline',
 };
 const lbl = { display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginTop: 12, marginBottom: 4 };

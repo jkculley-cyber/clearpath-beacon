@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:bands": "node test/band-matrix.test.mjs"
+    "test:bands": "node test/band-matrix.test.mjs",
+    "test:calendar": "node test/calendar-import.test.mjs",
+    "test": "npm run test:bands && npm run test:calendar"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",

@@ -6,7 +6,7 @@ import { db, exportLocalBackup, importLocalBackup, seedLocalLessons } from '../l
 import { encryptBackup, decryptBackup } from '../lib/backupCrypto';
 import { saveBackupToHandle, pickBackupFolder, persistPickedBackupFolder, getBackupFolderName, clearBackupFolder, isFsAccessSupported, getLastOffDeviceSync } from '../lib/backupFolder';
 import { hasSampleData, clearSampleData } from '../lib/seedSampleData';
-import { parseIcs } from '../lib/calendarImport';
+import { parseIcsDetailed, defaultImportWindow } from '../lib/calendarImport';
 import {
   getNotificationPrefs, setNotificationPrefs, getPermissionState, requestNotificationPermission,
   isNotificationsSupported, startNotificationPoll,
@@ -83,10 +83,33 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
-  // Calendar Import
+  // Calendar Import — Google's export has no date-range option, so the range
+  // lives here. Raw ICS text is kept so changing the range re-filters without
+  // making the counselor pick the file again.
   const [calEvents, setCalEvents] = useState([]);
   const [calImporting, setCalImporting] = useState(false);
   const [calMsg, setCalMsg] = useState('');
+  const [calRaw, setCalRaw] = useState('');
+  const [calFrom, setCalFrom] = useState(() => defaultImportWindow().from);
+  const [calTo, setCalTo] = useState(() => defaultImportWindow().to);
+  const [calStats, setCalStats] = useState(null);
+
+  // Parse (or re-parse) the loaded ICS against a date window.
+  const runCalendarParse = (text, from, to) => {
+    if (!text) return;
+    try {
+      const { entries, stats } = parseIcsDetailed(text, { from, to });
+      setCalStats(stats);
+      setCalEvents(entries.map((ev, i) => ({ ...ev, _idx: i, _include: true })));
+      setCalMsg(entries.length === 0
+        ? `No events between ${from} and ${to}. Widen the date range, or check that the export covers this period.`
+        : '');
+    } catch (err) {
+      setCalMsg('Error parsing ICS file: ' + err.message);
+      setCalEvents([]);
+      setCalStats(null);
+    }
+  };
 
   // Share Beacon
   const [compliancePct, setCompliancePct] = useState(null);
@@ -922,6 +945,40 @@ export default function SettingsPage() {
           <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 14, background: '#f9fafb', padding: '10px 14px', borderRadius: 8, lineHeight: 1.5 }}>
             <strong>Tip:</strong> Name your calendar events clearly &mdash; &ldquo;Marcus individual session&rdquo; auto-categorizes as counseling. &ldquo;Lunch duty&rdquo; auto-categorizes as non-counseling.
           </p>
+
+          {/* Google exports your whole calendar history with no way to limit it,
+              so the range filter lives here instead. */}
+          <div style={{ marginBottom: 14, padding: '12px 14px', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#0f766e', marginBottom: 8 }}>
+              Only import events in this date range
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                type="date" className="form-input" value={calFrom} style={{ width: 165, marginBottom: 0 }}
+                onChange={(e) => { setCalFrom(e.target.value); runCalendarParse(calRaw, e.target.value, calTo); }}
+              />
+              <span style={{ fontSize: 13, color: '#6b7280' }}>to</span>
+              <input
+                type="date" className="form-input" value={calTo} min={calFrom} style={{ width: 165, marginBottom: 0 }}
+                onChange={(e) => { setCalTo(e.target.value); runCalendarParse(calRaw, calFrom, e.target.value); }}
+              />
+              <button
+                type="button" className="btn btn-outline" style={{ fontSize: 12, padding: '6px 12px' }}
+                onClick={() => {
+                  const w = defaultImportWindow();
+                  setCalFrom(w.from); setCalTo(w.to); runCalendarParse(calRaw, w.from, w.to);
+                }}
+              >
+                This school year
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8, lineHeight: 1.5 }}>
+              Google Calendar exports every event you have ever had &mdash; there is no range option on their side.
+              Set the range here and Beacon ignores everything outside it. Repeating events are expanded into one
+              entry per occurrence inside the range.
+            </div>
+          </div>
+
           <div style={{ marginBottom: 14 }}>
             <input
               type="file"
@@ -933,20 +990,29 @@ export default function SettingsPage() {
                 setCalMsg('');
                 try {
                   const text = await file.text();
-                  const parsed = parseIcs(text);
-                  if (parsed.length === 0) {
-                    setCalMsg('No importable events found (weekend/all-day events are skipped).');
-                    setCalEvents([]);
-                    return;
-                  }
-                  setCalEvents(parsed.map((ev, i) => ({ ...ev, _idx: i, _include: true })));
+                  setCalRaw(text);
+                  runCalendarParse(text, calFrom, calTo);
                 } catch (err) {
-                  setCalMsg('Error parsing ICS file: ' + err.message);
+                  setCalMsg('Error reading ICS file: ' + err.message);
                   setCalEvents([]);
+                  setCalRaw('');
+                  setCalStats(null);
                 }
               }}
             />
           </div>
+
+          {calStats && (
+            <div style={{ fontSize: 12, color: '#4b5563', marginBottom: 12, lineHeight: 1.6 }}>
+              Read <strong>{calStats.totalEvents}</strong> event{calStats.totalEvents === 1 ? '' : 's'} from the file
+              {' — '}showing <strong>{calEvents.length}</strong> between {calFrom} and {calTo}.
+              {calStats.outOfRange > 0 && ` ${calStats.outOfRange} outside the range.`}
+              {calStats.recurringExpanded > 0 && ` ${calStats.recurringExpanded} repeating event${calStats.recurringExpanded === 1 ? '' : 's'} expanded into individual occurrences.`}
+              {calStats.allDay > 0 && ` ${calStats.allDay} all-day skipped.`}
+              {calStats.weekend > 0 && ` ${calStats.weekend} weekend skipped.`}
+              {calStats.recurringUnsupported > 0 && ` ${calStats.recurringUnsupported} repeat pattern${calStats.recurringUnsupported === 1 ? '' : 's'} could not be expanded and appear once — check those before importing.`}
+            </div>
+          )}
 
           {calMsg && (
             <div style={{
@@ -1043,6 +1109,7 @@ export default function SettingsPage() {
 
                   setCalImporting(false);
                   setCalEvents([]);
+                  setCalStats(null);
                   setCalMsg(`Imported ${imported} time entr${imported === 1 ? 'y' : 'ies'}${skipped > 0 ? `, ${skipped} duplicate${skipped === 1 ? '' : 's'} skipped` : ''}.`);
                 }}
               >
