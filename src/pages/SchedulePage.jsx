@@ -60,6 +60,12 @@ function weeklyOccurrenceDates(startISO, untilISO, days) {
   return out;
 }
 
+// Sessions logged before session_type was reliably stamped may have it missing;
+// group_id is authoritative when session_type isn't explicitly 'individual'.
+function isGroupSession(s) {
+  return s.session_type === 'group' || (!!s.group_id && s.session_type !== 'individual');
+}
+
 function colorForEventType(t) {
   return EVENT_TYPES.find((x) => x.value === t)?.color || '#475569';
 }
@@ -358,7 +364,7 @@ function MonthlyView({ currentMonth, sessions, events, groups, students, onPrevM
                       const grp = groups.find((g) => g.id === sess.group_id);
                       const stu = (students || []).find((s) => s.id === sess.student_id);
                       const stuName = stu?.first_name ? `${stu.first_name} ${stu.last_name || ''}`.trim() : (stu?.name || '');
-                      const label = sess.session_type === 'group' && grp ? grp.name : (stuName || 'Session');
+                      const label = isGroupSession(sess) && grp ? grp.name : (stuName || 'Session');
                       const tip = `${label} ${sess.start_time?.slice(0, 5) || ''} · ${sess.status || 'Scheduled'}`;
                       return (
                         <div
@@ -895,7 +901,7 @@ function AgendaView({ sessions, events, groups, students, range, onSessionClick,
   for (const s of sessions || []) {
     const stu = studentMap[s.student_id];
     const grp = groupMap[s.group_id];
-    const label = s.session_type === 'group' && grp
+    const label = isGroupSession(s) && grp
       ? grp.name
       : (stu ? sName(stu) : 'Session');
     items.push({
@@ -905,7 +911,7 @@ function AgendaView({ sessions, events, groups, students, range, onSessionClick,
       time: s.start_time || '',
       duration: s.duration_minutes || 0,
       label,
-      typeLabel: s.session_type === 'group' ? 'Group' : 'Individual',
+      typeLabel: isGroupSession(s) ? 'Group' : 'Individual',
       notes: s.notes || '',
       status: s.status || '',
       raw: s,
@@ -1502,9 +1508,9 @@ export default function SchedulePage() {
                 const grp = groups.find((g) => g.id === sess.group_id);
                 const stu = students.find((s) => s.id === sess.student_id);
                 const stuName = stu?.first_name ? `${stu.first_name} ${stu.last_name || ''}`.trim() : (stu?.name || '');
-                const label = sess.session_type === 'group' && grp
+                const label = isGroupSession(sess) && grp
                   ? grp.name
-                  : (stuName || (sess.session_type === 'group' ? 'Group' : 'Individual'));
+                  : (stuName || (isGroupSession(sess) ? 'Group' : 'Individual'));
                 const color = getColorForGroup(sess.group_id, groups);
                 const hasConflict = sessionHasConflict(sess, dayIdx);
                 const icon = STATUS_ICON[sess.status];

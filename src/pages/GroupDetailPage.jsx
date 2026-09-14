@@ -85,6 +85,7 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
     const { data: sess, error: sessErr } = await db.insert('sessions', {
         counselor_id: counselorId,
         group_id: group.id,
+        session_type: 'group',
         session_date: date,
         duration_minutes: dur,
         objectives_covered: coveredArr.length ? coveredArr : null,

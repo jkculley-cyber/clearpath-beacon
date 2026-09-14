@@ -10,6 +10,10 @@ import SessionNoteTemplateModal from '../components/SessionNoteTemplateModal';
 
 const sName = (s) => s?.name || 'Unknown';
 
+// Sessions logged before session_type was reliably stamped may have it missing;
+// group_id is authoritative when session_type isn't explicitly 'individual'.
+const isGroupSession = (s) => s.session_type === 'group' || (!!s.group_id && s.session_type !== 'individual');
+
 const TEAL = '#2A9D8F';
 const TEAL_LIGHT = '#2A9D8F20';
 const PURPLE = '#8b5cf6';
@@ -497,7 +501,7 @@ export default function SessionsPage() {
   const filtered = sessions.filter((s) => {
     const d = new Date(s.session_date);
     if (d < dateStart || d > dateEnd) return false;
-    if (typeFilter !== 'all' && s.session_type !== typeFilter) return false;
+    if (typeFilter !== 'all' && (isGroupSession(s) ? 'group' : 'individual') !== typeFilter) return false;
     if (statusFilter !== 'all' && s.status !== statusFilter) return false;
     if (searchText) {
       const term = searchText.toLowerCase();
@@ -524,7 +528,7 @@ export default function SessionsPage() {
   const totalHours = monthSessions.reduce((sum, s) => sum + (s.duration_minutes || 0), 0) / 60;
 
   const getSessionLabel = (s) => {
-    if (s.session_type === 'group' && s.group_id) {
+    if (isGroupSession(s) && s.group_id) {
       return groupMap[s.group_id]?.name || 'Unknown Group';
     }
     if (s.student_id) {
@@ -540,7 +544,7 @@ export default function SessionsPage() {
       ['Date', 'Type', 'Student / Group', 'Start', 'Duration (min)', 'Status', 'Notes'],
       filtered.map((s) => [
         s.session_date,
-        s.session_type === 'group' ? 'Group' : 'Individual',
+        isGroupSession(s) ? 'Group' : 'Individual',
         getSessionLabel(s),
         s.start_time || '',
         s.duration_minutes ?? '',
@@ -710,7 +714,7 @@ export default function SessionsPage() {
           {filtered.map((s) => {
             const isExpanded = expandedId === s.id;
             const sColor = STATUS_COLORS[s.status] || STATUS_COLORS.Scheduled;
-            const typeBadge = s.session_type === 'group'
+            const typeBadge = isGroupSession(s)
               ? { bg: PURPLE_LIGHT, fg: PURPLE, label: 'Group' }
               : { bg: TEAL_LIGHT, fg: TEAL, label: 'Individual' };
 
@@ -778,7 +782,7 @@ export default function SessionsPage() {
                       <div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase' }}>Type</span>
                         <div style={{ fontSize: 14, color: '#374151', marginTop: 2 }}>
-                          {s.session_type === 'group' ? 'Group Session' : 'Individual Session'}
+                          {isGroupSession(s) ? 'Group Session' : 'Individual Session'}
                         </div>
                       </div>
                       <div>
