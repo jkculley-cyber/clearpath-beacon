@@ -7,11 +7,23 @@ import { SESSION_STATUSES, ASCA_DOMAINS, PROGRESS_LEVELS, PROGRESS_COLORS } from
 import { autoLogTime } from '../lib/autoLogTime';
 import { generateGroupProgressPDF } from '../lib/pdfExports';
 import ExportNotesModal from '../components/ExportNotesModal';
+import AttendanceModal from '../components/AttendanceModal';
 
 const TABS = ['Members', 'Sessions', 'Objectives', 'Lesson Plan'];
 
 /** Student display name — use name column (always exists), fall back to first_name/last_name if available */
 const sName = (s) => s?.name || (s?.first_name ? `${s.first_name} ${s.last_name || ''}`.trim() : 'Unknown');
+
+const nowTimeStr = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+const endTimeFor = (start, dur) => {
+  if (!start) return null;
+  const [h, m] = start.split(':').map(Number);
+  const total = h * 60 + m + (parseInt(dur, 10) || 0);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+};
 
 /** Derive objectives array from group obj_1/obj_2/obj_3 + asca_1/asca_2/asca_3 */
 function deriveObjectives(group) {
@@ -42,6 +54,7 @@ const td = { padding: '10px 12px' };
    ==================================================================== */
 function LogSessionModal({ open, onClose, group, members, objectives, counselorId }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startTime, setStartTime] = useState(nowTimeStr);
   const [duration, setDuration] = useState('30');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState('Completed');
@@ -49,6 +62,11 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
   const [coveredObjs, setCoveredObjs] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // The modal stays mounted between opens — refresh the default time each open.
+  useEffect(() => {
+    if (open) setStartTime(nowTimeStr());
+  }, [open]);
 
   useEffect(() => {
     if (open && members.length) {
@@ -87,6 +105,9 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
         group_id: group.id,
         session_type: 'group',
         session_date: date,
+        // Without a start time the Schedule pins the session to the top of the day.
+        start_time: startTime || null,
+        end_time: endTimeFor(startTime, dur),
         duration_minutes: dur,
         objectives_covered: coveredArr.length ? coveredArr : null,
         notes,
@@ -138,10 +159,14 @@ function LogSessionModal({ open, onClose, group, members, objectives, counselorI
           </div>
         )}
         <form onSubmit={handleSave}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 12 }}>
             <div>
               <label className="form-label">Date</label>
               <input className="form-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            </div>
+            <div>
+              <label className="form-label">Time</label>
+              <input className="form-input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
             </div>
             <div>
               <label className="form-label">Duration (min)</label>
@@ -507,6 +532,7 @@ export default function GroupDetailPage() {
   const [showLogSession, setShowLogSession] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [showRateProgress, setShowRateProgress] = useState(null); // session id or null
+  const [attendanceSession, setAttendanceSession] = useState(null); // session row or null
   const [showExport, setShowExport] = useState(false);
   const [showAIPlan, setShowAIPlan] = useState(false);
 
@@ -701,6 +727,13 @@ export default function GroupDetailPage() {
                       {s.notes && <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{s.notes}</div>}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button
+                        className="btn btn-outline"
+                        style={{ padding: '4px 10px', fontSize: 12 }}
+                        onClick={() => setAttendanceSession(s)}
+                      >
+                        Attendance
+                      </button>
                       {s.status === 'Completed' && objectives.length > 0 && (
                         <button
                           className="btn btn-outline"
@@ -729,6 +762,12 @@ export default function GroupDetailPage() {
             objectives={objectives}
             counselorId={counselor?.id}
           />
+          {attendanceSession && (
+            <AttendanceModal
+              session={attendanceSession}
+              onClose={(saved) => { setAttendanceSession(null); if (saved) loadAll(); }}
+            />
+          )}
           <RateProgressModal
             open={!!showRateProgress}
             onClose={(saved) => { setShowRateProgress(null); if (saved) loadAll(); }}
