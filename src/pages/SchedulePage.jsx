@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/db';
-import { SESSION_STATUSES } from '../lib/constants';
+import { SESSION_STATUSES, TIME_DOMAINS } from '../lib/constants';
 import { startOfWeek, endOfWeek, addWeeks, addDays, format, parseISO, isToday } from 'date-fns';
 import { startOfMonth, endOfMonth, addMonths, getDay, getDaysInMonth } from 'date-fns';
-import { autoLogTime, removeAutoLoggedTime } from '../lib/autoLogTime';
+import { autoLogTime, removeAutoLoggedTime, autoLogEventTime } from '../lib/autoLogTime';
+import AttendanceModal from '../components/AttendanceModal';
 
 const HOURS = Array.from({ length: 8 }, (_, i) => i + 8);
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -17,17 +18,27 @@ const GROUP_COLORS = ['#2A9D8F', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#e
  *  value is written by that branch rather than picked from the Event Type list. */
 const CLASSROOM_LESSON_TYPE = 'classroom_lesson';
 
+/** `domain` is the Time Tracker domain a Completed event logs to by default;
+ *  the counselor can override it per event in the Edit Event modal. Ambiguous
+ *  types default to Non-Counseling so the 80/20 ratio is never overstated. */
 const EVENT_TYPES = [
-  { value: CLASSROOM_LESSON_TYPE, label: 'Whole Class Lesson', color: '#0d9488' }, // teal
-  { value: 'meeting',  label: 'Meeting',       color: '#475569' }, // slate
-  { value: 'duty',     label: 'Duty',          color: '#d97706' }, // amber
-  { value: 'planning', label: 'Planning',      color: '#0284c7' }, // sky
-  { value: 'training', label: 'Training / PD', color: '#7c3aed' }, // violet
-  { value: 'ard',      label: 'ARD',           color: '#b91c1c' }, // red
-  { value: '504',      label: '504',           color: '#15803d' }, // green
-  { value: 'admin',    label: 'Admin',         color: '#4b5563' }, // gray
-  { value: 'other',    label: 'Other',         color: '#525252' }, // neutral
+  { value: CLASSROOM_LESSON_TYPE, label: 'Whole Class Lesson', color: '#0d9488', domain: 'guidance' }, // teal
+  { value: 'meeting',  label: 'Meeting',       color: '#475569', domain: 'system' },         // slate
+  { value: 'duty',     label: 'Duty',          color: '#d97706', domain: 'non_counseling' }, // amber
+  { value: 'planning', label: 'Planning',      color: '#0284c7', domain: 'system' },         // sky
+  { value: 'training', label: 'Training / PD', color: '#7c3aed', domain: 'system' },         // violet
+  { value: 'ard',      label: 'ARD',           color: '#b91c1c', domain: 'non_counseling' }, // red
+  { value: '504',      label: '504',           color: '#15803d', domain: 'non_counseling' }, // green
+  { value: 'admin',    label: 'Admin',         color: '#4b5563', domain: 'non_counseling' }, // gray
+  { value: 'other',    label: 'Other',         color: '#525252', domain: 'non_counseling' }, // neutral
 ];
+
+/** Events get three statuses — "Make-up Needed" only means something for students. */
+const EVENT_STATUSES = ['Scheduled', 'Completed', 'Cancelled'];
+
+function defaultDomainForEventType(t) {
+  return EVENT_TYPES.find((x) => x.value === t)?.domain || 'non_counseling';
+}
 
 /** Ceiling on how many rows one recurring event may create. A full school year of
  *  weekday events is ~200, so this leaves headroom without letting a stray
@@ -123,6 +134,7 @@ function SessionDetailModal({ session, groups, onClose, onSave }) {
   const [duration, setDuration] = useState(30);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showAttendance, setShowAttendance] = useState(false);
 
   useEffect(() => {
     if (session) {
@@ -246,8 +258,23 @@ function SessionDetailModal({ session, groups, onClose, onSave }) {
           ))}
         </select>
 
+        {isGroupSession(session) && session.group_id && (
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => setShowAttendance(true)}
+            style={{ width: '100%', marginTop: 12 }}
+          >
+            Take Attendance
+          </button>
+        )}
+
         <label style={lbl}>Notes</label>
         <textarea className="form-input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+
+        {showAttendance && (
+          <AttendanceModal session={session} onClose={() => setShowAttendance(false)} />
+        )}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
           <button className="btn btn-outline" onClick={onClose} style={{ flex: 1 }}>Close</button>
@@ -383,12 +410,13 @@ function MonthlyView({ currentMonth, sessions, events, groups, students, onPrevM
                       <div
                         key={evt.id}
                         onClick={(e) => { e.stopPropagation(); onEventClick && onEventClick(evt); }}
-                        title={`${evt.title} ${evt.start_time?.slice(0, 5) || ''}`}
+                        title={`${evt.title} ${evt.start_time?.slice(0, 5) || ''} · ${evt.status || 'Scheduled'}`}
                         style={{
                           width: 10, height: 10, borderRadius: 2,
                           background: colorForEventType(evt.event_type),
                           flexShrink: 0,
                           cursor: onEventClick ? 'pointer' : 'default',
+                          ...monthlyDotStyle(evt.status),
                         }}
                       />
                     ))}
@@ -748,6 +776,8 @@ function EventDetailModal({ event, onClose, onSave }) {
   const [startTime, setStartTime] = useState('');
   const [duration, setDuration] = useState(30);
   const [notes, setNotes] = useState('');
+  const [status, setStatus] = useState('Scheduled');
+  const [domain, setDomain] = useState('non_counseling');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -759,8 +789,16 @@ function EventDetailModal({ event, onClose, onSave }) {
       setStartTime((event.start_time || '').slice(0, 5));
       setDuration(event.duration_minutes ?? 30);
       setNotes(event.notes || '');
+      setStatus(event.status || 'Scheduled');
+      setDomain(event.time_domain || defaultDomainForEventType(event.event_type));
     }
   }, [event]);
+
+  // Changing the type re-defaults the domain; the counselor can still override it after.
+  const changeEventType = (t) => {
+    setEventType(t);
+    setDomain(defaultDomainForEventType(t));
+  };
 
   if (!event) return null;
 
@@ -773,15 +811,33 @@ function EventDetailModal({ event, onClose, onSave }) {
 
   const handleSave = async () => {
     setSaving(true);
+    const resolvedTitle = title.trim() || 'Event';
     await db.update('schedule_events', event.id, {
-      title: title.trim() || 'Event',
+      title: resolvedTitle,
       event_type: eventType,
       event_date: eventDate || event.event_date,
       start_time: startTime || null,
       end_time: computeEnd(startTime, duration),
       duration_minutes: Number(duration),
       notes: notes || null,
+      status,
+      time_domain: domain,
     });
+
+    // Completed events count toward the Time Tracker, same as completed sessions.
+    if (status === 'Completed') {
+      await autoLogEventTime({
+        counselorId: event.counselor_id,
+        eventId: event.id,
+        date: eventDate || event.event_date,
+        durationMinutes: Number(duration) || 30,
+        domain,
+        description: resolvedTitle,
+      });
+    } else {
+      await removeAutoLoggedTime(event.id, 'auto_event');
+    }
+
     setSaving(false);
     onSave();
   };
@@ -790,6 +846,7 @@ function EventDetailModal({ event, onClose, onSave }) {
     if (!event.series_id) {
       if (!confirm('Delete this event? This cannot be undone.')) return;
       setDeleting(true);
+      await removeAutoLoggedTime(event.id, 'auto_event');
       await db.del('schedule_events', event.id);
       setDeleting(false);
       onSave();
@@ -806,11 +863,13 @@ function EventDetailModal({ event, onClose, onSave }) {
 
     setDeleting(true);
     if (choice === '1') {
+      await removeAutoLoggedTime(event.id, 'auto_event');
       await db.del('schedule_events', event.id);
     } else {
       const { data: siblings } = await db.select('schedule_events', { eq: { series_id: event.series_id } });
       const targets = (siblings || []).filter((s) => choice === '3' || s.event_date >= event.event_date);
       for (const s of targets) {
+        await removeAutoLoggedTime(s.id, 'auto_event');
         await db.del('schedule_events', s.id);
       }
     }
@@ -837,11 +896,35 @@ function EventDetailModal({ event, onClose, onSave }) {
         <input className="form-input" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
 
         <label style={lbl}>Event Type</label>
-        <select className="form-input" value={eventType} onChange={(e) => setEventType(e.target.value)}>
+        <select className="form-input" value={eventType} onChange={(e) => changeEventType(e.target.value)}>
           {EVENT_TYPES.map((t) => (
             <option key={t.value} value={t.value}>{t.label}</option>
           ))}
         </select>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <label style={lbl}>Status</label>
+            <select className="form-input" value={status} onChange={(e) => setStatus(e.target.value)}>
+              {EVENT_STATUSES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Counts toward</label>
+            <select className="form-input" value={domain} onChange={(e) => setDomain(e.target.value)}>
+              {Object.entries(TIME_DOMAINS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {status === 'Completed' && (
+          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+            Saving logs this time to the Time Tracker under {TIME_DOMAINS[domain]}.
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
           <div>
@@ -929,7 +1012,7 @@ function AgendaView({ sessions, events, groups, students, range, onSessionClick,
       label: e.title || typeLabel,
       typeLabel,
       notes: e.notes || '',
-      status: '',
+      status: e.status || '',
       raw: e,
       _haystack: [e.title, typeLabel, e.event_type, e.notes].filter(Boolean).join(' ').toLowerCase(),
     });
@@ -1079,7 +1162,7 @@ function AgendaView({ sessions, events, groups, students, range, onSessionClick,
                   }}>
                     {row.typeLabel}
                   </span>
-                  {!isEvent && statusColor && (
+                  {statusColor && (
                     <span style={{
                       fontSize: 10, fontWeight: 600,
                       padding: '1px 7px', borderRadius: 10,
@@ -1477,11 +1560,12 @@ export default function SchedulePage() {
                     })()
                   : null) });
                 const evtColor = colorForEventType(evt.event_type);
+                const evtIcon = STATUS_ICON[evt.status];
                 return (
                   <div
                     key={evt.id}
                     onClick={() => setSelectedEvent(evt)}
-                    title={`${evt.title} (${evt.event_type})`}
+                    title={`${evt.title} (${evt.event_type}) · ${evt.status || 'Scheduled'}`}
                     style={{
                       position: 'absolute', top: pos.top, left: 2, right: 2, height: pos.height,
                       background: evtColor, color: '#fff', borderRadius: 6, padding: '4px 8px',
@@ -1489,9 +1573,10 @@ export default function SchedulePage() {
                       boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                       borderLeft: '3px solid rgba(0,0,0,0.35)',
                       zIndex: 1,
+                      ...sessionBlockStyle(evt.status),
                     }}
                   >
-                    <div>{evt.title}</div>
+                    <div>{evtIcon && <span style={{ marginRight: 4 }}>{evtIcon}</span>}{evt.title}</div>
                     {pos.height > 35 && (
                       <div style={{ fontSize: 10, fontWeight: 400, opacity: 0.85 }}>
                         {evt.start_time?.slice(0, 5)}

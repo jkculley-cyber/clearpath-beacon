@@ -22,6 +22,12 @@ const nowTimeStr = () => {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
+const endTimeFor = (start, dur) => {
+  if (!start) return null;
+  const [h, m] = start.split(':').map(Number);
+  const total = h * 60 + m + (parseInt(dur, 10) || 0);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+};
 
 /* ---- Shared Styles ---- */
 const overlay = {
@@ -59,10 +65,16 @@ const OBJ_LABELS = { 1: 'Objective 1', 2: 'Objective 2', 3: 'Objective 3' };
 /* ---- Quick Action Modals ---- */
 function LogSessionModal({ open, onClose, student, counselorId }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startTime, setStartTime] = useState(nowTimeStr);
   const [duration, setDuration] = useState('30');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // The modal stays mounted between opens — refresh the default time each open.
+  useEffect(() => {
+    if (open) setStartTime(nowTimeStr());
+  }, [open]);
 
   if (!open) return null;
 
@@ -74,6 +86,9 @@ function LogSessionModal({ open, onClose, student, counselorId }) {
       counselor_id: counselorId,
       student_id: student.id,
       session_date: date,
+      // Without a start time the Schedule pins the session to the top of the day.
+      start_time: startTime || null,
+      end_time: endTimeFor(startTime, duration),
       duration_minutes: parseInt(duration, 10),
       notes,
       session_type: 'individual',
@@ -110,7 +125,7 @@ function LogSessionModal({ open, onClose, student, counselorId }) {
           </div>
         )}
         <form onSubmit={handleSave}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 12 }}>
             <div>
               <label className="form-label">Date</label>
               <input
@@ -119,6 +134,15 @@ function LogSessionModal({ open, onClose, student, counselorId }) {
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
+              />
+            </div>
+            <div>
+              <label className="form-label">Time</label>
+              <input
+                className="form-input"
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
               />
             </div>
             <div>

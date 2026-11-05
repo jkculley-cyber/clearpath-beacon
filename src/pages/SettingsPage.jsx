@@ -1402,7 +1402,7 @@ export default function SettingsPage() {
                     <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8 }}>Grade Promotions</p>
                     {GRADE_PROMOTIONS.map((p) => (
                       <div key={p.from} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 14 }}>
-                        <span style={{ color: '#374151' }}>{p.from === '5' ? 'Grade 5' : p.from === 'K' ? 'Kindergarten' : `Grade ${p.from}`}</span>
+                        <span style={{ color: '#374151' }}>{p.from === '5' ? 'Grade 5' : p.from === 'PK' ? 'Pre-K' : p.from === 'K' ? 'Kindergarten' : `Grade ${p.from}`}</span>
                         <span style={{ color: '#6b7280' }}>&rarr;</span>
                         <span style={{ fontWeight: 600, color: p.to === 'Graduated' ? '#f59e0b' : '#2A9D8F' }}>{p.to === 'Graduated' ? 'Graduated' : `Grade ${p.to}`}</span>
                       </div>

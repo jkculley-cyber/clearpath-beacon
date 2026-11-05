@@ -305,7 +305,7 @@ export default function LocalSetupPage() {
           <label style={labelStyle}>Grade level I serve</label>
           <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
             {[
-              { key: 'elementary', label: 'Elementary', sub: 'K–5' },
+              { key: 'elementary', label: 'Elementary', sub: 'PK–5' },
               { key: 'middle', label: 'Middle', sub: '6–8' },
               { key: 'high', label: 'High', sub: '9–12' },
               { key: 'combined', label: 'Combined', sub: '6–12 · K–8…' },

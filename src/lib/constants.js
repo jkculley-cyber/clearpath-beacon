@@ -71,7 +71,7 @@ export const MTSS_TIERS = [1, 2, 3];
 export const DEFAULT_GRADE_BAND = 'elementary';
 
 export const GRADE_BANDS = {
-  elementary: { key: 'elementary', label: 'Elementary', short: 'K–5', grades: ['K', '1', '2', '3', '4', '5'] },
+  elementary: { key: 'elementary', label: 'Elementary', short: 'PK–5', grades: ['PK', 'K', '1', '2', '3', '4', '5'] },
   middle: { key: 'middle', label: 'Middle', short: '6–8', grades: ['6', '7', '8'] },
   high: { key: 'high', label: 'High', short: '9–12', grades: ['9', '10', '11', '12'] },
 };
@@ -79,10 +79,11 @@ export const GRADE_BANDS = {
 export const GRADE_BAND_KEYS = ['elementary', 'middle', 'high'];
 
 // Band-wide filter/content token per preset band.
-export const BAND_WIDE_TOKEN = { elementary: 'K-5', middle: '6-8', high: '9-12' };
+export const BAND_WIDE_TOKEN = { elementary: 'PK-5', middle: '6-8', high: '9-12' };
 
 // Ordered union of every grade, used for combined-campus (served_grades) ranges.
-export const ALL_GRADES = ['K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+// 'PK' (Pre-K) sorts first, so PK → K is the bottom rung of the promotion ladder.
+export const ALL_GRADES = ['PK', 'K', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
 
 const SECONDARY_GRADES = ['6', '7', '8', '9', '10', '11', '12'];
 
@@ -106,10 +107,11 @@ export function rangeTokenToGrades(token) {
   if (!token || typeof token !== 'string') return ALL_GRADES;
   const t = token.trim();
   if (ALL_GRADES.includes(t)) return [t];
-  const m = t.match(/^([Kk]|\d{1,2})\s*-\s*([Kk]|\d{1,2})$/);
+  const m = t.match(/^(PK|K|\d{1,2})\s*-\s*(PK|K|\d{1,2})$/i);
   if (m) {
-    const lo = ALL_GRADES.indexOf(m[1].toUpperCase() === 'K' ? 'K' : String(Number(m[1])));
-    const hi = ALL_GRADES.indexOf(m[2].toUpperCase() === 'K' ? 'K' : String(Number(m[2])));
+    const norm = (g) => (/^\d+$/.test(g) ? String(Number(g)) : g.toUpperCase());
+    const lo = ALL_GRADES.indexOf(norm(m[1]));
+    const hi = ALL_GRADES.indexOf(norm(m[2]));
     if (lo !== -1 && hi !== -1 && lo <= hi) return ALL_GRADES.slice(lo, hi + 1);
   }
   return ALL_GRADES; // unparseable → show it rather than hide it
@@ -190,6 +192,7 @@ export function topGradeLabel(counselor) {
 
 // Ordinal display for a grade value (band-independent).
 export function gradeLabel(g) {
+  if (g === 'PK') return 'Pre-K';
   if (g === 'K') return 'Kindergarten';
   const suffix = g === '1' ? 'st' : g === '2' ? 'nd' : g === '3' ? 'rd' : 'th';
   return `${g}${suffix} Grade`;
